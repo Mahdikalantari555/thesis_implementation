@@ -66,10 +66,15 @@ def main() -> int:
         n_bands=len(bands), band_names=bands,
         include_valid_frac=True, include_dtime=True,
         include_dsh=True, include_doy=True, include_sensor=True,
-        include_ratoon=True, include_weather=False,
+        include_ratoon=True, include_weather=True,
+        n_weather_vars=5,
     )
     field_cycles: dict[int, list[dict]] = {}
-    val_fields = set(cfg.train.validation_farms or [])
+    # Split Farms_subset: last 6 fields as validation for this initial run
+    all_fields_sorted = sorted(int(f) for f in fields)
+    val_fields = set(all_fields_sorted[-6:]) if len(all_fields_sorted) >= 6 else set()
+    if cfg.train.validation_farms:
+        val_fields = set(int(x) for x in cfg.train.validation_farms)
     epoch = times[0]
     for fid in fields:
         fi = int(np.where(fields == fid)[0][0])
@@ -90,6 +95,20 @@ def main() -> int:
             dsh = (t_c - harvest_dt).astype("timedelta64[D]").astype(int)
             sensors = ds.coords["sensor"].values[tmask]
             binned = phase_bin({b: b_c[:, band_idx[b]] for b in bands}, dsh, bin_days=cfg.phenology.bin_days, max_cycle_days=540)
+            # Weather per observation, then binned like bands
+            w_keys = ["tmean", "et0", "rad", "rh", "gdd"]
+            w_arrs = {}
+            for wk in w_keys:
+                wcol = f"weather_{wk if wk != 'gdd' else 'gdd'}"
+                # map names
+                pass
+            # map to actual zarr variable names
+            w_name_map = {"tmean": "weather_tmean", "et0": "weather_et0", "rad": "weather_rad", "rh": "weather_rh", "gdd": "weather_gdd"}
+            weather_cycle = {}
+            for wk in w_keys:
+                wv = ds[w_name_map[wk]].values[tmask]
+                weather_cycle[wk] = wv
+            w_binned = phase_bin(weather_cycle, dsh, bin_days=cfg.phenology.bin_days, max_cycle_days=540)
             # Build per-observation token inputs (one per phase-bin center observed)
             obs_mask = ~np.isnan(binned[bands[0]])
             obs_idx = np.where(obs_mask)[0]
@@ -99,16 +118,18 @@ def main() -> int:
             tok_dsh_vals = (obs_idx * cfg.phenology.bin_days).astype(np.int64)
             tok_times = harvest_dt + tok_dsh_vals.astype("timedelta64[D]")
             tok_dsh = tok_dsh_vals
+            obs_weather = np.stack([w_binned[wk][obs_idx] for wk in w_keys], axis=-1).astype(np.float32)
             rec = {
                 "bands": tok_bands.astype(np.float32),
                 "times": tok_times,
                 "dsh": tok_dsh.astype(np.int64),
                 "valid_frac": np.ones(obs_idx.size, dtype=np.float32),
-                "sensor": sensors[obs_idx] if len(sensors) == tmask.sum() else np.array(["L8"] * obs_idx.size, dtype=object),
+                "sensor": (np.array([str(sensors[0]) if sensors.size else "L8"] * obs_idx.size, dtype=object)),
                 "ratoon_no": int(c.get("ratoon_no", 0)),
                 "cycle_id": int(c["cycle_id"]),
                 "censored": False,
                 "stratum": str(c.get("stratum", "all")),
+                "weather": obs_weather,
             }
             cyc_list.append(rec)
         field_cycles[int(fid)] = cyc_list
