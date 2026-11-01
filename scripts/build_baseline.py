@@ -66,6 +66,7 @@ def main() -> int:
     max_cycle = 540
 
     X_by_stratum: dict[str, list[np.ndarray]] = {}
+    X_fields_by_stratum: dict[str, list[int]] = {}
     X_by_field: dict[int, list[np.ndarray]] = {}
 
     epoch = times[0]
@@ -94,6 +95,7 @@ def main() -> int:
             arr = np.stack([binned[b] for b in bands], axis=-1)  # (bins, bands)
             key = str(c.get("stratum_full", "all"))
             X_by_stratum.setdefault(key, []).append(arr)
+            X_fields_by_stratum.setdefault(key, []).append(int(fid))
             field_cycles_binned.append(arr)
         if field_cycles_binned:
             X_by_field[fi] = np.stack(field_cycles_binned, axis=0)
@@ -134,9 +136,11 @@ def main() -> int:
         bur = scores["burden"].get(key, np.zeros(X[key].shape[0]))
         mx = scores["max_score"].get(key, np.zeros(X[key].shape[0]))
         flags = scores["flags"].get(key, np.zeros_like(X[key][..., 0], dtype=bool))
+        fids = X_fields_by_stratum.get(key, [0] * X[key].shape[0])
         for i in range(X[key].shape[0]):
             rows.append({
                 "stratum": key, "cycle_idx": i,
+                "field": int(fids[i]) if i < len(fids) else 0,
                 "burden": float(bur[i]), "max_score": float(mx[i]),
                 "has_run": bool(flags[i].any()),
                 "n_flagged_bins": int(flags[i].sum()),

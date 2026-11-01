@@ -51,19 +51,19 @@ def add_spectral_indices(ds: xr.Dataset, *, prefix: str = "") -> xr.Dataset:
     new_vars = {}
     new_bands = list(band)
 
-    if "SR_B4" in band and "SR_B5" in band:
+    if "SR_B4" in band and "SR_B5" in band and "NDVI" not in band:
         ndvi_arr = ndvi(get("SR_B4"), get("SR_B5"))
         new_vars["NDVI"] = ndvi_arr
         if "NDVI" not in new_bands:
             new_bands.append("NDVI")
 
-    if {"SR_B2", "SR_B4", "SR_B5"}.issubset(band):
+    if {"SR_B2", "SR_B4", "SR_B5"}.issubset(band) and "EVI" not in band:
         evi_arr = evi(get("SR_B4"), get("SR_B5"), get("SR_B2"))
         new_vars["EVI"] = evi_arr
         if "EVI" not in new_bands:
             new_bands.append("EVI")
 
-    if {"SR_B5", "SR_B6"}.issubset(band):
+    if {"SR_B5", "SR_B6"}.issubset(band) and "NDWI" not in band:
         ndwi_arr = ndwi(get("SR_B5"), get("SR_B6"))
         new_vars["NDWI"] = ndwi_arr
         if "NDWI" not in new_bands:
