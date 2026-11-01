@@ -1,0 +1,164 @@
+{
+  "n_cycles": 35,
+  "n_normal_reference_cycles": 20,
+  "K": 36,
+  "seeds": [
+    42,
+    43,
+    44,
+    45,
+    46
+  ],
+  "baselines": {
+    "B0_calendar_doy": {
+      "mean_auc_pr": 0.8850260304685584,
+      "mean_auc_pr_ci_95": [
+        0.8831690446583916,
+        0.8867518246666732
+      ],
+      "mean_auc_roc": 0.8941874999999999,
+      "mean_auc_roc_ci_95": [
+        0.8930624999999999,
+        0.8953125
+      ],
+      "per_perturbation_auc_pr": {
+        "ndvi_drop": 1.0,
+        "lst_spike": 0.5544114811815928,
+        "phase_shift": 0.9856926406926407,
+        "early_senescence": 1.0
+      },
+      "cwsi_spearman_rho": 0.5955182072829133,
+      "cwsi_spearman_pval": 0.0001606549248692624,
+      "cwsi_spearman_ci_95": [
+        0.3611475944586155,
+        0.7675714598865546
+      ],
+      "mean_cycle_burden": 0.10641409823581657
+    },
+    "B1_dsh_baseline": {
+      "mean_auc_pr": 0.8930103329294378,
+      "mean_auc_pr_ci_95": [
+        0.8890032855268366,
+        0.8963757096899446
+      ],
+      "mean_auc_roc": 0.8985,
+      "mean_auc_roc_ci_95": [
+        0.8943749999999999,
+        0.9024375000000001
+      ],
+      "per_perturbation_auc_pr": {
+        "ndvi_drop": 1.0,
+        "lst_spike": 0.5720413317177511,
+        "phase_shift": 1.0,
+        "early_senescence": 1.0
+      },
+      "cwsi_spearman_rho": 0.5299719887955182,
+      "cwsi_spearman_pval": 0.0010589898130925718,
+      "cwsi_spearman_ci_95": [
+        0.2692515030850579,
+        0.7138172820076447
+      ],
+      "mean_cycle_burden": 0.09490075421472938
+    },
+    "B2_gdd_axis": {
+      "mean_auc_pr": 0.9007288244104611,
+      "mean_auc_pr_ci_95": [
+        0.8967636975612377,
+        0.9043804883340542
+      ],
+      "mean_auc_roc": 0.913625,
+      "mean_auc_roc_ci_95": [
+        0.907625,
+        0.92025
+      ],
+      "per_perturbation_auc_pr": {
+        "ndvi_drop": 1.0,
+        "lst_spike": 0.6029152976418442,
+        "phase_shift": 1.0,
+        "early_senescence": 1.0
+      },
+      "cwsi_spearman_rho": 0.6492997198879552,
+      "cwsi_spearman_pval": 2.444304515935708e-05,
+      "cwsi_spearman_ci_95": [
+        0.3870070259457785,
+        0.8056454730098768
+      ],
+      "mean_cycle_burden": 0.04782327886323572
+    },
+    "B2_landmark_axis": {
+      "mean_auc_pr": 0.8901866522743788,
+      "mean_auc_pr_ci_95": [
+        0.8893525106977224,
+        0.8909660292648577
+      ],
+      "mean_auc_roc": 0.88975,
+      "mean_auc_roc_ci_95": [
+        0.8880000000000001,
+        0.8913140625000001
+      ],
+      "per_perturbation_auc_pr": {
+        "ndvi_drop": 1.0,
+        "lst_spike": 0.5607466090975157,
+        "phase_shift": 1.0,
+        "early_senescence": 1.0
+      },
+      "cwsi_spearman_rho": 0.5274509803921569,
+      "cwsi_spearman_pval": 0.0011301970960684627,
+      "cwsi_spearman_ci_95": [
+        0.22694359855388183,
+        0.7450093983302187
+      ],
+      "mean_cycle_burden": 0.040374220910117255
+    },
+    "B3_isolation_forest": {
+      "mean_auc_pr": 0.629209960476526,
+      "mean_auc_pr_ci_95": [
+        0.6175633304194017,
+        0.6386324289500126
+      ],
+      "mean_auc_roc": 0.665125,
+      "mean_auc_roc_ci_95": [
+        0.6583749999999999,
+        0.672
+      ],
+      "per_perturbation_auc_pr": {
+        "ndvi_drop": 0.639121820679524,
+        "lst_spike": 0.5500395615705355,
+        "phase_shift": 0.648658547137589,
+        "early_senescence": 0.6790199125184561
+      },
+      "cwsi_spearman_rho": 0.604201680672269,
+      "cwsi_spearman_pval": 0.00012128469534834242,
+      "cwsi_spearman_ci_95": [
+        0.32379690522167426,
+        0.7778167903053005
+      ],
+      "mean_cycle_burden": NaN
+    },
+    "B3_ecod": {
+      "mean_auc_pr": 0.7472564937919041,
+      "mean_auc_pr_ci_95": [
+        0.7444017303463267,
+        0.750122489792411
+      ],
+      "mean_auc_roc": 0.7805,
+      "mean_auc_roc_ci_95": [
+        0.7797499999999999,
+        0.7813749999999999
+      ],
+      "per_perturbation_auc_pr": {
+        "ndvi_drop": 0.7959873017027244,
+        "lst_spike": 0.559648442336658,
+        "phase_shift": 0.8278344957988921,
+        "early_senescence": 0.8055557353293421
+      },
+      "cwsi_spearman_rho": 0.5484593837535015,
+      "cwsi_spearman_pval": 0.000646821035735368,
+      "cwsi_spearman_ci_95": [
+        0.23193657657183236,
+        0.7459663463338201
+      ],
+      "mean_cycle_burden": NaN
+    }
+  }
+}

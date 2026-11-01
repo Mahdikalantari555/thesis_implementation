@@ -1,0 +1,235 @@
+{
+  "independent_validation_gate": {
+    "multi_proxy_non_circular_gate": {
+      "gate_passed": true,
+      "permitted_terminology": "validated_crop_stress_indicator",
+      "n_passing_non_circular_proxies": 3,
+      "passing_proxies": [
+        "eta_evaporative_deficit",
+        "non_circular_optical_vs_cwsi",
+        "agronomic_yield_deficit"
+      ],
+      "top_k": 30,
+      "top_k_independent_stress_precision": 1.0,
+      "proxies": {
+        "eta_evaporative_deficit": {
+          "non_circular": true,
+          "spearman_rho": 0.512656769754241,
+          "ci_95": [
+            0.43022159565805784,
+            0.5862249890108622
+          ],
+          "pval": 2.9306174891438743e-34,
+          "passed": true
+        },
+        "non_circular_optical_vs_cwsi": {
+          "non_circular": true,
+          "spearman_rho": 0.48886473861152924,
+          "ci_95": [
+            0.4116363910754159,
+            0.5596123284425866
+          ],
+          "pval": 7.332011688746982e-31,
+          "passed": true
+        },
+        "agronomic_yield_deficit": {
+          "non_circular": true,
+          "spearman_rho": 0.510736715330909,
+          "ci_95": [
+            0.4382294110202548,
+            0.5838805129497604
+          ],
+          "pval": 5.639298441027755e-34,
+          "passed": true
+        }
+      },
+      "unmet_criteria": []
+    },
+    "circular_cwsi_only_gate_rejected": {
+      "gate_passed": false,
+      "permitted_terminology": "unvalidated_spectral_thermal_anomaly",
+      "n_passing_non_circular_proxies": 0,
+      "passing_proxies": [],
+      "top_k": 30,
+      "top_k_independent_stress_precision": NaN,
+      "proxies": {
+        "circular_full_vs_cwsi_diagnostic_only": {
+          "non_circular": false,
+          "spearman_rho": 0.5082918363067092,
+          "pval": 1.2899912232132234e-33,
+          "passed": false,
+          "warning": "Excluded from gate: ST_B10 appears in both full score and CWSI."
+        }
+      },
+      "unmet_criteria": [
+        "Fewer than 2 independent non-circular proxies passed rho>=0.2 (passed=[]).",
+        "No independent event-level labels/consensus supplied for Top-K precision."
+      ]
+    },
+    "expert_review_packet_csv": "reports/expert_stress_review_packet.csv"
+  },
+  "rq7_frozen_probing_multiyear": [
+    {
+      "encoder_source": "untrained_random_encoder",
+      "et0_r2": 0.11724492769913153,
+      "gdd_r2": 0.21776047905896512,
+      "radiation_r2": -0.011128794145965681,
+      "eta_deficit_r2": 0.4164567247806603,
+      "late_ratoon_auc": 0.7543195429200797
+    },
+    {
+      "encoder_source": "ssl_masked_recon",
+      "et0_r2": 0.12136291178968117,
+      "gdd_r2": 0.21282682966162958,
+      "radiation_r2": -0.02645865507418521,
+      "eta_deficit_r2": 0.4039207359505186,
+      "late_ratoon_auc": 0.7123115577889446
+    },
+    {
+      "encoder_source": "ssl_traj_contrastive",
+      "et0_r2": 0.10452089507362383,
+      "gdd_r2": 0.20062437962918134,
+      "radiation_r2": -0.03152273276159101,
+      "eta_deficit_r2": 0.2428134410005678,
+      "late_ratoon_auc": 0.7183004061402906
+    },
+    {
+      "encoder_source": "ssl_anomaly_degradation",
+      "et0_r2": 0.11456486012403355,
+      "gdd_r2": 0.18313173674055117,
+      "radiation_r2": -0.01406078463268301,
+      "eta_deficit_r2": 0.5347946502898453,
+      "late_ratoon_auc": 0.7901665863564398
+    }
+  ],
+  "rq7_frozen_probing_real_32farms": [
+    {
+      "encoder_source": "untrained_random_encoder",
+      "real_tmean_r2": NaN,
+      "real_gdd_total_r2": NaN,
+      "real_cwsi_r2": 0.5549995176949987
+    },
+    {
+      "encoder_source": "ssl_masked_recon",
+      "real_tmean_r2": NaN,
+      "real_gdd_total_r2": NaN,
+      "real_cwsi_r2": 0.7504237746067836
+    },
+    {
+      "encoder_source": "ssl_traj_contrastive",
+      "real_tmean_r2": NaN,
+      "real_gdd_total_r2": NaN,
+      "real_cwsi_r2": 0.7380894891078801
+    },
+    {
+      "encoder_source": "ssl_anomaly_degradation",
+      "real_tmean_r2": NaN,
+      "real_gdd_total_r2": NaN,
+      "real_cwsi_r2": 0.6640231664545926
+    }
+  ],
+  "rq8_contamination_sweep": [
+    {
+      "contamination_rate": 0.0,
+      "ssl_untrimmed_auc_pr": 0.9108218903276364,
+      "ssl_trimmed_q25_auc_pr": 0.9211453939148406,
+      "ssl_trimming_gain": 0.010323503587204241,
+      "b1_untrimmed_mean_sd_auc_pr": 0.7937567869977117,
+      "b1_trimmed_mad_auc_pr": 0.7775362173485947,
+      "ssl_trimmed_recall_10pct": 0.4857142857142857,
+      "ssl_untrimmed_recall_10pct": 0.4857142857142857
+    },
+    {
+      "contamination_rate": 0.05,
+      "ssl_untrimmed_auc_pr": 0.912289111604686,
+      "ssl_trimmed_q25_auc_pr": 0.9007728772411928,
+      "ssl_trimming_gain": -0.011516234363493139,
+      "b1_untrimmed_mean_sd_auc_pr": 0.7526014568429674,
+      "b1_trimmed_mad_auc_pr": 0.7516069256243206,
+      "ssl_trimmed_recall_10pct": 0.45714285714285713,
+      "ssl_untrimmed_recall_10pct": 0.4857142857142857
+    },
+    {
+      "contamination_rate": 0.1,
+      "ssl_untrimmed_auc_pr": 0.8976463132279225,
+      "ssl_trimmed_q25_auc_pr": 0.9092899995197213,
+      "ssl_trimming_gain": 0.011643686291798794,
+      "b1_untrimmed_mean_sd_auc_pr": 0.7488040744839433,
+      "b1_trimmed_mad_auc_pr": 0.7945780183300885,
+      "ssl_trimmed_recall_10pct": 0.4857142857142857,
+      "ssl_untrimmed_recall_10pct": 0.4857142857142857
+    },
+    {
+      "contamination_rate": 0.15,
+      "ssl_untrimmed_auc_pr": 0.8583378147597267,
+      "ssl_trimmed_q25_auc_pr": 0.9092459001361478,
+      "ssl_trimming_gain": 0.05090808537642111,
+      "b1_untrimmed_mean_sd_auc_pr": 0.6939276426860131,
+      "b1_trimmed_mad_auc_pr": 0.7605120676091037,
+      "ssl_trimmed_recall_10pct": 0.4857142857142857,
+      "ssl_untrimmed_recall_10pct": 0.4857142857142857
+    },
+    {
+      "contamination_rate": 0.2,
+      "ssl_untrimmed_auc_pr": 0.8571304667598768,
+      "ssl_trimmed_q25_auc_pr": 0.8726659094255727,
+      "ssl_trimming_gain": 0.015535442665695842,
+      "b1_untrimmed_mean_sd_auc_pr": 0.6450798548893114,
+      "b1_trimmed_mad_auc_pr": 0.7289525649170066,
+      "ssl_trimmed_recall_10pct": 0.45714285714285713,
+      "ssl_untrimmed_recall_10pct": 0.4857142857142857
+    },
+    {
+      "contamination_rate": 0.3,
+      "ssl_untrimmed_auc_pr": 0.8352448494187705,
+      "ssl_trimmed_q25_auc_pr": 0.8774294304401308,
+      "ssl_trimming_gain": 0.042184581021360246,
+      "b1_untrimmed_mean_sd_auc_pr": 0.6046912802836777,
+      "b1_trimmed_mad_auc_pr": 0.723471221207403,
+      "ssl_trimmed_recall_10pct": 0.4857142857142857,
+      "ssl_untrimmed_recall_10pct": 0.4857142857142857
+    }
+  ],
+  "rq8_false_alarm_confounders": {
+    "raw_ssl_stress_vs_confounders_auc_pr": 0.22121196817274374,
+    "physics_filtered_stress_vs_confounders_auc_pr": 0.31290044105932846,
+    "cohort_breakdown": {
+      "clean_normal": {
+        "n_cycles": 45,
+        "raw_ssl_flag_rate_at_20pct_budget": 0.0,
+        "physics_filtered_flag_rate_at_20pct_budget": 0.0,
+        "mean_raw_score": 0.9616035757241428
+      },
+      "cloud_shadow_residual": {
+        "n_cycles": 45,
+        "raw_ssl_flag_rate_at_20pct_budget": 0.7555555555555555,
+        "physics_filtered_flag_rate_at_20pct_budget": 0.37777777777777777,
+        "mean_raw_score": 2.039662401322965
+      },
+      "harvest_date_jitter_30d": {
+        "n_cycles": 45,
+        "raw_ssl_flag_rate_at_20pct_budget": 0.1111111111111111,
+        "physics_filtered_flag_rate_at_20pct_budget": 0.17777777777777778,
+        "mean_raw_score": 1.275879943370819
+      },
+      "late_lodging_partial_cut": {
+        "n_cycles": 45,
+        "raw_ssl_flag_rate_at_20pct_budget": 0.0,
+        "physics_filtered_flag_rate_at_20pct_budget": 0.0,
+        "mean_raw_score": 1.2217972932038483
+      },
+      "early_weed_flush": {
+        "n_cycles": 45,
+        "raw_ssl_flag_rate_at_20pct_budget": 0.1111111111111111,
+        "physics_filtered_flag_rate_at_20pct_budget": 0.17777777777777778,
+        "mean_raw_score": 1.3630497049402308
+      },
+      "true_water_canopy_stress": {
+        "n_cycles": 45,
+        "raw_ssl_flag_rate_at_20pct_budget": 0.2222222222222222,
+        "physics_filtered_flag_rate_at_20pct_budget": 0.4666666666666667,
+        "mean_raw_score": 1.5065227212729277
+      }
+    }
+  }
+}

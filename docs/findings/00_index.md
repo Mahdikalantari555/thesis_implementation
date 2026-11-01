@@ -11,6 +11,8 @@
 4. `04_evaluation.md` — ارزیابی و تزریق مصنوعی
 5. `05_ssl_training.md` — آموزش SSL و پایداری
 6. `06_advisor_presentation_plan.md` — چه چیزی بعد از ارائهٔ پاورپوینت به استاد نشان دهیم
-7. `07_validation_and_map.md` — validation split و نقشهٔ مکانی
+7. `07_validation_and_map.md` — validation split و نقشهٔ مکانی پویا (per-day anomaly)
 8. `08_honest_assessment.md` — ارزیابی صادقانه: شدنی بودن، معماری‌ها، محدودیت‌ها، نقاط قوت
 9. `09_anomaly_layer_explained.md` — لایهٔ آنومالی: معنا، منشأ، فرمول‌ها، علم پشتش
+10. `10_remaining_code_results.md` — نتایج تکمیلی: بک‌اند Rust (`32.7×`)، تحلیل حساسیت Ablation، آزمون درون‌مزرعه‌ای `E-INTRA`، مقایسهٔ `B0–B3` و `GRU-AE` در برابر `Masked Transformer`
+11. `11_rq1_to_rq8_empirical_framework.md` — چارچوب تجربی کامل ادبیات پژوهش (`RQ1–RQ8`، شکاف‌های `G1–G8`، دروازهٔ اعتبارسنجی مستقل `Anomaly ≠ Stress`، مقاومت ابری `date/Δt`، پیش‌دستی `+34` روزه و `Temporal XAI`)

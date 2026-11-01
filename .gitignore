@@ -55,6 +55,7 @@ Thumbs.db
 
 # Rust
 rust/target/
+rust/Cargo.lock
 **/*.so
 src/ssl_anomaly/_rs*.so
 
