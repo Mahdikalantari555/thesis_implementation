@@ -1,0 +1,8 @@
+# Base configuration — defaults match the laptop profile.
+# Override via Hydra: `python script.py profile=laptop device=cpu`
+defaults:
+  - profile: laptop
+  - _self_
+
+verbose: 1
+seed: 42

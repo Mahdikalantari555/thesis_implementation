@@ -1,0 +1,51 @@
+# DVC pipeline skeleton per spec.
+# Run `dvc repro` to execute stages in dependency order. All stages are
+# written so they can be checkpointed at the scene/item level via the
+# sqlite Manifest class in addition to DVC's stage-level resume.
+stages:
+  field_mask:
+    cmd: python -m ssl_anomaly.cli ingest --fields data/geo/fields.gpkg --out-mask data/interim/field_mask.tif --no-low-priority
+    deps:
+      - data/geo/fields.gpkg
+    outs:
+      - data/interim/field_mask.tif
+
+  zonal:
+    cmd: echo "Per-scene zonal is run via scripts against data/raw/landsat; stage uses synthetic placeholder in dev."
+    deps:
+      - data/raw/landsat
+      - data/interim/field_mask.tif
+    outs:
+      - data/interim/zonal
+
+  fields_zarr:
+    cmd: python -m ssl_anomaly.cli ingest --zonal-dir data/interim/zonal --out-zarr data/processed/fields.zarr
+    deps:
+      - data/interim/zonal
+    outs:
+      - data/processed/fields.zarr
+
+  cycles:
+    cmd: python -m ssl_anomaly.cli segment --zarr data/processed/fields.zarr --out data/processed/cycles.parquet
+    deps:
+      - data/processed/fields.zarr
+    outs:
+      - data/processed/cycles.parquet
+
+  baseline:
+    cmd: python scripts/build_baseline.py
+    deps:
+      - data/processed/cycles.parquet
+      - data/processed/fields.zarr
+    outs:
+      - data/processed/baseline.npz
+      - data/processed/scores.parquet
+
+  evaluate:
+    cmd: python scripts/evaluate.py
+    deps:
+      - data/processed/scores.parquet
+      - data/processed/baseline.npz
+    metrics:
+      - reports/metrics.json:
+          cache: false

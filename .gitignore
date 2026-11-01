@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+dist/
+build/
+
+# Virtual env
+.venv/
+venv/
+env/
+
+# Data (DVC tracked)
+data/raw/
+data/interim/
+data/processed/
+data/geo/
+data/manifests/
+!data/.gitkeep
+!data/**/.gitkeep
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# MLflow / lightning
+mlruns/
+lightning_logs/
+checkpoints/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# DVC
+.dvc/tmp/
+.dvc/cache/
+
+# Ruff/Pyright
+.pyrightconfig.json.bak
+
+# Rust
+rust/target/
+**/*.so
+src/ssl_anomaly/_rs*.so
