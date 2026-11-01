@@ -68,6 +68,39 @@ $q = 0.15$ (top 15% حذف می‌شوند).
 | Trimmed loss | حذف ۱۰٪ بالاترین loss در هر batch | robust M-estimation |
 | Leave-one-out | baseline بدون خود چرخه | cross-validation |
 
+## ۴.۵ رابطه با SSL (مکمل یا جایگزین)
+
+**لایهٔ آنومالی فعلی (B1)** یک **baseline آماری** است: z-score robust روی چرخه‌های نرمال.
+**SSL (M-B)** یک **baseline یادگیری‌عمیق** است: خطای بازسازی (reconstruction error) مدل Transformer.
+
+### تفاوت‌ها
+
+| | B1 (آماری) | SSL (Transformer) |
+|---|---|---|
+| **ورودی** | باندهای خام (mean per field) | token sequence (bands + weather + dsh + ...) |
+| **مدل** | median/MAD per (stratum, bin) | masked autoencoder |
+| **امتیاز** | RMS z-score | reconstruction error (Huber) |
+| **تفسیرپذیری** | بالا (هر band/bin) | متوسط (Captum/XAI لازم) |
+| **پایداری** | بالا | نامشخص (gate G2) |
+| **هزینه** | CPU، چند دقیقه | CPU/GPU، چند ساعت |
+
+### چگونه ترکیب می‌شوند؟
+
+1. **B1 اول**: baseline آماری به‌عنوان کف مقایسه.
+2. **SSL دوم**: اگر SSL با CI معنادار از B1 بهتر باشد (gate G2)، امتیاز SSL به‌عنوان anomaly score اصلی استفاده می‌شود.
+3. **ترکیب**: اگر هر دو جداگانه از B1 بهتر باشند، با **rank-average** ترکیب می‌شوند.
+4. **بدون برچسب**: وزن‌های یادگرفته‌شده روی دادهٔ مصنوعی fit نمی‌شوند (خطر overfit).
+
+### فرمول SSL anomaly score
+$$\text{score}_{\text{SSL}} = \frac{1}{K} \sum_{k=1}^{K} \text{Huber}(x_k, \hat{x}_k)$$
+
+که $\hat{x}_k$ = بازسازی مدل برای band $k$ (token پوشانده‌شده). سپس robust scaling (median/MAD) به z تبدیل می‌شود تا با B1 هم‌واحد باشد.
+
+### وضعیت فعلی
+- SSL روی ۳۲ مزرعه (۴۳ cycle) آموزش دیده است.
+- Gate G2 (SSL beats B1 with CI) **هنوز تست نشده**.
+- باید روی ۴۹۰ مزرعه اجرا و مقایسه شود.
+
 ## ۵. daily anomaly (نسخهٔ جدید)
 
 برای هر مزرعه در هر تاریخ:
