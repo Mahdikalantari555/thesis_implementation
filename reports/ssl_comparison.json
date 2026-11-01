@@ -1,0 +1,75 @@
+{
+  "n_cycles_total": 35,
+  "n_train_cycles": 29,
+  "n_val_cycles": 6,
+  "d_in": 24,
+  "n_bands": 10,
+  "epochs": 45,
+  "seeds": [
+    42,
+    43,
+    44,
+    45,
+    46
+  ],
+  "models": {
+    "gru_ae": {
+      "n_parameters": 161112,
+      "mean_train_seconds": 3.3731165537999006,
+      "val_band_huber_loss": 0.10401213639955016,
+      "val_band_huber_ci_95": [
+        0.09816678383655866,
+        0.10842900508314687
+      ],
+      "recon_only_auc_pr": 0.8535404607132072,
+      "embed_knn_only_auc_pr": 0.4872330698122722,
+      "combined_auc_pr": 0.7008450795664655,
+      "combined_auc_pr_ci_95": [
+        0.6899527792239749,
+        0.7093980409154133
+      ],
+      "combined_auc_roc": 0.7354489795918367,
+      "combined_auc_roc_ci_95": [
+        0.7218163265306122,
+        0.7484897959183672
+      ],
+      "per_perturbation_auc_pr": {
+        "ndvi_drop": 0.7401608102187585,
+        "lst_spike": 0.5619553205424591,
+        "phase_shift": 0.8293620751602063,
+        "early_senescence": 0.6719021123444379
+      },
+      "cwsi_spearman_rho": 0.07703081232492998,
+      "cwsi_spearman_pval": 0.6600642758322361
+    },
+    "transformer": {
+      "n_parameters": 161624,
+      "mean_train_seconds": 1.8143435871999827,
+      "val_band_huber_loss": 0.12944853112886134,
+      "val_band_huber_ci_95": [
+        0.11567763703043785,
+        0.14753130188859193
+      ],
+      "recon_only_auc_pr": 0.9023471617520716,
+      "embed_knn_only_auc_pr": 0.48616284424406436,
+      "combined_auc_pr": 0.7638583552993157,
+      "combined_auc_pr_ci_95": [
+        0.7325495917622022,
+        0.7919113323202095
+      ],
+      "combined_auc_roc": 0.7979387755102041,
+      "combined_auc_roc_ci_95": [
+        0.767,
+        0.8152653061224491
+      ],
+      "per_perturbation_auc_pr": {
+        "ndvi_drop": 0.7684654045396005,
+        "lst_spike": 0.6859308204920784,
+        "phase_shift": 0.8410068167668927,
+        "early_senescence": 0.760030379398691
+      },
+      "cwsi_spearman_rho": 0.28293297919373284,
+      "cwsi_spearman_pval": 0.09957626183051047
+    }
+  }
+}

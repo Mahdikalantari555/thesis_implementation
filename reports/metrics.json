@@ -1,8 +1,8 @@
 {
-  "n_scored": 70,
-  "n_with_run": 31,
-  "mean_burden": 0.14445498540963497,
-  "synthetic_mean_recall_at_5pct": 0.01984126984126984,
-  "synthetic_mean_detection_delay_bins": 11.029411764705882,
-  "n_injection_scenarios": 63
+  "n_cycles_scored": 70,
+  "n_cycles_with_run": 30,
+  "mean_burden": 0.13536144281025633,
+  "baseline_floor": 0.0036505827922560276,
+  "n_strata": 6,
+  "n_normal_cycles": 42
 }

@@ -32,7 +32,19 @@ def test_get_backend_numpy():
     assert isinstance(bk, NumpyBackend)
 
 
-def test_get_backend_rust_stub_raises():
+def test_get_backend_rust_or_fallback(monkeypatch):
+    import sys
+
     import pytest
+
+    try:
+        import ssl_anomaly_rs  # noqa: F401
+        bk = get_backend("rust")
+        assert bk.name == "rust"
+    except ImportError:
+        pass
+
+    # Verify clean NotImplementedError when Rust extension is unavailable
+    monkeypatch.setitem(sys.modules, "ssl_anomaly_rs", None)
     with pytest.raises(NotImplementedError):
         get_backend("rust")

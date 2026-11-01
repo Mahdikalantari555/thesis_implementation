@@ -168,3 +168,44 @@ def whittaker_tune_lambda(
         scores[float(lam)] = float(np.mean(errs))
     best = float(min(scores, key=scores.get))  # type: ignore[arg-type]
     return best, {"grid_mse": scores, "best_idx": int(np.argmin(list(scores.values())))}
+
+
+def savitzky_golay_8day(
+    t_days: np.ndarray,
+    y: np.ndarray,
+    *,
+    step_days: int = 8,
+    window_length: int = 7,
+    polyorder: int = 2,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Sprint-0 regular-grid comparator: interpolate onto an 8-day grid + Savitzky-Golay filter.
+
+    Included per ``docs/final_plan.md`` §4.2.2 as a baseline smoothing comparator against
+    weighted daily Whittaker-Eilers smoothing on irregular cloud-gapped Landsat series.
+    """
+    from scipy.signal import savgol_filter
+
+    t_arr = np.asarray(t_days, dtype=np.int64)
+    y_arr = np.asarray(y, dtype=np.float64)
+    fin = np.isfinite(t_arr) & np.isfinite(y_arr)
+    if int(fin.sum()) < 2:
+        return t_arr.copy(), np.nan_to_num(y_arr, nan=0.0)
+
+    t_fin = t_arr[fin]
+    y_fin = y_arr[fin]
+    order = np.argsort(t_fin)
+    t_fin, y_fin = t_fin[order], y_fin[order]
+
+    grid = np.arange(int(t_fin[0]), int(t_fin[-1]) + 1, int(step_days), dtype=np.int64)
+    y_interp = np.interp(grid.astype(np.float64), t_fin.astype(np.float64), y_fin)
+    if grid.size < 3:
+        return grid, y_interp
+
+    win = min(int(window_length), int(grid.size))
+    if win % 2 == 0:
+        win = max(3, win - 1)
+    if win > grid.size:
+        return grid, y_interp
+    poly = min(int(polyorder), win - 1)
+    smoothed = savgol_filter(y_interp, window_length=win, polyorder=poly, mode="interp")
+    return grid, np.asarray(smoothed, dtype=np.float64)
