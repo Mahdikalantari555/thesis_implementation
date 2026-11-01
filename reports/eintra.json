@@ -1,0 +1,1610 @@
+{
+  "source_mode": "zarr_spatial_std_subfield_ensemble",
+  "backend": "rust",
+  "n_farms_total": 32,
+  "n_farms_with_detected_harvests": 31,
+  "n_pixels_per_farm": 48,
+  "gate_threshold_days": 30.0,
+  "mean_within_field_std_days": 9.263842293711303,
+  "mean_within_field_std_ci_95": [
+    8.101350865691245,
+    10.48669979190962
+  ],
+  "median_within_field_std_days": 8.552707838010814,
+  "mean_within_field_iqr_days": 10.073924731182794,
+  "mean_within_field_iqr_ci_95": [
+    8.53987087173579,
+    11.684962557603683
+  ],
+  "mean_within_field_p90_p10_days": 18.804301075268807,
+  "n_farms_exceeding_30d_std": 0,
+  "frac_farms_exceeding_30d_std": 0.0,
+  "prioritize_phase3": false,
+  "per_field": [
+    {
+      "field": 1,
+      "n_pixels": 48,
+      "n_field_harvests": 3,
+      "n_matched_harvests": 3,
+      "mean_std_days": 6.333727202670414,
+      "max_std_days": 7.175746789801183,
+      "mean_iqr_days": 5.5,
+      "mean_p90_p10_days": 12.699999999999969,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 1531,
+          "n_pixels_matched": 20,
+          "pixel_detection_rate": 0.4166666666666667,
+          "std_days": 5.609202964302223,
+          "iqr_days": 4.25,
+          "p90_p10_days": 11.5,
+          "median_offset_days": -3.0
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 1943,
+          "n_pixels_matched": 26,
+          "pixel_detection_rate": 0.5416666666666666,
+          "std_days": 6.2162318539078365,
+          "iqr_days": 3.75,
+          "p90_p10_days": 9.0,
+          "median_offset_days": 0.5
+        },
+        {
+          "harvest_idx": 2,
+          "field_harvest_day": 2876,
+          "n_pixels_matched": 22,
+          "pixel_detection_rate": 0.4583333333333333,
+          "std_days": 7.175746789801183,
+          "iqr_days": 8.5,
+          "p90_p10_days": 17.59999999999991,
+          "median_offset_days": -1.5
+        }
+      ]
+    },
+    {
+      "field": 2,
+      "n_pixels": 48,
+      "n_field_harvests": 2,
+      "n_matched_harvests": 2,
+      "mean_std_days": 4.453063656767513,
+      "max_std_days": 6.2603760024704345,
+      "mean_iqr_days": 6.625,
+      "mean_p90_p10_days": 9.5,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 722,
+          "n_pixels_matched": 14,
+          "pixel_detection_rate": 0.2916666666666667,
+          "std_days": 6.2603760024704345,
+          "iqr_days": 11.25,
+          "p90_p10_days": 14.0,
+          "median_offset_days": -12.5
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 1425,
+          "n_pixels_matched": 5,
+          "pixel_detection_rate": 0.10416666666666667,
+          "std_days": 2.6457513110645907,
+          "iqr_days": 2.0,
+          "p90_p10_days": 5.0,
+          "median_offset_days": -9.0
+        }
+      ]
+    },
+    {
+      "field": 3,
+      "n_pixels": 48,
+      "n_field_harvests": 5,
+      "n_matched_harvests": 5,
+      "mean_std_days": 7.734236118266412,
+      "max_std_days": 16.863707047521178,
+      "mean_iqr_days": 7.45,
+      "mean_p90_p10_days": 14.880000000000019,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 1446,
+          "n_pixels_matched": 6,
+          "pixel_detection_rate": 0.125,
+          "std_days": 2.756809750418044,
+          "iqr_days": 2.5,
+          "p90_p10_days": 5.5,
+          "median_offset_days": -3.5
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 1808,
+          "n_pixels_matched": 47,
+          "pixel_detection_rate": 0.9791666666666666,
+          "std_days": 4.440062337571074,
+          "iqr_days": 7.5,
+          "p90_p10_days": 11.400000000000091,
+          "median_offset_days": 0.0
+        },
+        {
+          "harvest_idx": 2,
+          "field_harvest_day": 2534,
+          "n_pixels_matched": 43,
+          "pixel_detection_rate": 0.8958333333333334,
+          "std_days": 9.952600844296503,
+          "iqr_days": 9.0,
+          "p90_p10_days": 26.0,
+          "median_offset_days": 1.0
+        },
+        {
+          "harvest_idx": 3,
+          "field_harvest_day": 2877,
+          "n_pixels_matched": 27,
+          "pixel_detection_rate": 0.5625,
+          "std_days": 16.863707047521178,
+          "iqr_days": 14.5,
+          "p90_p10_days": 19.199999999999818,
+          "median_offset_days": 0.0
+        },
+        {
+          "harvest_idx": 4,
+          "field_harvest_day": 3951,
+          "n_pixels_matched": 12,
+          "pixel_detection_rate": 0.25,
+          "std_days": 4.658000611525259,
+          "iqr_days": 3.75,
+          "p90_p10_days": 12.300000000000182,
+          "median_offset_days": -1.0
+        }
+      ]
+    },
+    {
+      "field": 4,
+      "n_pixels": 48,
+      "n_field_harvests": 4,
+      "n_matched_harvests": 4,
+      "mean_std_days": 12.19467044532572,
+      "max_std_days": 17.332313489811188,
+      "mean_iqr_days": 13.3125,
+      "mean_p90_p10_days": 22.049999999999955,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 2527,
+          "n_pixels_matched": 10,
+          "pixel_detection_rate": 0.20833333333333334,
+          "std_days": 10.488088481701515,
+          "iqr_days": 12.75,
+          "p90_p10_days": 22.299999999999727,
+          "median_offset_days": -10.0
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 2876,
+          "n_pixels_matched": 39,
+          "pixel_detection_rate": 0.8125,
+          "std_days": 5.9448658941413655,
+          "iqr_days": 5.5,
+          "p90_p10_days": 15.0,
+          "median_offset_days": 1.0
+        },
+        {
+          "harvest_idx": 2,
+          "field_harvest_day": 3950,
+          "n_pixels_matched": 22,
+          "pixel_detection_rate": 0.4583333333333333,
+          "std_days": 17.332313489811188,
+          "iqr_days": 10.75,
+          "p90_p10_days": 18.90000000000009,
+          "median_offset_days": 1.5
+        },
+        {
+          "harvest_idx": 3,
+          "field_harvest_day": 4331,
+          "n_pixels_matched": 22,
+          "pixel_detection_rate": 0.4583333333333333,
+          "std_days": 15.01341391564881,
+          "iqr_days": 24.25,
+          "p90_p10_days": 32.0,
+          "median_offset_days": -28.5
+        }
+      ]
+    },
+    {
+      "field": 5,
+      "n_pixels": 48,
+      "n_field_harvests": 4,
+      "n_matched_harvests": 4,
+      "mean_std_days": 8.552707838010814,
+      "max_std_days": 18.837295386519575,
+      "mean_iqr_days": 8.4375,
+      "mean_p90_p10_days": 12.550000000000068,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 721,
+          "n_pixels_matched": 35,
+          "pixel_detection_rate": 0.7291666666666666,
+          "std_days": 18.837295386519575,
+          "iqr_days": 8.5,
+          "p90_p10_days": 14.400000000000091,
+          "median_offset_days": 0.0
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 1446,
+          "n_pixels_matched": 7,
+          "pixel_detection_rate": 0.14583333333333334,
+          "std_days": 2.544836041121407,
+          "iqr_days": 1.5,
+          "p90_p10_days": 4.400000000000091,
+          "median_offset_days": -7.0
+        },
+        {
+          "harvest_idx": 2,
+          "field_harvest_day": 2530,
+          "n_pixels_matched": 14,
+          "pixel_detection_rate": 0.2916666666666667,
+          "std_days": 3.0750681221794025,
+          "iqr_days": 3.75,
+          "p90_p10_days": 8.400000000000091,
+          "median_offset_days": -2.5
+        },
+        {
+          "harvest_idx": 3,
+          "field_harvest_day": 3897,
+          "n_pixels_matched": 21,
+          "pixel_detection_rate": 0.4375,
+          "std_days": 9.75363180222287,
+          "iqr_days": 20.0,
+          "p90_p10_days": 23.0,
+          "median_offset_days": 8.0
+        }
+      ]
+    },
+    {
+      "field": 6,
+      "n_pixels": 48,
+      "n_field_harvests": 3,
+      "n_matched_harvests": 3,
+      "mean_std_days": 12.740718151332828,
+      "max_std_days": 16.813963233155686,
+      "mean_iqr_days": 17.583333333333332,
+      "mean_p90_p10_days": 24.49999999999996,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 720,
+          "n_pixels_matched": 13,
+          "pixel_detection_rate": 0.2708333333333333,
+          "std_days": 6.658328118479393,
+          "iqr_days": 10.0,
+          "p90_p10_days": 13.399999999999977,
+          "median_offset_days": -11.0
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 1436,
+          "n_pixels_matched": 26,
+          "pixel_detection_rate": 0.5416666666666666,
+          "std_days": 14.74986310236341,
+          "iqr_days": 28.75,
+          "p90_p10_days": 34.5,
+          "median_offset_days": -19.5
+        },
+        {
+          "harvest_idx": 2,
+          "field_harvest_day": 2877,
+          "n_pixels_matched": 29,
+          "pixel_detection_rate": 0.6041666666666666,
+          "std_days": 16.813963233155686,
+          "iqr_days": 14.0,
+          "p90_p10_days": 25.59999999999991,
+          "median_offset_days": -2.0
+        }
+      ]
+    },
+    {
+      "field": 7,
+      "n_pixels": 48,
+      "n_field_harvests": 3,
+      "n_matched_harvests": 3,
+      "mean_std_days": 6.647059370670352,
+      "max_std_days": 11.525838373557528,
+      "mean_iqr_days": 9.25,
+      "mean_p90_p10_days": 16.433333333333394,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 722,
+          "n_pixels_matched": 21,
+          "pixel_detection_rate": 0.4375,
+          "std_days": 6.164414002968976,
+          "iqr_days": 9.0,
+          "p90_p10_days": 16.0,
+          "median_offset_days": -1.0
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 1445,
+          "n_pixels_matched": 6,
+          "pixel_detection_rate": 0.125,
+          "std_days": 2.250925735484551,
+          "iqr_days": 1.5,
+          "p90_p10_days": 4.0,
+          "median_offset_days": -8.0
+        },
+        {
+          "harvest_idx": 2,
+          "field_harvest_day": 2862,
+          "n_pixels_matched": 38,
+          "pixel_detection_rate": 0.7916666666666666,
+          "std_days": 11.525838373557528,
+          "iqr_days": 17.25,
+          "p90_p10_days": 29.300000000000182,
+          "median_offset_days": -4.5
+        }
+      ]
+    },
+    {
+      "field": 8,
+      "n_pixels": 48,
+      "n_field_harvests": 1,
+      "n_matched_harvests": 1,
+      "mean_std_days": 9.1335687396591,
+      "max_std_days": 9.1335687396591,
+      "mean_iqr_days": 13.0,
+      "mean_p90_p10_days": 20.699999999999932,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 603,
+          "n_pixels_matched": 22,
+          "pixel_detection_rate": 0.4583333333333333,
+          "std_days": 9.1335687396591,
+          "iqr_days": 13.0,
+          "p90_p10_days": 20.699999999999932,
+          "median_offset_days": -5.5
+        }
+      ]
+    },
+    {
+      "field": 9,
+      "n_pixels": 48,
+      "n_field_harvests": 1,
+      "n_matched_harvests": 1,
+      "mean_std_days": 6.943307843493891,
+      "max_std_days": 6.943307843493891,
+      "mean_iqr_days": 3.0,
+      "mean_p90_p10_days": 10.399999999999977,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 683,
+          "n_pixels_matched": 15,
+          "pixel_detection_rate": 0.3125,
+          "std_days": 6.943307843493891,
+          "iqr_days": 3.0,
+          "p90_p10_days": 10.399999999999977,
+          "median_offset_days": 0.0
+        }
+      ]
+    },
+    {
+      "field": 10,
+      "n_pixels": 48,
+      "n_field_harvests": 4,
+      "n_matched_harvests": 3,
+      "mean_std_days": 10.940931181377929,
+      "max_std_days": 16.004463663080283,
+      "mean_iqr_days": 15.333333333333334,
+      "mean_p90_p10_days": 23.866666666666674,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 716,
+          "n_pixels_matched": 17,
+          "pixel_detection_rate": 0.3541666666666667,
+          "std_days": 8.310163868986686,
+          "iqr_days": 5.0,
+          "p90_p10_days": 17.199999999999932,
+          "median_offset_days": -11.0
+        },
+        {
+          "harvest_idx": 2,
+          "field_harvest_day": 2519,
+          "n_pixels_matched": 7,
+          "pixel_detection_rate": 0.14583333333333334,
+          "std_days": 16.004463663080283,
+          "iqr_days": 30.0,
+          "p90_p10_days": 34.0,
+          "median_offset_days": -4.0
+        },
+        {
+          "harvest_idx": 3,
+          "field_harvest_day": 3951,
+          "n_pixels_matched": 37,
+          "pixel_detection_rate": 0.7708333333333334,
+          "std_days": 8.508166012066813,
+          "iqr_days": 11.0,
+          "p90_p10_days": 20.40000000000009,
+          "median_offset_days": 3.0
+        }
+      ]
+    },
+    {
+      "field": 11,
+      "n_pixels": 48,
+      "n_field_harvests": 1,
+      "n_matched_harvests": 1,
+      "mean_std_days": 8.5684583362977,
+      "max_std_days": 8.5684583362977,
+      "mean_iqr_days": 7.5,
+      "mean_p90_p10_days": 20.09999999999991,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 3951,
+          "n_pixels_matched": 24,
+          "pixel_detection_rate": 0.5,
+          "std_days": 8.5684583362977,
+          "iqr_days": 7.5,
+          "p90_p10_days": 20.09999999999991,
+          "median_offset_days": -10.0
+        }
+      ]
+    },
+    {
+      "field": 12,
+      "n_pixels": 48,
+      "n_field_harvests": 2,
+      "n_matched_harvests": 2,
+      "mean_std_days": 19.01801126468034,
+      "max_std_days": 27.080354285631014,
+      "mean_iqr_days": 19.5,
+      "mean_p90_p10_days": 39.60000000000002,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 685,
+          "n_pixels_matched": 25,
+          "pixel_detection_rate": 0.5208333333333334,
+          "std_days": 10.955668243729667,
+          "iqr_days": 19.0,
+          "p90_p10_days": 27.200000000000045,
+          "median_offset_days": -1.0
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 3892,
+          "n_pixels_matched": 17,
+          "pixel_detection_rate": 0.3541666666666667,
+          "std_days": 27.080354285631014,
+          "iqr_days": 20.0,
+          "p90_p10_days": 52.0,
+          "median_offset_days": -22.0
+        }
+      ]
+    },
+    {
+      "field": 13,
+      "n_pixels": 48,
+      "n_field_harvests": 3,
+      "n_matched_harvests": 2,
+      "mean_std_days": 9.226173415244402,
+      "max_std_days": 12.803916791552151,
+      "mean_iqr_days": 13.125,
+      "mean_p90_p10_days": 22.350000000000023,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 718,
+          "n_pixels_matched": 7,
+          "pixel_detection_rate": 0.14583333333333334,
+          "std_days": 5.648430038936652,
+          "iqr_days": 5.0,
+          "p90_p10_days": 11.0,
+          "median_offset_days": -9.0
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 1061,
+          "n_pixels_matched": 34,
+          "pixel_detection_rate": 0.7083333333333334,
+          "std_days": 12.803916791552151,
+          "iqr_days": 21.25,
+          "p90_p10_days": 33.700000000000045,
+          "median_offset_days": -5.5
+        }
+      ]
+    },
+    {
+      "field": 14,
+      "n_pixels": 48,
+      "n_field_harvests": 0,
+      "n_matched_harvests": 0,
+      "mean_std_days": NaN,
+      "max_std_days": NaN,
+      "mean_iqr_days": NaN,
+      "mean_p90_p10_days": NaN,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": []
+    },
+    {
+      "field": 15,
+      "n_pixels": 48,
+      "n_field_harvests": 4,
+      "n_matched_harvests": 4,
+      "mean_std_days": 4.09098986215332,
+      "max_std_days": 5.165053511608353,
+      "mean_iqr_days": 4.4375,
+      "mean_p90_p10_days": 8.549999999999955,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 711,
+          "n_pixels_matched": 13,
+          "pixel_detection_rate": 0.2708333333333333,
+          "std_days": 4.708148963941845,
+          "iqr_days": 6.0,
+          "p90_p10_days": 11.0,
+          "median_offset_days": -4.0
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 1094,
+          "n_pixels_matched": 6,
+          "pixel_detection_rate": 0.125,
+          "std_days": 3.1885210782848317,
+          "iqr_days": 1.5,
+          "p90_p10_days": 5.5,
+          "median_offset_days": -4.0
+        },
+        {
+          "harvest_idx": 2,
+          "field_harvest_day": 1427,
+          "n_pixels_matched": 7,
+          "pixel_detection_rate": 0.14583333333333334,
+          "std_days": 3.302235894778249,
+          "iqr_days": 3.5,
+          "p90_p10_days": 7.0,
+          "median_offset_days": -2.0
+        },
+        {
+          "harvest_idx": 3,
+          "field_harvest_day": 2531,
+          "n_pixels_matched": 10,
+          "pixel_detection_rate": 0.20833333333333334,
+          "std_days": 5.165053511608353,
+          "iqr_days": 6.75,
+          "p90_p10_days": 10.699999999999818,
+          "median_offset_days": -1.5
+        }
+      ]
+    },
+    {
+      "field": 16,
+      "n_pixels": 48,
+      "n_field_harvests": 6,
+      "n_matched_harvests": 6,
+      "mean_std_days": 5.155641462541095,
+      "max_std_days": 7.969045733362731,
+      "mean_iqr_days": 5.708333333333333,
+      "mean_p90_p10_days": 12.250000000000037,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 712,
+          "n_pixels_matched": 7,
+          "pixel_detection_rate": 0.14583333333333334,
+          "std_days": 4.4986770542121866,
+          "iqr_days": 5.0,
+          "p90_p10_days": 10.0,
+          "median_offset_days": -2.0
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 990,
+          "n_pixels_matched": 8,
+          "pixel_detection_rate": 0.16666666666666666,
+          "std_days": 4.54933276112317,
+          "iqr_days": 5.75,
+          "p90_p10_days": 11.299999999999955,
+          "median_offset_days": -6.0
+        },
+        {
+          "harvest_idx": 2,
+          "field_harvest_day": 1791,
+          "n_pixels_matched": 28,
+          "pixel_detection_rate": 0.5833333333333334,
+          "std_days": 6.2151674859417,
+          "iqr_days": 5.5,
+          "p90_p10_days": 13.900000000000091,
+          "median_offset_days": 0.5
+        },
+        {
+          "harvest_idx": 3,
+          "field_harvest_day": 2541,
+          "n_pixels_matched": 38,
+          "pixel_detection_rate": 0.7916666666666666,
+          "std_days": 7.969045733362731,
+          "iqr_days": 9.0,
+          "p90_p10_days": 22.0,
+          "median_offset_days": 0.0
+        },
+        {
+          "harvest_idx": 4,
+          "field_harvest_day": 2923,
+          "n_pixels_matched": 17,
+          "pixel_detection_rate": 0.3541666666666667,
+          "std_days": 4.260799427889781,
+          "iqr_days": 5.0,
+          "p90_p10_days": 8.400000000000091,
+          "median_offset_days": -3.0
+        },
+        {
+          "harvest_idx": 5,
+          "field_harvest_day": 3276,
+          "n_pixels_matched": 8,
+          "pixel_detection_rate": 0.16666666666666666,
+          "std_days": 3.440826312717007,
+          "iqr_days": 4.0,
+          "p90_p10_days": 7.900000000000091,
+          "median_offset_days": -7.5
+        }
+      ]
+    },
+    {
+      "field": 17,
+      "n_pixels": 48,
+      "n_field_harvests": 4,
+      "n_matched_harvests": 4,
+      "mean_std_days": 13.695524027119001,
+      "max_std_days": 32.00892732616057,
+      "mean_iqr_days": 7.9375,
+      "mean_p90_p10_days": 21.275000000000034,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 284,
+          "n_pixels_matched": 25,
+          "pixel_detection_rate": 0.5208333333333334,
+          "std_days": 7.6511437053554285,
+          "iqr_days": 8.0,
+          "p90_p10_days": 14.0,
+          "median_offset_days": 0.0
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 601,
+          "n_pixels_matched": 11,
+          "pixel_detection_rate": 0.22916666666666666,
+          "std_days": 7.884391946347946,
+          "iqr_days": 11.5,
+          "p90_p10_days": 20.0,
+          "median_offset_days": 2.0
+        },
+        {
+          "harvest_idx": 2,
+          "field_harvest_day": 1732,
+          "n_pixels_matched": 8,
+          "pixel_detection_rate": 0.16666666666666666,
+          "std_days": 32.00892732616057,
+          "iqr_days": 4.0,
+          "p90_p10_days": 34.600000000000136,
+          "median_offset_days": -1.0
+        },
+        {
+          "harvest_idx": 3,
+          "field_harvest_day": 4257,
+          "n_pixels_matched": 16,
+          "pixel_detection_rate": 0.3333333333333333,
+          "std_days": 7.2376331306120605,
+          "iqr_days": 8.25,
+          "p90_p10_days": 16.5,
+          "median_offset_days": 1.5
+        }
+      ]
+    },
+    {
+      "field": 18,
+      "n_pixels": 48,
+      "n_field_harvests": 2,
+      "n_matched_harvests": 2,
+      "mean_std_days": 7.220325125113671,
+      "max_std_days": 7.262478209508771,
+      "mean_iqr_days": 7.875,
+      "mean_p90_p10_days": 14.450000000000045,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 284,
+          "n_pixels_matched": 26,
+          "pixel_detection_rate": 0.5416666666666666,
+          "std_days": 7.1781720407185725,
+          "iqr_days": 6.75,
+          "p90_p10_days": 12.5,
+          "median_offset_days": -1.0
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 2826,
+          "n_pixels_matched": 13,
+          "pixel_detection_rate": 0.2708333333333333,
+          "std_days": 7.262478209508771,
+          "iqr_days": 9.0,
+          "p90_p10_days": 16.40000000000009,
+          "median_offset_days": -7.0
+        }
+      ]
+    },
+    {
+      "field": 19,
+      "n_pixels": 48,
+      "n_field_harvests": 6,
+      "n_matched_harvests": 6,
+      "mean_std_days": 7.782505530345756,
+      "max_std_days": 13.958436325893803,
+      "mean_iqr_days": 7.291666666666667,
+      "mean_p90_p10_days": 13.950000000000083,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 284,
+          "n_pixels_matched": 24,
+          "pixel_detection_rate": 0.5,
+          "std_days": 10.890761940845733,
+          "iqr_days": 14.25,
+          "p90_p10_days": 24.100000000000023,
+          "median_offset_days": 1.5
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 600,
+          "n_pixels_matched": 23,
+          "pixel_detection_rate": 0.4791666666666667,
+          "std_days": 13.958436325893803,
+          "iqr_days": 7.0,
+          "p90_p10_days": 13.600000000000023,
+          "median_offset_days": 1.0
+        },
+        {
+          "harvest_idx": 2,
+          "field_harvest_day": 1069,
+          "n_pixels_matched": 7,
+          "pixel_detection_rate": 0.14583333333333334,
+          "std_days": 5.089672082242814,
+          "iqr_days": 5.0,
+          "p90_p10_days": 10.800000000000182,
+          "median_offset_days": -3.0
+        },
+        {
+          "harvest_idx": 3,
+          "field_harvest_day": 2555,
+          "n_pixels_matched": 7,
+          "pixel_detection_rate": 0.14583333333333334,
+          "std_days": 7.302967433402215,
+          "iqr_days": 3.5,
+          "p90_p10_days": 11.400000000000091,
+          "median_offset_days": -5.0
+        },
+        {
+          "harvest_idx": 4,
+          "field_harvest_day": 2861,
+          "n_pixels_matched": 27,
+          "pixel_detection_rate": 0.5625,
+          "std_days": 8.87584513050035,
+          "iqr_days": 13.5,
+          "p90_p10_days": 23.0,
+          "median_offset_days": -5.0
+        },
+        {
+          "harvest_idx": 5,
+          "field_harvest_day": 4605,
+          "n_pixels_matched": 3,
+          "pixel_detection_rate": 0.0625,
+          "std_days": 0.5773502691896257,
+          "iqr_days": 0.5,
+          "p90_p10_days": 0.8000000000001819,
+          "median_offset_days": -22.0
+        }
+      ]
+    },
+    {
+      "field": 20,
+      "n_pixels": 48,
+      "n_field_harvests": 2,
+      "n_matched_harvests": 2,
+      "mean_std_days": 11.49214979852817,
+      "max_std_days": 16.78373755019561,
+      "mean_iqr_days": 5.5,
+      "mean_p90_p10_days": 10.5,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 1733,
+          "n_pixels_matched": 26,
+          "pixel_detection_rate": 0.5416666666666666,
+          "std_days": 16.78373755019561,
+          "iqr_days": 3.0,
+          "p90_p10_days": 8.5,
+          "median_offset_days": -2.0
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 3978,
+          "n_pixels_matched": 12,
+          "pixel_detection_rate": 0.25,
+          "std_days": 6.200562046860727,
+          "iqr_days": 8.0,
+          "p90_p10_days": 12.5,
+          "median_offset_days": -0.5
+        }
+      ]
+    },
+    {
+      "field": 21,
+      "n_pixels": 48,
+      "n_field_harvests": 7,
+      "n_matched_harvests": 7,
+      "mean_std_days": 8.40359505198288,
+      "max_std_days": 21.840570649957602,
+      "mean_iqr_days": 8.071428571428571,
+      "mean_p90_p10_days": 17.77142857142852,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 688,
+          "n_pixels_matched": 20,
+          "pixel_detection_rate": 0.4166666666666667,
+          "std_days": 21.840570649957602,
+          "iqr_days": 10.5,
+          "p90_p10_days": 30.5,
+          "median_offset_days": -3.0
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 1446,
+          "n_pixels_matched": 21,
+          "pixel_detection_rate": 0.4375,
+          "std_days": 4.040862708453657,
+          "iqr_days": 7.0,
+          "p90_p10_days": 10.0,
+          "median_offset_days": 0.0
+        },
+        {
+          "harvest_idx": 2,
+          "field_harvest_day": 1808,
+          "n_pixels_matched": 44,
+          "pixel_detection_rate": 0.9166666666666666,
+          "std_days": 6.129504427301842,
+          "iqr_days": 4.0,
+          "p90_p10_days": 14.400000000000091,
+          "median_offset_days": 1.0
+        },
+        {
+          "harvest_idx": 3,
+          "field_harvest_day": 2188,
+          "n_pixels_matched": 13,
+          "pixel_detection_rate": 0.2708333333333333,
+          "std_days": 4.011202262382637,
+          "iqr_days": 5.0,
+          "p90_p10_days": 9.599999999999909,
+          "median_offset_days": -1.0
+        },
+        {
+          "harvest_idx": 4,
+          "field_harvest_day": 2566,
+          "n_pixels_matched": 3,
+          "pixel_detection_rate": 0.0625,
+          "std_days": 1.5275252316519465,
+          "iqr_days": 1.5,
+          "p90_p10_days": 2.400000000000091,
+          "median_offset_days": 0.0
+        },
+        {
+          "harvest_idx": 5,
+          "field_harvest_day": 3896,
+          "n_pixels_matched": 25,
+          "pixel_detection_rate": 0.5208333333333334,
+          "std_days": 9.04028023164474,
+          "iqr_days": 17.0,
+          "p90_p10_days": 22.59999999999991,
+          "median_offset_days": 5.0
+        },
+        {
+          "harvest_idx": 6,
+          "field_harvest_day": 4271,
+          "n_pixels_matched": 32,
+          "pixel_detection_rate": 0.6666666666666666,
+          "std_days": 12.235219852487722,
+          "iqr_days": 11.5,
+          "p90_p10_days": 34.899999999999636,
+          "median_offset_days": -10.0
+        }
+      ]
+    },
+    {
+      "field": 22,
+      "n_pixels": 48,
+      "n_field_harvests": 4,
+      "n_matched_harvests": 4,
+      "mean_std_days": 14.692415362586097,
+      "max_std_days": 38.829933508361,
+      "mean_iqr_days": 21.0,
+      "mean_p90_p10_days": 32.974999999999994,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 600,
+          "n_pixels_matched": 13,
+          "pixel_detection_rate": 0.2708333333333333,
+          "std_days": 7.64182150389787,
+          "iqr_days": 10.0,
+          "p90_p10_days": 16.399999999999977,
+          "median_offset_days": 1.0
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 1732,
+          "n_pixels_matched": 14,
+          "pixel_detection_rate": 0.2916666666666667,
+          "std_days": 38.829933508361,
+          "iqr_days": 61.0,
+          "p90_p10_days": 87.5,
+          "median_offset_days": -3.0
+        },
+        {
+          "harvest_idx": 2,
+          "field_harvest_day": 3977,
+          "n_pixels_matched": 21,
+          "pixel_detection_rate": 0.4375,
+          "std_days": 4.914022695065524,
+          "iqr_days": 6.0,
+          "p90_p10_days": 10.0,
+          "median_offset_days": 1.0
+        },
+        {
+          "harvest_idx": 3,
+          "field_harvest_day": 4340,
+          "n_pixels_matched": 23,
+          "pixel_detection_rate": 0.4791666666666667,
+          "std_days": 7.383883743019983,
+          "iqr_days": 7.0,
+          "p90_p10_days": 18.0,
+          "median_offset_days": -1.0
+        }
+      ]
+    },
+    {
+      "field": 23,
+      "n_pixels": 48,
+      "n_field_harvests": 4,
+      "n_matched_harvests": 4,
+      "mean_std_days": 10.511547132664123,
+      "max_std_days": 13.225345216574159,
+      "mean_iqr_days": 15.9375,
+      "mean_p90_p10_days": 26.074999999999932,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 2881,
+          "n_pixels_matched": 29,
+          "pixel_detection_rate": 0.6041666666666666,
+          "std_days": 11.508938483832056,
+          "iqr_days": 21.0,
+          "p90_p10_days": 29.0,
+          "median_offset_days": -2.0
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 3646,
+          "n_pixels_matched": 20,
+          "pixel_detection_rate": 0.4166666666666667,
+          "std_days": 4.1278897374094825,
+          "iqr_days": 3.5,
+          "p90_p10_days": 7.299999999999727,
+          "median_offset_days": -1.0
+        },
+        {
+          "harvest_idx": 2,
+          "field_harvest_day": 3981,
+          "n_pixels_matched": 36,
+          "pixel_detection_rate": 0.75,
+          "std_days": 13.184015092840799,
+          "iqr_days": 15.25,
+          "p90_p10_days": 37.0,
+          "median_offset_days": 2.0
+        },
+        {
+          "harvest_idx": 3,
+          "field_harvest_day": 4341,
+          "n_pixels_matched": 41,
+          "pixel_detection_rate": 0.8541666666666666,
+          "std_days": 13.225345216574159,
+          "iqr_days": 24.0,
+          "p90_p10_days": 31.0,
+          "median_offset_days": -2.0
+        }
+      ]
+    },
+    {
+      "field": 24,
+      "n_pixels": 48,
+      "n_field_harvests": 7,
+      "n_matched_harvests": 7,
+      "mean_std_days": 6.899119949914941,
+      "max_std_days": 12.446074156325837,
+      "mean_iqr_days": 8.678571428571429,
+      "mean_p90_p10_days": 15.128571428571393,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 604,
+          "n_pixels_matched": 15,
+          "pixel_detection_rate": 0.3125,
+          "std_days": 11.77042298062636,
+          "iqr_days": 15.5,
+          "p90_p10_days": 23.600000000000023,
+          "median_offset_days": 2.0
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 1446,
+          "n_pixels_matched": 4,
+          "pixel_detection_rate": 0.08333333333333333,
+          "std_days": 2.160246899469287,
+          "iqr_days": 2.0,
+          "p90_p10_days": 3.7999999999999545,
+          "median_offset_days": 1.5
+        },
+        {
+          "harvest_idx": 2,
+          "field_harvest_day": 1809,
+          "n_pixels_matched": 44,
+          "pixel_detection_rate": 0.9166666666666666,
+          "std_days": 2.473004352713765,
+          "iqr_days": 4.0,
+          "p90_p10_days": 6.7000000000000455,
+          "median_offset_days": -1.0
+        },
+        {
+          "harvest_idx": 3,
+          "field_harvest_day": 2188,
+          "n_pixels_matched": 10,
+          "pixel_detection_rate": 0.20833333333333334,
+          "std_days": 3.4075080500434787,
+          "iqr_days": 2.5,
+          "p90_p10_days": 6.599999999999909,
+          "median_offset_days": 0.5
+        },
+        {
+          "harvest_idx": 4,
+          "field_harvest_day": 2568,
+          "n_pixels_matched": 7,
+          "pixel_detection_rate": 0.14583333333333334,
+          "std_days": 12.446074156325837,
+          "iqr_days": 11.5,
+          "p90_p10_days": 22.59999999999991,
+          "median_offset_days": -12.0
+        },
+        {
+          "harvest_idx": 5,
+          "field_harvest_day": 3982,
+          "n_pixels_matched": 33,
+          "pixel_detection_rate": 0.6875,
+          "std_days": 6.45878541917202,
+          "iqr_days": 9.0,
+          "p90_p10_days": 17.40000000000009,
+          "median_offset_days": 1.0
+        },
+        {
+          "harvest_idx": 6,
+          "field_harvest_day": 4339,
+          "n_pixels_matched": 20,
+          "pixel_detection_rate": 0.4166666666666667,
+          "std_days": 9.577797791053838,
+          "iqr_days": 16.25,
+          "p90_p10_days": 25.199999999999818,
+          "median_offset_days": -6.5
+        }
+      ]
+    },
+    {
+      "field": 25,
+      "n_pixels": 48,
+      "n_field_harvests": 8,
+      "n_matched_harvests": 6,
+      "mean_std_days": 8.681422604141641,
+      "max_std_days": 17.101935284528196,
+      "mean_iqr_days": 12.958333333333334,
+      "mean_p90_p10_days": 20.033333333333342,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 688,
+          "n_pixels_matched": 19,
+          "pixel_detection_rate": 0.3958333333333333,
+          "std_days": 11.41815523654535,
+          "iqr_days": 16.5,
+          "p90_p10_days": 27.799999999999955,
+          "median_offset_days": -8.0
+        },
+        {
+          "harvest_idx": 2,
+          "field_harvest_day": 1448,
+          "n_pixels_matched": 5,
+          "pixel_detection_rate": 0.10416666666666667,
+          "std_days": 2.2803508501982757,
+          "iqr_days": 2.0,
+          "p90_p10_days": 4.400000000000091,
+          "median_offset_days": -5.0
+        },
+        {
+          "harvest_idx": 3,
+          "field_harvest_day": 1810,
+          "n_pixels_matched": 36,
+          "pixel_detection_rate": 0.75,
+          "std_days": 6.046578463156756,
+          "iqr_days": 8.25,
+          "p90_p10_days": 13.0,
+          "median_offset_days": 0.0
+        },
+        {
+          "harvest_idx": 4,
+          "field_harvest_day": 2188,
+          "n_pixels_matched": 13,
+          "pixel_detection_rate": 0.2708333333333333,
+          "std_days": 6.597396533909495,
+          "iqr_days": 13.0,
+          "p90_p10_days": 15.599999999999909,
+          "median_offset_days": -3.0
+        },
+        {
+          "harvest_idx": 6,
+          "field_harvest_day": 3483,
+          "n_pixels_matched": 7,
+          "pixel_detection_rate": 0.14583333333333334,
+          "std_days": 17.101935284528196,
+          "iqr_days": 24.0,
+          "p90_p10_days": 37.80000000000018,
+          "median_offset_days": 25.0
+        },
+        {
+          "harvest_idx": 7,
+          "field_harvest_day": 3987,
+          "n_pixels_matched": 27,
+          "pixel_detection_rate": 0.5625,
+          "std_days": 8.644119256511777,
+          "iqr_days": 14.0,
+          "p90_p10_days": 21.59999999999991,
+          "median_offset_days": -12.0
+        }
+      ]
+    },
+    {
+      "field": 26,
+      "n_pixels": 48,
+      "n_field_harvests": 6,
+      "n_matched_harvests": 6,
+      "mean_std_days": 7.3158508037653265,
+      "max_std_days": 13.057139383834764,
+      "mean_iqr_days": 6.958333333333333,
+      "mean_p90_p10_days": 16.466666666666697,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 1810,
+          "n_pixels_matched": 36,
+          "pixel_detection_rate": 0.75,
+          "std_days": 5.799014694633169,
+          "iqr_days": 6.75,
+          "p90_p10_days": 16.5,
+          "median_offset_days": -1.0
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 2189,
+          "n_pixels_matched": 17,
+          "pixel_detection_rate": 0.3541666666666667,
+          "std_days": 2.93433026730923,
+          "iqr_days": 4.0,
+          "p90_p10_days": 6.800000000000182,
+          "median_offset_days": -1.0
+        },
+        {
+          "harvest_idx": 2,
+          "field_harvest_day": 2364,
+          "n_pixels_matched": 10,
+          "pixel_detection_rate": 0.20833333333333334,
+          "std_days": 13.057139383834764,
+          "iqr_days": 9.0,
+          "p90_p10_days": 25.5,
+          "median_offset_days": 25.5
+        },
+        {
+          "harvest_idx": 3,
+          "field_harvest_day": 2536,
+          "n_pixels_matched": 5,
+          "pixel_detection_rate": 0.10416666666666667,
+          "std_days": 8.264381404557755,
+          "iqr_days": 10.0,
+          "p90_p10_days": 16.59999999999991,
+          "median_offset_days": -5.0
+        },
+        {
+          "harvest_idx": 4,
+          "field_harvest_day": 2876,
+          "n_pixels_matched": 21,
+          "pixel_detection_rate": 0.4375,
+          "std_days": 6.600144298566871,
+          "iqr_days": 7.0,
+          "p90_p10_days": 18.0,
+          "median_offset_days": -3.0
+        },
+        {
+          "harvest_idx": 5,
+          "field_harvest_day": 3896,
+          "n_pixels_matched": 23,
+          "pixel_detection_rate": 0.4791666666666667,
+          "std_days": 7.240094773690178,
+          "iqr_days": 5.0,
+          "p90_p10_days": 15.400000000000091,
+          "median_offset_days": 0.0
+        }
+      ]
+    },
+    {
+      "field": 27,
+      "n_pixels": 48,
+      "n_field_harvests": 5,
+      "n_matched_harvests": 5,
+      "mean_std_days": 13.601104143475274,
+      "max_std_days": 33.6699668349505,
+      "mean_iqr_days": 9.65,
+      "mean_p90_p10_days": 32.959999999999965,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 681,
+          "n_pixels_matched": 5,
+          "pixel_detection_rate": 0.10416666666666667,
+          "std_days": 7.496665925596525,
+          "iqr_days": 7.0,
+          "p90_p10_days": 14.800000000000068,
+          "median_offset_days": -3.0
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 1759,
+          "n_pixels_matched": 15,
+          "pixel_detection_rate": 0.3125,
+          "std_days": 33.6699668349505,
+          "iqr_days": 11.0,
+          "p90_p10_days": 85.79999999999995,
+          "median_offset_days": -5.0
+        },
+        {
+          "harvest_idx": 2,
+          "field_harvest_day": 3636,
+          "n_pixels_matched": 20,
+          "pixel_detection_rate": 0.4166666666666667,
+          "std_days": 5.355764233637977,
+          "iqr_days": 4.0,
+          "p90_p10_days": 7.599999999999909,
+          "median_offset_days": 0.5
+        },
+        {
+          "harvest_idx": 3,
+          "field_harvest_day": 3990,
+          "n_pixels_matched": 40,
+          "pixel_detection_rate": 0.8333333333333334,
+          "std_days": 13.81888340140181,
+          "iqr_days": 19.25,
+          "p90_p10_days": 36.59999999999991,
+          "median_offset_days": 3.0
+        },
+        {
+          "harvest_idx": 4,
+          "field_harvest_day": 4359,
+          "n_pixels_matched": 46,
+          "pixel_detection_rate": 0.9583333333333334,
+          "std_days": 7.66424032178956,
+          "iqr_days": 7.0,
+          "p90_p10_days": 20.0,
+          "median_offset_days": 0.0
+        }
+      ]
+    },
+    {
+      "field": 28,
+      "n_pixels": 48,
+      "n_field_harvests": 3,
+      "n_matched_harvests": 3,
+      "mean_std_days": 7.792018233761617,
+      "max_std_days": 11.690573795563488,
+      "mean_iqr_days": 10.583333333333334,
+      "mean_p90_p10_days": 20.733333333333274,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 233,
+          "n_pixels_matched": 43,
+          "pixel_detection_rate": 0.8958333333333334,
+          "std_days": 1.9142757970685742,
+          "iqr_days": 2.0,
+          "p90_p10_days": 4.0,
+          "median_offset_days": 0.0
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 2822,
+          "n_pixels_matched": 27,
+          "pixel_detection_rate": 0.5625,
+          "std_days": 11.690573795563488,
+          "iqr_days": 20.0,
+          "p90_p10_days": 29.800000000000182,
+          "median_offset_days": -1.0
+        },
+        {
+          "harvest_idx": 2,
+          "field_harvest_day": 4252,
+          "n_pixels_matched": 24,
+          "pixel_detection_rate": 0.5,
+          "std_days": 9.771205108652786,
+          "iqr_days": 9.75,
+          "p90_p10_days": 28.399999999999636,
+          "median_offset_days": 2.5
+        }
+      ]
+    },
+    {
+      "field": 29,
+      "n_pixels": 48,
+      "n_field_harvests": 4,
+      "n_matched_harvests": 4,
+      "mean_std_days": 11.632521964704662,
+      "max_std_days": 19.0154399507805,
+      "mean_iqr_days": 10.4375,
+      "mean_p90_p10_days": 17.525000000000034,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 1425,
+          "n_pixels_matched": 10,
+          "pixel_detection_rate": 0.20833333333333334,
+          "std_days": 2.440400695696417,
+          "iqr_days": 2.75,
+          "p90_p10_days": 3.6000000000001364,
+          "median_offset_days": -2.5
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 1760,
+          "n_pixels_matched": 24,
+          "pixel_detection_rate": 0.5,
+          "std_days": 19.0154399507805,
+          "iqr_days": 15.0,
+          "p90_p10_days": 19.09999999999991,
+          "median_offset_days": -3.5
+        },
+        {
+          "harvest_idx": 2,
+          "field_harvest_day": 2736,
+          "n_pixels_matched": 45,
+          "pixel_detection_rate": 0.9375,
+          "std_days": 12.151484924015906,
+          "iqr_days": 14.0,
+          "p90_p10_days": 24.199999999999818,
+          "median_offset_days": -1.0
+        },
+        {
+          "harvest_idx": 3,
+          "field_harvest_day": 3097,
+          "n_pixels_matched": 43,
+          "pixel_detection_rate": 0.8958333333333334,
+          "std_days": 12.922762288325817,
+          "iqr_days": 10.0,
+          "p90_p10_days": 23.200000000000273,
+          "median_offset_days": -1.0
+        }
+      ]
+    },
+    {
+      "field": 30,
+      "n_pixels": 48,
+      "n_field_harvests": 3,
+      "n_matched_harvests": 3,
+      "mean_std_days": 6.544795084350425,
+      "max_std_days": 8.023905814260848,
+      "mean_iqr_days": 8.75,
+      "mean_p90_p10_days": 14.299999999999935,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 237,
+          "n_pixels_matched": 44,
+          "pixel_detection_rate": 0.9166666666666666,
+          "std_days": 4.517525188268293,
+          "iqr_days": 5.0,
+          "p90_p10_days": 8.699999999999989,
+          "median_offset_days": 0.0
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 2825,
+          "n_pixels_matched": 32,
+          "pixel_detection_rate": 0.6666666666666666,
+          "std_days": 8.023905814260848,
+          "iqr_days": 15.25,
+          "p90_p10_days": 18.800000000000182,
+          "median_offset_days": -2.0
+        },
+        {
+          "harvest_idx": 2,
+          "field_harvest_day": 4245,
+          "n_pixels_matched": 25,
+          "pixel_detection_rate": 0.5208333333333334,
+          "std_days": 7.0929542505221335,
+          "iqr_days": 6.0,
+          "p90_p10_days": 15.399999999999636,
+          "median_offset_days": 0.0
+        }
+      ]
+    },
+    {
+      "field": 31,
+      "n_pixels": 48,
+      "n_field_harvests": 5,
+      "n_matched_harvests": 5,
+      "mean_std_days": 11.638913127503331,
+      "max_std_days": 22.353444266784376,
+      "mean_iqr_days": 10.95,
+      "mean_p90_p10_days": 21.040000000000077,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 622,
+          "n_pixels_matched": 18,
+          "pixel_detection_rate": 0.375,
+          "std_days": 22.353444266784376,
+          "iqr_days": 15.0,
+          "p90_p10_days": 37.39999999999998,
+          "median_offset_days": 0.0
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 1425,
+          "n_pixels_matched": 6,
+          "pixel_detection_rate": 0.125,
+          "std_days": 5.307227776030219,
+          "iqr_days": 5.75,
+          "p90_p10_days": 10.5,
+          "median_offset_days": -1.0
+        },
+        {
+          "harvest_idx": 2,
+          "field_harvest_day": 1762,
+          "n_pixels_matched": 18,
+          "pixel_detection_rate": 0.375,
+          "std_days": 6.889653130705342,
+          "iqr_days": 11.25,
+          "p90_p10_days": 18.299999999999955,
+          "median_offset_days": -8.0
+        },
+        {
+          "harvest_idx": 3,
+          "field_harvest_day": 2867,
+          "n_pixels_matched": 28,
+          "pixel_detection_rate": 0.5833333333333334,
+          "std_days": 7.428940263533787,
+          "iqr_days": 9.75,
+          "p90_p10_days": 16.600000000000364,
+          "median_offset_days": -0.5
+        },
+        {
+          "harvest_idx": 4,
+          "field_harvest_day": 3940,
+          "n_pixels_matched": 29,
+          "pixel_detection_rate": 0.6041666666666666,
+          "std_days": 16.215300200462927,
+          "iqr_days": 13.0,
+          "p90_p10_days": 22.40000000000009,
+          "median_offset_days": 0.0
+        }
+      ]
+    },
+    {
+      "field": 32,
+      "n_pixels": 48,
+      "n_field_harvests": 5,
+      "n_matched_harvests": 5,
+      "mean_std_days": 7.542038276601656,
+      "max_std_days": 14.259499757471625,
+      "mean_iqr_days": 9.95,
+      "mean_p90_p10_days": 17.319999999999983,
+      "exceeds_2_obs_intervals": false,
+      "per_harvest": [
+        {
+          "harvest_idx": 0,
+          "field_harvest_day": 1789,
+          "n_pixels_matched": 33,
+          "pixel_detection_rate": 0.6875,
+          "std_days": 5.09456037892824,
+          "iqr_days": 4.0,
+          "p90_p10_days": 9.0,
+          "median_offset_days": 1.0
+        },
+        {
+          "harvest_idx": 1,
+          "field_harvest_day": 2183,
+          "n_pixels_matched": 10,
+          "pixel_detection_rate": 0.20833333333333334,
+          "std_days": 3.7653389990514503,
+          "iqr_days": 4.75,
+          "p90_p10_days": 6.699999999999818,
+          "median_offset_days": 2.0
+        },
+        {
+          "harvest_idx": 2,
+          "field_harvest_day": 2539,
+          "n_pixels_matched": 26,
+          "pixel_detection_rate": 0.5416666666666666,
+          "std_days": 6.385560634383219,
+          "iqr_days": 8.0,
+          "p90_p10_days": 16.0,
+          "median_offset_days": 0.5
+        },
+        {
+          "harvest_idx": 3,
+          "field_harvest_day": 3949,
+          "n_pixels_matched": 37,
+          "pixel_detection_rate": 0.7708333333333334,
+          "std_days": 8.205231613173746,
+          "iqr_days": 14.0,
+          "p90_p10_days": 19.40000000000009,
+          "median_offset_days": 1.0
+        },
+        {
+          "harvest_idx": 4,
+          "field_harvest_day": 4329,
+          "n_pixels_matched": 16,
+          "pixel_detection_rate": 0.3333333333333333,
+          "std_days": 14.259499757471625,
+          "iqr_days": 19.0,
+          "p90_p10_days": 35.5,
+          "median_offset_days": -34.5
+        }
+      ]
+    }
+  ]
+}

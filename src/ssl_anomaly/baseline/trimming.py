@@ -58,21 +58,32 @@ def trimmed_normal_cycles(
             break
         bl = fit_baseline(X_act, X_by_field, min_n=min_n, kappa=kappa, floor_pct=floor_pct)
 
-        # Score each active cycle (leave-one-out) and compute burden
+        # Score each active cycle (leave-one-out for small strata; vectorized for large strata >= 60)
         burden = {k: np.zeros(arr.shape[0], dtype=np.float64) for k, arr in X.items()}
         for key, arr in X.items():
             act = active[key]
-            for i in np.where(act)[0]:
-                z = score_cycle_loo(
-                    arr, active=act, index=i, baseline=bl, stratum_for_cycle=key,
-                    floor=bl.floor, threshold=threshold,
-                )
-                # Burden = fraction of observed |z| > threshold
-                finite_mask = np.isfinite(z)
-                if finite_mask.any():
-                    burden[key][i] = float(np.mean(np.abs(z[finite_mask]) > threshold))
-                else:
-                    burden[key][i] = 0.0
+            n_act = int(act.sum())
+            if n_act >= 60 and key in bl.stats:
+                med = bl.stats[key].median[None, :, :]
+                denom = np.maximum(bl.stats[key].scale[None, :, :], bl.floor)
+                with np.errstate(all="ignore"):
+                    z_all = (arr[act] - med) / denom
+                fin_all = np.isfinite(z_all)
+                hits = np.where(fin_all, (np.abs(z_all) > threshold).astype(np.float64), 0.0)
+                cnts = fin_all.sum(axis=(1, 2))
+                burden[key][act] = np.where(cnts > 0, hits.sum(axis=(1, 2)) / np.maximum(cnts, 1), 0.0)
+            else:
+                for i in np.where(act)[0]:
+                    z = score_cycle_loo(
+                        arr, active=act, index=i, baseline=bl, stratum_for_cycle=key,
+                        floor=bl.floor, threshold=threshold,
+                    )
+                    # Burden = fraction of observed |z| > threshold
+                    finite_mask = np.isfinite(z)
+                    if finite_mask.any():
+                        burden[key][i] = float(np.mean(np.abs(z[finite_mask]) > threshold))
+                    else:
+                        burden[key][i] = 0.0
 
         # Trim top q per stratum
         total_trimmed = 0
