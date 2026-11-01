@@ -1,0 +1,85 @@
+{
+  "backbone": "PretextTransformer(d_model=64, n_heads=4, n_layers=3)",
+  "epochs": 45,
+  "seeds": [
+    42,
+    43,
+    44,
+    45,
+    46
+  ],
+  "arms": {
+    "masked_recon": {
+      "n_parameters": 112088,
+      "mean_train_seconds": 1.3966159242001595,
+      "auc_pr": 0.8864457341568646,
+      "auc_pr_ci_95": [
+        0.8734210199185046,
+        0.8982783758695287
+      ],
+      "auc_roc": 0.940857142857143,
+      "auc_roc_ci_95": [
+        0.931387755102041,
+        0.9489795918367347
+      ],
+      "recall_at_5pct_budget": 0.16285714285714287,
+      "recall_at_10pct_budget": 0.39714285714285713,
+      "per_perturbation_auc_pr": {
+        "ndvi_drop": 0.9138903421728296,
+        "lst_spike": 0.8033508786256401,
+        "phase_shift": 0.9280871727150324,
+        "early_senescence": 0.900454543113956
+      },
+      "cwsi_spearman_rho": 0.03221288515406163,
+      "cwsi_pval": 0.8542485326959622
+    },
+    "traj_contrastive": {
+      "n_parameters": 112608,
+      "mean_train_seconds": 2.4817890540001826,
+      "auc_pr": 0.3755879239393163,
+      "auc_pr_ci_95": [
+        0.3615365345362877,
+        0.39019150887014403
+      ],
+      "auc_roc": 0.25395918367346937,
+      "auc_roc_ci_95": [
+        0.2099938775510204,
+        0.30255816326530605
+      ],
+      "recall_at_5pct_budget": 0.007142857142857143,
+      "recall_at_10pct_budget": 0.007142857142857143,
+      "per_perturbation_auc_pr": {
+        "ndvi_drop": 0.3659563829244304,
+        "lst_spike": 0.3711869494056944,
+        "phase_shift": 0.3998700025679627,
+        "early_senescence": 0.36533836085917787
+      },
+      "cwsi_spearman_rho": 0.4330532212885154,
+      "cwsi_pval": 0.009362814594658408
+    },
+    "anomaly_degradation": {
+      "n_parameters": 110593,
+      "mean_train_seconds": 1.4143720903999566,
+      "auc_pr": 0.9901435845285146,
+      "auc_pr_ci_95": [
+        0.9797725897819826,
+        0.9976345359740637
+      ],
+      "auc_roc": 0.9924489795918368,
+      "auc_roc_ci_95": [
+        0.9865714285714284,
+        0.9974693877551021
+      ],
+      "recall_at_5pct_budget": 0.30714285714285716,
+      "recall_at_10pct_budget": 0.5928571428571427,
+      "per_perturbation_auc_pr": {
+        "ndvi_drop": 0.9888750409642684,
+        "lst_spike": 0.9972094674943476,
+        "phase_shift": 0.9975171370545869,
+        "early_senescence": 0.9769726926008561
+      },
+      "cwsi_spearman_rho": 0.280952380952381,
+      "cwsi_pval": 0.1020716440719022
+    }
+  }
+}

@@ -51,14 +51,16 @@ class SSLLitModule(L.LightningModule):
 
     # ----- forward ------------------------------------------------------
     def forward(self, batch: dict) -> tuple[torch.Tensor, torch.Tensor]:
+        if isinstance(self.model, GRUAutoencoder):
+            return self.model(batch["tokens"], lengths=batch.get("lengths"))
         return self.model(
             batch["tokens"],
-            mask=batch["mask"],
+            mask=batch.get("mask"),
             key_padding_mask=batch.get("pamask"),
-            lengths=batch.get("lengths"),
         )
 
     def _compute_loss(self, batch: dict) -> torch.Tensor:
+        target = batch.get("original")
         if isinstance(self.model, GRUAutoencoder):
             loss, _ = self.model.masked_reconstruction_loss(
                 batch["tokens"],
@@ -66,6 +68,7 @@ class SSLLitModule(L.LightningModule):
                 lengths=batch.get("lengths"),
                 delta=self.cfg.huber_delta,
                 trim_frac=self.cfg.trim_loss_frac,
+                target=target,
             )
         else:
             loss, _ = self.model.masked_reconstruction_loss(
@@ -74,6 +77,7 @@ class SSLLitModule(L.LightningModule):
                 key_padding_mask=batch.get("pamask"),
                 delta=self.cfg.huber_delta,
                 trim_frac=self.cfg.trim_loss_frac,
+                target=target,
             )
         return loss
 

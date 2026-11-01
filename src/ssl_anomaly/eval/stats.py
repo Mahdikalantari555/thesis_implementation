@@ -38,10 +38,11 @@ def bootstrap_ci(
     point = float(metric_fn(*arrays))
     if cluster_by is not None:
         clusters = np.unique(cluster_by)
+        cluster_idx = {c: np.where(cluster_by == c)[0] for c in clusters}
         samples = []
         for _ in range(n_boot):
             chosen = rng.choice(clusters, size=clusters.size, replace=True)
-            idx = np.concatenate([np.where(cluster_by == c)[0] for c in chosen])
+            idx = np.concatenate([cluster_idx[c] for c in chosen])
             try:
                 samples.append(metric_fn(*[a[idx] for a in arrays]))
             except Exception:
