@@ -116,6 +116,10 @@ def _median_mad(X: np.ndarray, min_n: int) -> tuple[np.ndarray, np.ndarray, np.n
         warnings.simplefilter("ignore", category=RuntimeWarning)
         med = np.nanmedian(X, axis=0)
         scale = np.nanmedian(np.abs(X - med[None, :, :]), axis=0) * MAD_K
+    if min_n > 1:
+        bad = n < min_n
+        med = np.where(bad, np.nan, med)
+        scale = np.where(bad, np.nan, scale)
     return med, scale, n
 
 
@@ -201,16 +205,19 @@ def lookup_median_scale(
         st = bl.stats.get(key)
         if st is None:
             continue
-        need = ~np.isfinite(med)
+        need = ~np.isfinite(med) | ~np.isfinite(scale) | (scale <= 0)
         if not np.any(need):
             break
-        med[need] = st.median[need]
-        scale[need] = st.scale[need]
+        avail = need & np.isfinite(st.median) & np.isfinite(st.scale) & (st.scale > 0)
+        med[avail] = st.median[avail]
+        scale[avail] = st.scale[avail]
     # Final fallback: global 'all'
-    if "all" in bl.stats and (np.any(~np.isfinite(med)) or np.any(~np.isfinite(scale))):
+    if "all" in bl.stats and (
+        np.any(~np.isfinite(med)) or np.any(~np.isfinite(scale)) or np.any(scale <= 0)
+    ):
         st = bl.stats["all"]
         need_m = ~np.isfinite(med)
-        need_s = ~np.isfinite(scale)
+        need_s = ~np.isfinite(scale) | (scale <= 0)
         med[need_m] = st.median[need_m]
         scale[need_s] = st.scale[need_s]
     return med, scale

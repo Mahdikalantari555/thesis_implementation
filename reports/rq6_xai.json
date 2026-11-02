@@ -1,0 +1,107 @@
+{
+  "n_stressed_cycles_evaluated": 28,
+  "band_names": [
+    "SR_B2",
+    "SR_B3",
+    "SR_B4",
+    "SR_B5",
+    "SR_B6",
+    "SR_B7",
+    "ST_B10",
+    "NDVI",
+    "NDWI",
+    "NDMI"
+  ],
+  "methods": [
+    {
+      "xai_method": "Integrated_Gradients",
+      "deletion_auc": 0.37583423106987857,
+      "random_deletion_auc": 0.7319258558254303,
+      "deletion_gain": 0.3560916247555518,
+      "insertion_auc": 1.0173303104078892,
+      "random_insertion_auc": 0.7501918556686543,
+      "insertion_gain": 0.2671384547392349,
+      "physiology_sign_concordance": 0.9563959801104568,
+      "canopy_loss_concordance": 0.9489758403361344,
+      "lst_heating_concordance": 0.9943181818181818,
+      "swir_dehydration_concordance": 0.9571987753102303,
+      "grand_growth_stage_share": 0.36018940720225184,
+      "sanity_recon_abs_rho": 0.6355900045780974,
+      "sanity_neural_disc_abs_rho": 0.15733457370575846,
+      "passes_neural_sanity_check": true
+    },
+    {
+      "xai_method": "Temporal_GradCAM",
+      "deletion_auc": 0.6954565915740345,
+      "random_deletion_auc": 0.7319258558254303,
+      "deletion_gain": 0.03646926425139585,
+      "insertion_auc": 0.9030675088394405,
+      "random_insertion_auc": 0.7501918556686543,
+      "insertion_gain": 0.15287565317078622,
+      "physiology_sign_concordance": 0.2025331331883984,
+      "canopy_loss_concordance": 0.20777019140989728,
+      "lst_heating_concordance": 0.23582251082251082,
+      "swir_dehydration_concordance": 0.2107574768344339,
+      "grand_growth_stage_share": 0.39099923282544513,
+      "sanity_recon_abs_rho": 0.3191225171281655,
+      "sanity_neural_disc_abs_rho": 0.1445774661949669,
+      "passes_neural_sanity_check": true
+    },
+    {
+      "xai_method": "Window_Occlusion",
+      "deletion_auc": 0.565634984349191,
+      "random_deletion_auc": 0.7319258558254303,
+      "deletion_gain": 0.16629087147623933,
+      "insertion_auc": 0.9856571018212186,
+      "random_insertion_auc": 0.7501918556686543,
+      "insertion_gain": 0.23546524615256426,
+      "physiology_sign_concordance": 0.6847631850913497,
+      "canopy_loss_concordance": 0.7326661220043572,
+      "lst_heating_concordance": 0.8992965367965369,
+      "swir_dehydration_concordance": 0.5782685322933,
+      "grand_growth_stage_share": 0.387294560781585,
+      "sanity_recon_abs_rho": 0.168060671340067,
+      "sanity_neural_disc_abs_rho": 0.10931076641666643,
+      "passes_neural_sanity_check": true
+    },
+    {
+      "xai_method": "Temporal_SHAP",
+      "deletion_auc": 0.7037010354677617,
+      "random_deletion_auc": 0.7319258558254303,
+      "deletion_gain": 0.0282248203576686,
+      "insertion_auc": 0.7189183963009427,
+      "random_insertion_auc": 0.7501918556686543,
+      "insertion_gain": -0.03127345936771164,
+      "physiology_sign_concordance": 0.5942944543728158,
+      "canopy_loss_concordance": 0.3993785014005602,
+      "lst_heating_concordance": 0.5385281385281385,
+      "swir_dehydration_concordance": 0.9422635614586079,
+      "grand_growth_stage_share": 0.3340111514883168,
+      "sanity_recon_abs_rho": 0.990988237473372,
+      "sanity_neural_disc_abs_rho": 0.37143651014170603,
+      "passes_neural_sanity_check": false
+    }
+  ],
+  "stage_attribution_shares": {
+    "Integrated_Gradients": {
+      "emergence_tillering": 0.15443018254729401,
+      "grand_growth": 0.36018940720225184,
+      "maturation_ripening": 0.48538041024931106
+    },
+    "Temporal_GradCAM": {
+      "emergence_tillering": 0.16845450700249834,
+      "grand_growth": 0.39099923282544513,
+      "maturation_ripening": 0.44054626017200105
+    },
+    "Window_Occlusion": {
+      "emergence_tillering": 0.14475896197733093,
+      "grand_growth": 0.387294560781585,
+      "maturation_ripening": 0.4679464772398877
+    },
+    "Temporal_SHAP": {
+      "emergence_tillering": 0.18418191392733302,
+      "grand_growth": 0.3340111514883168,
+      "maturation_ripening": 0.4818069345842108
+    }
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "circularity_safeguard": "Zero CWSI targets used; real perturbation test scores optical SR_B2..SR_B7 only.",
+  "seeds": [
+    42,
+    43,
+    44,
+    45,
+    46
+  ],
+  "models": {
+    "optical_only_ssl": {
+      "real_optical_pert_pr": {
+        "mean": 0.8103304072580254,
+        "ci_95": [
+          0.7867452901692054,
+          0.828776225815408
+        ]
+      },
+      "real_et0_probe_r2": {
+        "mean": 0.28848929157766035,
+        "ci_95": [
+          0.2048270537977018,
+          0.37356829892915233
+        ]
+      },
+      "coupled_stress_pr": {
+        "mean": 0.4734837409556668,
+        "ci_95": [
+          0.43066974215985016,
+          0.5226516095792382
+        ]
+      },
+      "eta_probe_r2": {
+        "mean": 0.06774210637519447,
+        "ci_95": [
+          0.03873763566520363,
+          0.09762600528714968
+        ]
+      }
+    },
+    "optical_plus_lst_ssl": {
+      "real_optical_pert_pr": {
+        "mean": 0.8235403729054191,
+        "ci_95": [
+          0.8084913511195386,
+          0.837802192092384
+        ]
+      },
+      "real_et0_probe_r2": {
+        "mean": 0.29810585421072744,
+        "ci_95": [
+          0.10033450643038666,
+          0.5349391962115987
+        ]
+      },
+      "coupled_stress_pr": {
+        "mean": 0.7226278195896084,
+        "ci_95": [
+          0.6950129342169895,
+          0.7442965570019734
+        ]
+      },
+      "eta_probe_r2": {
+        "mean": 0.20260822609618798,
+        "ci_95": [
+          0.16595017865163708,
+          0.24342176288520276
+        ]
+      }
+    }
+  },
+  "paired_deltas_lst_minus_optical": {
+    "real_optical_pert_pr": {
+      "delta_lst_minus_optical": 0.013209965647393584,
+      "delta_ci_95": [
+        -0.018729236436066922,
+        0.050633362507315136
+      ],
+      "wilcoxon_pval": 0.8125
+    },
+    "real_et0_probe_r2": {
+      "delta_lst_minus_optical": 0.009616562633067094,
+      "delta_ci_95": [
+        -0.2148671315872103,
+        0.29029996783732026
+      ],
+      "wilcoxon_pval": 1.0
+    },
+    "coupled_stress_pr": {
+      "delta_lst_minus_optical": 0.24914407863394153,
+      "delta_ci_95": [
+        0.1965048072119227,
+        0.2967308324209211
+      ],
+      "wilcoxon_pval": 0.0625
+    },
+    "eta_probe_r2": {
+      "delta_lst_minus_optical": 0.13486611972099352,
+      "delta_ci_95": [
+        0.1119312268518321,
+        0.15780101259015494
+      ],
+      "wilcoxon_pval": 0.0625
+    }
+  }
+}

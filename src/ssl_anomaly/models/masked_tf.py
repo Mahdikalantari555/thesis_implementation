@@ -153,9 +153,11 @@ class MaskedTransformer(nn.Module):
         key_padding_mask: torch.Tensor | None = None,
         delta: float = 1.0,
         trim_frac: float = 0.0,
+        target: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         recon, _ = self.forward(x, mask=mask, key_padding_mask=key_padding_mask)
-        tok_loss = F.smooth_l1_loss(recon, x, reduction="none", beta=delta).mean(dim=-1)  # (B, T)
+        tgt = x if target is None else target
+        tok_loss = F.smooth_l1_loss(recon, tgt, reduction="none", beta=delta).mean(dim=-1)  # (B, T)
         # Loss only on masked tokens (and ignore padding)
         loss_mask = mask.clone()
         if key_padding_mask is not None:

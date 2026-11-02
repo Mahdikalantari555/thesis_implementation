@@ -7,9 +7,13 @@ edition = "2021"
 name = "ssl_anomaly_rs"
 crate-type = ["cdylib", "rlib"]
 
+[features]
+default = ["extension-module"]
+extension-module = ["pyo3/extension-module"]
+
 [dependencies]
-numpy = "0.21"
-pyo3 = { version = "0.22", features = ["extension-module"] }
+numpy = "0.22"
+pyo3 = { version = "0.22" }
 ndarray = "0.16"
 
 [profile.release]

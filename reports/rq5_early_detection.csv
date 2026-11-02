@@ -1,0 +1,5 @@
+detector,detection_rate_at_5pct_far,mean_delay_days,delay_ci_lo,delay_ci_hi,median_delay_days
+SSL_Causal_OpticalThermal,1.0,41.0,38.333333333333336,43.666666666666664,45.0
+B1_CUSUM_Causal,1.0,40.333333333333336,37.65833333333333,43.333333333333336,45.0
+B1_PhaseZ_Causal,1.0,37.0,34.0,40.0,30.0
+NDVI_Index_Threshold,1.0,75.0,68.33333333333333,80.66666666666667,75.0
