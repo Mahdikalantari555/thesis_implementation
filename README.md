@@ -139,3 +139,11 @@ pyright src
 - Joshi N. et al. (2024). Automating sugarcane growth stages from EO time series. Remote Sensing 16(22), 4244.
 - Tseng G. et al. (2023). Presto: Lightweight pre-trained transformers for remote sensing timeseries.
 - STS-NET (2025). Spatio-Temporal Stress Network for self-supervised crop stress detection.
+
+## Forward-only growth validation
+
+A separate paired-perturbation benchmark (statistical, one-class and SSL models) and honest data/claim boundaries are
+available in [docs/growth_validation.md](docs/growth_validation.md). It is a
+retrospective sensitivity experiment, not validated stress or an online
+benchmark. Its proposed protocol is tracked in
+[OpenSpec](openspec/changes/add-rigorous-growth-validation/).
