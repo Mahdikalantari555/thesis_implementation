@@ -61,4 +61,4 @@ src/ssl_anomaly/_rs*.so
 # Releases and large HTML maps
 releases/
 reports/figures/*.html
-
+reports/figures/*.png
