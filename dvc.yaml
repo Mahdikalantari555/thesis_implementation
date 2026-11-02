@@ -118,3 +118,15 @@ stages:
     metrics:
       - reports/rq7_rq8.json:
           cache: false
+
+  data_scarcity:
+    cmd: OMP_NUM_THREADS=1 python scripts/run_data_scarcity.py
+    deps:
+      - scripts/run_data_scarcity.py
+      - src/ssl_anomaly/eval/data_scarcity.py
+      - src/ssl_anomaly/models/pretexts.py
+      - data/processed/fields.zarr
+      - data/processed/cycles.parquet
+    metrics:
+      - reports/data_scarcity.json:
+          cache: false

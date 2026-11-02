@@ -192,6 +192,67 @@ def synthesize_anomalybert_degradation(
     return out, labels
 
 
+def _arm_batch_loss(
+    model: PretextTransformer,
+    arm: str,
+    bx: torch.Tensor,
+    bp: torch.Tensor,
+    n_bands: int,
+    rng: np.random.Generator,
+    T_max: int,
+) -> torch.Tensor:
+    """Per-batch pretext loss for one arm (shared by plain and tracked training)."""
+    if arm == "masked_recon":
+        bsz = bx.size(0)
+        m_np = (rng.random((bsz, T_max)) < 0.25) & (~bp.numpy())
+        for bi in range(bsz):
+            st = int(rng.integers(0, max(1, T_max - 3)))
+            m_np[bi, st : st + 3] = ~bp[bi, st : st + 3].numpy()
+            if not m_np[bi].any():
+                vp = np.where(~bp[bi].numpy())[0]
+                if vp.size:
+                    m_np[bi, vp[0]] = True
+        m_t = torch.from_numpy(m_np)
+        xin = bx.clone()
+        xin[:, :, :n_bands][m_t] = 0.0
+        h, _ = model.encode_sequence(xin, mask=m_t, key_padding_mask=bp)
+        recon = model.task_head(h)
+        err = F.smooth_l1_loss(
+            recon[:, :, :n_bands], bx[:, :, :n_bands], reduction="none", beta=1.0
+        ).mean(dim=-1)
+        return (err * m_t.float()).sum() / m_t.float().sum().clamp(min=1.0)
+
+    if arm == "traj_contrastive":
+        v1, p1, v2, p2 = make_contrastive_views(bx, bp, n_bands, rng)
+        _, e1 = model.encode_sequence(v1, mask=None, key_padding_mask=p1)
+        _, e2 = model.encode_sequence(v2, mask=None, key_padding_mask=p2)
+        z1 = model.task_head(e1)
+        z2 = model.task_head(e2)
+        return info_nce_loss(z1, z2, temperature=0.2)
+
+    # anomaly_degradation
+    corrupted, y_deg = synthesize_anomalybert_degradation(bx, bp, n_bands, rng)
+    h, _ = model.encode_sequence(corrupted, mask=None, key_padding_mask=bp)
+    logits = model.task_head(h).squeeze(-1)
+    valid_f = (~bp).float()
+    bce = F.binary_cross_entropy_with_logits(logits, y_deg, reduction="none")
+    return (bce * valid_f).sum() / valid_f.sum().clamp(min=1.0)
+
+
+def _pad_tokens(tokens: list[np.ndarray]) -> tuple[torch.Tensor, torch.Tensor, int, int]:
+    """Pad a token list into ``(X, padding_mask, T_max, d_in)`` tensors."""
+    d_in = tokens[0].shape[1]
+    T_max = max(t.shape[0] for t in tokens)
+    N = len(tokens)
+    X_pad = np.zeros((N, T_max, d_in), dtype=np.float32)
+    P_pad = np.ones((N, T_max), dtype=bool)
+    for i, t in enumerate(tokens):
+        L = t.shape[0]
+        X_pad[i, :L] = t
+        P_pad[i, :L] = False
+    return torch.from_numpy(X_pad), torch.from_numpy(P_pad), T_max, d_in
+
+
 def train_pretext_arm(
     arm: str,
     train_tokens: list[np.ndarray],
@@ -205,20 +266,7 @@ def train_pretext_arm(
     """Train one of the three controlled pretext arms under an identical budget."""
     torch.manual_seed(seed)
     rng = np.random.default_rng(seed)
-    d_in = train_tokens[0].shape[1]
-    T_max = max(t.shape[0] for t in train_tokens)
-
-    # Pad into tensor batch
-    N = len(train_tokens)
-    X_pad = np.zeros((N, T_max, d_in), dtype=np.float32)
-    P_pad = np.ones((N, T_max), dtype=bool)
-    for i, t in enumerate(train_tokens):
-        L = t.shape[0]
-        X_pad[i, :L] = t
-        P_pad[i, :L] = False
-
-    X_t = torch.from_numpy(X_pad)
-    P_t = torch.from_numpy(P_pad)
+    X_t, P_t, T_max, d_in = _pad_tokens(train_tokens)
 
     model = PretextTransformer(
         d_in=d_in, n_bands=n_bands, d_model=64, n_heads=4, n_layers=3, d_ff=128, max_len=max(64, T_max + 4), arm=arm
@@ -226,50 +274,13 @@ def train_pretext_arm(
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
 
     model.train()
+    N = len(train_tokens)
     idx_all = np.arange(N)
     for _ in range(epochs):
         rng.shuffle(idx_all)
         for s in range(0, N, batch_size):
             b_idx = idx_all[s : s + batch_size]
-            bx = X_t[b_idx]
-            bp = P_t[b_idx]
-
-            if arm == "masked_recon":
-                bsz = bx.size(0)
-                m_np = (rng.random((bsz, T_max)) < 0.25) & (~bp.numpy())
-                for bi in range(bsz):
-                    st = int(rng.integers(0, max(1, T_max - 3)))
-                    m_np[bi, st : st + 3] = ~bp[bi, st : st + 3].numpy()
-                    if not m_np[bi].any():
-                        vp = np.where(~bp[bi].numpy())[0]
-                        if vp.size:
-                            m_np[bi, vp[0]] = True
-                m_t = torch.from_numpy(m_np)
-                xin = bx.clone()
-                xin[:, :, :n_bands][m_t] = 0.0
-                h, _ = model.encode_sequence(xin, mask=m_t, key_padding_mask=bp)
-                recon = model.task_head(h)
-                err = F.smooth_l1_loss(
-                    recon[:, :, :n_bands], bx[:, :, :n_bands], reduction="none", beta=1.0
-                ).mean(dim=-1)
-                loss = (err * m_t.float()).sum() / m_t.float().sum().clamp(min=1.0)
-
-            elif arm == "traj_contrastive":
-                v1, p1, v2, p2 = make_contrastive_views(bx, bp, n_bands, rng)
-                _, e1 = model.encode_sequence(v1, mask=None, key_padding_mask=p1)
-                _, e2 = model.encode_sequence(v2, mask=None, key_padding_mask=p2)
-                z1 = model.task_head(e1)
-                z2 = model.task_head(e2)
-                loss = info_nce_loss(z1, z2, temperature=0.2)
-
-            else:  # anomaly_degradation
-                corrupted, y_deg = synthesize_anomalybert_degradation(bx, bp, n_bands, rng)
-                h, _ = model.encode_sequence(corrupted, mask=None, key_padding_mask=bp)
-                logits = model.task_head(h).squeeze(-1)
-                valid_f = (~bp).float()
-                bce = F.binary_cross_entropy_with_logits(logits, y_deg, reduction="none")
-                loss = (bce * valid_f).sum() / valid_f.sum().clamp(min=1.0)
-
+            loss = _arm_batch_loss(model, arm, X_t[b_idx], P_t[b_idx], n_bands, rng, T_max)
             opt.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -277,6 +288,71 @@ def train_pretext_arm(
 
     model.eval()
     return model
+
+
+def train_pretext_arm_tracked(
+    arm: str,
+    train_tokens: list[np.ndarray],
+    n_bands: int,
+    *,
+    val_tokens: list[np.ndarray] | None = None,
+    epochs: int = 40,
+    batch_size: int = 16,
+    lr: float = 1.2e-3,
+    seed: int = 42,
+) -> tuple[PretextTransformer, dict]:
+    """Train a pretext arm while recording per-epoch train and validation loss.
+
+    Returns ``(model, history)`` where ``history["train_loss"]`` and
+    ``history["val_loss"]`` are lists of length ``epochs``. Validation loss is
+    the mean pretext loss over ``val_tokens`` (batched, under ``no_grad``); when
+    ``val_tokens`` is None, ``history["val_loss"]`` is filled with NaN.
+    """
+    torch.manual_seed(seed)
+    rng = np.random.default_rng(seed)
+    X_t, P_t, T_max, d_in = _pad_tokens(train_tokens)
+
+    model = PretextTransformer(
+        d_in=d_in, n_bands=n_bands, d_model=64, n_heads=4, n_layers=3, d_ff=128, max_len=max(64, T_max + 4), arm=arm
+    )
+    opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
+
+    if val_tokens:
+        X_v, P_v, T_v, _ = _pad_tokens(val_tokens)
+    else:
+        X_v = P_v = None
+        T_v = 0
+
+    history: dict[str, list[float]] = {"train_loss": [], "val_loss": []}
+    N = len(train_tokens)
+    idx_all = np.arange(N)
+    for _ in range(epochs):
+        model.train()
+        epoch_losses: list[float] = []
+        rng.shuffle(idx_all)
+        for s in range(0, N, batch_size):
+            b_idx = idx_all[s : s + batch_size]
+            loss = _arm_batch_loss(model, arm, X_t[b_idx], P_t[b_idx], n_bands, rng, T_max)
+            opt.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            opt.step()
+            epoch_losses.append(float(loss.detach()))
+        history["train_loss"].append(float(np.mean(epoch_losses)))
+        if X_v is not None:
+            model.eval()
+            vloss: list[float] = []
+            with torch.no_grad():
+                for s in range(0, len(val_tokens), batch_size):
+                    vloss.append(
+                        float(_arm_batch_loss(model, arm, X_v[s : s + batch_size], P_v[s : s + batch_size], n_bands, rng, T_v))
+                    )
+            history["val_loss"].append(float(np.mean(vloss)))
+        else:
+            history["val_loss"].append(float("nan"))
+
+    model.eval()
+    return model, history
 
 
 @torch.no_grad()

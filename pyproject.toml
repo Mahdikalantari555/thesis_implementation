@@ -35,9 +35,10 @@ dependencies = [
   "tqdm>=4.66",
   "click>=8.1",
   "psutil>=5.9",
-  # Eval / stats
+  # Eval / stats / figures
   "scikit-learn>=1.4",
   "statsmodels>=0.14",
+  "matplotlib>=3.8",
   # Tracking
   "mlflow>=2.11",
   # Parquet

@@ -1,0 +1,17 @@
+arm,diagnostic,key,auc_pr_mean,ci_lo,ci_hi
+anomaly_degradation,DS1_learning_curve,frac_0.2,0.9461802625348539,0.9461802625348539,0.9461802625348539
+anomaly_degradation,DS1_learning_curve,frac_0.5,0.9641313992396047,0.9641313992396047,0.9641313992396047
+anomaly_degradation,DS1_learning_curve,frac_1.0,0.9634407929864205,0.9634407929864205,0.9634407929864205
+anomaly_degradation,DS1_slope_last_segment,slope_80_to_100,-0.0006906062531841783,,
+anomaly_degradation,DS2_gap_final_mean,gap,-0.0010253478380285379,,
+anomaly_degradation,DS3_embedding_quality,mean_cosine_sim,0.9985630748836469,,
+anomaly_degradation,DS3_embedding_quality,alignment,0.0031113411040868647,,
+anomaly_degradation,DS3_embedding_quality,uniformity,-0.005726370065855378,,
+anomaly_degradation,DS3_embedding_quality,effective_rank,1.5196020737046068,,
+anomaly_degradation,DS3_embedding_quality,effective_rank_ratio,0.02374378240163448,,
+anomaly_degradation,DS3_embedding_quality,collapse_suspected,1.0,,
+anomaly_degradation,DS4_few_shot,frac_0.01,0.5689510233255817,,
+anomaly_degradation,DS4_few_shot,frac_0.05,0.6405643106977249,,
+anomaly_degradation,DS4_few_shot,frac_0.1,0.6770465536086914,,
+anomaly_degradation,DS5_loyo_std,auc_pr_std,0.0015041316439493935,,
+anomaly_degradation,verdict,data_scarcity_suspected,1.0,,
