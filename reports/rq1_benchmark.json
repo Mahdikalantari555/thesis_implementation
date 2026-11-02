@@ -1,0 +1,461 @@
+{
+  "splits_sha256": "c2fc1e0cee75067c",
+  "real_32_farm_loyo": {
+    "n_fields": 5,
+    "n_cycles_evaluated": 5,
+    "n_loyo_folds": 1,
+    "held_out_years": [
+      2018
+    ],
+    "detectors": {
+      "SSL_MaskedTransformer": {
+        "auc_pr": 1.0,
+        "recall_at_5pct_alert_budget": 0.25,
+        "recall_at_10pct_alert_budget": 0.25,
+        "eta_deficit_spearman_rho": 0.09999999999999999,
+        "eta_deficit_pval": 0.8728885715695384,
+        "field_cluster_concordance_mean": 0.72,
+        "field_cluster_concordance_ci_95": [
+          0.52,
+          0.8800000000000001
+        ]
+      },
+      "B1_PhaseZScore": {
+        "auc_pr": 1.0,
+        "recall_at_5pct_alert_budget": 0.25,
+        "recall_at_10pct_alert_budget": 0.25,
+        "eta_deficit_spearman_rho": 0.3,
+        "eta_deficit_pval": 0.623837664781073,
+        "field_cluster_concordance_mean": 0.7200000000000001,
+        "field_cluster_concordance_ci_95": [
+          0.52,
+          0.8800000000000001
+        ]
+      },
+      "B1_CUSUM_SlowDrift": {
+        "auc_pr": 1.0,
+        "recall_at_5pct_alert_budget": 0.25,
+        "recall_at_10pct_alert_budget": 0.25,
+        "eta_deficit_spearman_rho": 0.3,
+        "eta_deficit_pval": 0.623837664781073,
+        "field_cluster_concordance_mean": 0.7200000000000001,
+        "field_cluster_concordance_ci_95": [
+          0.52,
+          0.8800000000000001
+        ]
+      },
+      "B3_ECOD": {
+        "auc_pr": 0.8875,
+        "recall_at_5pct_alert_budget": 0.25,
+        "recall_at_10pct_alert_budget": 0.25,
+        "eta_deficit_spearman_rho": 0.3,
+        "eta_deficit_pval": 0.623837664781073,
+        "field_cluster_concordance_mean": 0.5599999999999999,
+        "field_cluster_concordance_ci_95": [
+          0.31999999999999995,
+          0.8400000000000001
+        ]
+      },
+      "NDVI_Threshold_Alarm": {
+        "auc_pr": 0.95,
+        "recall_at_5pct_alert_budget": 0.25,
+        "recall_at_10pct_alert_budget": 0.25,
+        "eta_deficit_spearman_rho": 0.0,
+        "eta_deficit_pval": 1.0,
+        "field_cluster_concordance_mean": 0.64,
+        "field_cluster_concordance_ci_95": [
+          0.39999999999999997,
+          0.8799999999999999
+        ]
+      },
+      "CWSI_Threshold_Alarm": {
+        "auc_pr": 0.8875,
+        "recall_at_5pct_alert_budget": 0.25,
+        "recall_at_10pct_alert_budget": 0.25,
+        "eta_deficit_spearman_rho": 0.19999999999999998,
+        "eta_deficit_pval": 0.7470600781046621,
+        "field_cluster_concordance_mean": 0.5599999999999999,
+        "field_cluster_concordance_ci_95": [
+          0.31999999999999995,
+          0.8400000000000001
+        ]
+      },
+      "RF_Baseline": {
+        "auc_pr": 0.8875,
+        "recall_at_5pct_alert_budget": 0.25,
+        "recall_at_10pct_alert_budget": 0.25,
+        "eta_deficit_spearman_rho": -0.19999999999999998,
+        "eta_deficit_pval": 0.7470600781046621,
+        "field_cluster_concordance_mean": 0.5599999999999999,
+        "field_cluster_concordance_ci_95": [
+          0.32,
+          0.8400000000000001
+        ]
+      },
+      "GBT_Baseline": {
+        "auc_pr": 0.7625,
+        "recall_at_5pct_alert_budget": 0.25,
+        "recall_at_10pct_alert_budget": 0.25,
+        "eta_deficit_spearman_rho": 0.35355339059327373,
+        "eta_deficit_pval": 0.5594043441634877,
+        "field_cluster_concordance_mean": 0.5199999999999999,
+        "field_cluster_concordance_ci_95": [
+          0.31999999999999995,
+          0.7
+        ]
+      }
+    },
+    "paired_wilcoxon_vs_ssl": [
+      {
+        "reference": "SSL_MaskedTransformer",
+        "comparator": "B1_PhaseZScore",
+        "n_fields": 5,
+        "mean_ref": 0.72,
+        "mean_comp": 0.7200000000000001,
+        "mean_diff_ref_minus_comp": 0.0,
+        "diff_ci_95": [
+          -0.12000000000000004,
+          0.12000000000000004
+        ],
+        "median_effect_size": 0.0,
+        "wilcoxon_stat": 1.5,
+        "p_raw": 1.0,
+        "p_holm": 1.0,
+        "significant_holm_05": false
+      },
+      {
+        "reference": "SSL_MaskedTransformer",
+        "comparator": "B1_CUSUM_SlowDrift",
+        "n_fields": 5,
+        "mean_ref": 0.72,
+        "mean_comp": 0.7200000000000001,
+        "mean_diff_ref_minus_comp": 0.0,
+        "diff_ci_95": [
+          -0.12000000000000004,
+          0.12000000000000004
+        ],
+        "median_effect_size": 0.0,
+        "wilcoxon_stat": 1.5,
+        "p_raw": 1.0,
+        "p_holm": 1.0,
+        "significant_holm_05": false
+      },
+      {
+        "reference": "SSL_MaskedTransformer",
+        "comparator": "B3_ECOD",
+        "n_fields": 5,
+        "mean_ref": 0.72,
+        "mean_comp": 0.5599999999999999,
+        "mean_diff_ref_minus_comp": 0.15999999999999998,
+        "diff_ci_95": [
+          -0.16000000000000003,
+          0.44000000000000006
+        ],
+        "median_effect_size": 0.2,
+        "wilcoxon_stat": 2.5,
+        "p_raw": 0.5,
+        "p_holm": 1.0,
+        "significant_holm_05": false
+      },
+      {
+        "reference": "SSL_MaskedTransformer",
+        "comparator": "NDVI_Threshold_Alarm",
+        "n_fields": 5,
+        "mean_ref": 0.72,
+        "mean_comp": 0.64,
+        "mean_diff_ref_minus_comp": 0.08,
+        "diff_ci_95": [
+          -0.08000000000000003,
+          0.20000000000000004
+        ],
+        "median_effect_size": 0.2,
+        "wilcoxon_stat": 3.0,
+        "p_raw": 0.625,
+        "p_holm": 1.0,
+        "significant_holm_05": false
+      },
+      {
+        "reference": "SSL_MaskedTransformer",
+        "comparator": "CWSI_Threshold_Alarm",
+        "n_fields": 5,
+        "mean_ref": 0.72,
+        "mean_comp": 0.5599999999999999,
+        "mean_diff_ref_minus_comp": 0.16000000000000003,
+        "diff_ci_95": [
+          -0.27999999999999997,
+          0.5599999999999999
+        ],
+        "median_effect_size": 0.19999999999999996,
+        "wilcoxon_stat": 3.0,
+        "p_raw": 0.625,
+        "p_holm": 1.0,
+        "significant_holm_05": false
+      },
+      {
+        "reference": "SSL_MaskedTransformer",
+        "comparator": "RF_Baseline",
+        "n_fields": 5,
+        "mean_ref": 0.72,
+        "mean_comp": 0.5599999999999999,
+        "mean_diff_ref_minus_comp": 0.15999999999999998,
+        "diff_ci_95": [
+          -0.040000000000000036,
+          0.36
+        ],
+        "median_effect_size": 0.2,
+        "wilcoxon_stat": 2.0,
+        "p_raw": 0.375,
+        "p_holm": 1.0,
+        "significant_holm_05": false
+      },
+      {
+        "reference": "SSL_MaskedTransformer",
+        "comparator": "GBT_Baseline",
+        "n_fields": 5,
+        "mean_ref": 0.72,
+        "mean_comp": 0.5199999999999999,
+        "mean_diff_ref_minus_comp": 0.2,
+        "diff_ci_95": [
+          -0.13999999999999996,
+          0.5599999999999999
+        ],
+        "median_effect_size": 0.10000000000000009,
+        "wilcoxon_stat": 4.0,
+        "p_raw": 0.4375,
+        "p_holm": 1.0,
+        "significant_holm_05": false
+      }
+    ]
+  },
+  "full_490_field_loyo_source": "simulated_490_field_13_5yr_calibrated_fallback",
+  "full_490_field_loyo": {
+    "n_fields": 488,
+    "n_cycles_evaluated": 1358,
+    "n_loyo_folds": 4,
+    "held_out_years": [
+      2013,
+      2017,
+      2021,
+      2025
+    ],
+    "detectors": {
+      "SSL_MaskedTransformer": {
+        "auc_pr": 0.8705547039811437,
+        "recall_at_5pct_alert_budget": 0.3941176470588235,
+        "recall_at_10pct_alert_budget": 0.7176470588235294,
+        "eta_deficit_spearman_rho": 0.3269942600827459,
+        "eta_deficit_pval": 3.315092400982935e-35,
+        "field_cluster_concordance_mean": 0.5991218785314105,
+        "field_cluster_concordance_ci_95": [
+          0.583769787291006,
+          0.6143830721946641
+        ]
+      },
+      "B1_PhaseZScore": {
+        "auc_pr": 0.8773761622237509,
+        "recall_at_5pct_alert_budget": 0.3941176470588235,
+        "recall_at_10pct_alert_budget": 0.7,
+        "eta_deficit_spearman_rho": 0.31511621089646036,
+        "eta_deficit_pval": 1.0973257290786084e-32,
+        "field_cluster_concordance_mean": 0.6028211156925306,
+        "field_cluster_concordance_ci_95": [
+          0.5887881923891658,
+          0.6170204223372469
+        ]
+      },
+      "B1_CUSUM_SlowDrift": {
+        "auc_pr": 0.8953093504089168,
+        "recall_at_5pct_alert_budget": 0.38235294117647056,
+        "recall_at_10pct_alert_budget": 0.7294117647058823,
+        "eta_deficit_spearman_rho": 0.3165039447888385,
+        "eta_deficit_pval": 5.646358069957688e-33,
+        "field_cluster_concordance_mean": 0.6028829323205528,
+        "field_cluster_concordance_ci_95": [
+          0.5885507425218949,
+          0.6165215648110834
+        ]
+      },
+      "B3_ECOD": {
+        "auc_pr": 0.3466426787178823,
+        "recall_at_5pct_alert_budget": 0.1588235294117647,
+        "recall_at_10pct_alert_budget": 0.25882352941176473,
+        "eta_deficit_spearman_rho": 0.16673709447831392,
+        "eta_deficit_pval": 6.325322833972567e-10,
+        "field_cluster_concordance_mean": 0.5573381759973625,
+        "field_cluster_concordance_ci_95": [
+          0.537303813042031,
+          0.5768409437116787
+        ]
+      },
+      "NDVI_Threshold_Alarm": {
+        "auc_pr": 0.2223147043683143,
+        "recall_at_5pct_alert_budget": 0.12352941176470589,
+        "recall_at_10pct_alert_budget": 0.2411764705882353,
+        "eta_deficit_spearman_rho": 0.04524386837718968,
+        "eta_deficit_pval": 0.09559352372788653,
+        "field_cluster_concordance_mean": 0.5232143128268418,
+        "field_cluster_concordance_ci_95": [
+          0.5013464286475858,
+          0.5426342677001398
+        ]
+      },
+      "CWSI_Threshold_Alarm": {
+        "auc_pr": 0.615016808617594,
+        "recall_at_5pct_alert_budget": 0.34705882352941175,
+        "recall_at_10pct_alert_budget": 0.5058823529411764,
+        "eta_deficit_spearman_rho": 0.22393461420275318,
+        "eta_deficit_pval": 6.774493196283981e-17,
+        "field_cluster_concordance_mean": 0.5671778648753582,
+        "field_cluster_concordance_ci_95": [
+          0.5520214221531247,
+          0.5823342474677923
+        ]
+      },
+      "RF_Baseline": {
+        "auc_pr": 0.7014190824642275,
+        "recall_at_5pct_alert_budget": 0.36470588235294116,
+        "recall_at_10pct_alert_budget": 0.5764705882352941,
+        "eta_deficit_spearman_rho": 0.2578529381834403,
+        "eta_deficit_pval": 4.583850583514693e-22,
+        "field_cluster_concordance_mean": 0.5846502805607311,
+        "field_cluster_concordance_ci_95": [
+          0.568438298614902,
+          0.5995603267617362
+        ]
+      },
+      "GBT_Baseline": {
+        "auc_pr": 0.771209542297054,
+        "recall_at_5pct_alert_budget": 0.3764705882352941,
+        "recall_at_10pct_alert_budget": 0.6,
+        "eta_deficit_spearman_rho": 0.289341042899621,
+        "eta_deficit_pval": 1.3383755139535496e-27,
+        "field_cluster_concordance_mean": 0.5947925455653618,
+        "field_cluster_concordance_ci_95": [
+          0.5775353312427248,
+          0.6110340421295658
+        ]
+      }
+    },
+    "paired_wilcoxon_vs_ssl": [
+      {
+        "reference": "SSL_MaskedTransformer",
+        "comparator": "B1_PhaseZScore",
+        "n_fields": 488,
+        "mean_ref": 0.5937359162864064,
+        "mean_comp": 0.5968993447049261,
+        "mean_diff_ref_minus_comp": -0.0031634284185196827,
+        "diff_ci_95": [
+          -0.01829384172018478,
+          0.01049942420245941
+        ],
+        "median_effect_size": 0.0002761413843888061,
+        "wilcoxon_stat": 58239.0,
+        "p_raw": 0.6489093946806894,
+        "p_holm": 1.0,
+        "significant_holm_05": false
+      },
+      {
+        "reference": "SSL_MaskedTransformer",
+        "comparator": "B1_CUSUM_SlowDrift",
+        "n_fields": 488,
+        "mean_ref": 0.5937359162864064,
+        "mean_comp": 0.5989584590807762,
+        "mean_diff_ref_minus_comp": -0.005222542794369711,
+        "diff_ci_95": [
+          -0.02060344500209242,
+          0.010019197862092299
+        ],
+        "median_effect_size": 0.0011045655375553076,
+        "wilcoxon_stat": 58566.5,
+        "p_raw": 0.7261876118063118,
+        "p_holm": 1.0,
+        "significant_holm_05": false
+      },
+      {
+        "reference": "SSL_MaskedTransformer",
+        "comparator": "B3_ECOD",
+        "n_fields": 488,
+        "mean_ref": 0.5937359162864064,
+        "mean_comp": 0.5559915638555575,
+        "mean_diff_ref_minus_comp": 0.03774435243084896,
+        "diff_ci_95": [
+          0.015361276175587692,
+          0.05732508090590469
+        ],
+        "median_effect_size": 0.04626902307314679,
+        "wilcoxon_stat": 49052.0,
+        "p_raw": 0.0006668143796317854,
+        "p_holm": 0.004000886277790713,
+        "significant_holm_05": true
+      },
+      {
+        "reference": "SSL_MaskedTransformer",
+        "comparator": "NDVI_Threshold_Alarm",
+        "n_fields": 488,
+        "mean_ref": 0.5937359162864064,
+        "mean_comp": 0.5196630018831937,
+        "mean_diff_ref_minus_comp": 0.0740729144032127,
+        "diff_ci_95": [
+          0.048441410745471085,
+          0.09948762318219496
+        ],
+        "median_effect_size": 0.10309278350515466,
+        "wilcoxon_stat": 40939.5,
+        "p_raw": 1.90484621268221e-09,
+        "p_holm": 1.333392348877547e-08,
+        "significant_holm_05": true
+      },
+      {
+        "reference": "SSL_MaskedTransformer",
+        "comparator": "CWSI_Threshold_Alarm",
+        "n_fields": 488,
+        "mean_ref": 0.5937359162864064,
+        "mean_comp": 0.5622285112709948,
+        "mean_diff_ref_minus_comp": 0.03150740501541161,
+        "diff_ci_95": [
+          0.012572411664936388,
+          0.05225570164055143
+        ],
+        "median_effect_size": 0.026755031909671018,
+        "wilcoxon_stat": 50847.5,
+        "p_raw": 0.0047016112348691975,
+        "p_holm": 0.02350805617434599,
+        "significant_holm_05": true
+      },
+      {
+        "reference": "SSL_MaskedTransformer",
+        "comparator": "RF_Baseline",
+        "n_fields": 488,
+        "mean_ref": 0.5937359162864064,
+        "mean_comp": 0.583559930225259,
+        "mean_diff_ref_minus_comp": 0.010175986061147458,
+        "diff_ci_95": [
+          -0.008862582314276054,
+          0.02698990927070506
+        ],
+        "median_effect_size": 0.01681394207167408,
+        "wilcoxon_stat": 55035.5,
+        "p_raw": 0.13804734723122244,
+        "p_holm": 0.5521893889248898,
+        "significant_holm_05": false
+      },
+      {
+        "reference": "SSL_MaskedTransformer",
+        "comparator": "GBT_Baseline",
+        "n_fields": 488,
+        "mean_ref": 0.5937359162864064,
+        "mean_comp": 0.5905085452932228,
+        "mean_diff_ref_minus_comp": 0.003227370993183488,
+        "diff_ci_95": [
+          -0.016081695850133186,
+          0.02164887151729882
+        ],
+        "median_effect_size": 0.020096956308296554,
+        "wilcoxon_stat": 56554.5,
+        "p_raw": 0.3193766188803032,
+        "p_holm": 0.9581298566409097,
+        "significant_holm_05": false
+      }
+    ]
+  }
+}

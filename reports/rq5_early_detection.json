@@ -1,0 +1,49 @@
+{
+  "false_alarm_budget": 0.05,
+  "eigencl_reference_lead_days": 12.0,
+  "ssl_lead_time_vs_ndvi_mean_days": 34.0,
+  "ssl_lead_time_vs_ndvi_ci_95": [
+    27.333333333333332,
+    39.333333333333336
+  ],
+  "ssl_lead_time_vs_ndvi_median_days": 45.0,
+  "exceeds_eigencl_12d_reference": true,
+  "methods": {
+    "SSL_Causal_OpticalThermal": {
+      "detection_rate_at_5pct_far": 1.0,
+      "mean_delay_days_from_onset": 41.0,
+      "delay_days_ci_95": [
+        38.333333333333336,
+        43.666666666666664
+      ],
+      "median_delay_days_from_onset": 45.0
+    },
+    "B1_CUSUM_Causal": {
+      "detection_rate_at_5pct_far": 1.0,
+      "mean_delay_days_from_onset": 40.333333333333336,
+      "delay_days_ci_95": [
+        37.65833333333333,
+        43.333333333333336
+      ],
+      "median_delay_days_from_onset": 45.0
+    },
+    "B1_PhaseZ_Causal": {
+      "detection_rate_at_5pct_far": 1.0,
+      "mean_delay_days_from_onset": 37.0,
+      "delay_days_ci_95": [
+        34.0,
+        40.0
+      ],
+      "median_delay_days_from_onset": 30.0
+    },
+    "NDVI_Index_Threshold": {
+      "detection_rate_at_5pct_far": 1.0,
+      "mean_delay_days_from_onset": 75.0,
+      "delay_days_ci_95": [
+        68.33333333333333,
+        80.66666666666667
+      ],
+      "median_delay_days_from_onset": 75.0
+    }
+  }
+}

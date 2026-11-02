@@ -1,7 +1,5 @@
-# DVC pipeline skeleton per spec.
-# Run `dvc repro` to execute stages in dependency order. All stages are
-# written so they can be checkpointed at the scene/item level via the
-# sqlite Manifest class in addition to DVC's stage-level resume.
+# DVC reproducible pipeline covering data ingestion, baseline/SSL modeling,
+# and all RQ1–RQ8 empirical research suites.
 stages:
   field_mask:
     cmd: python -m ssl_anomaly.cli ingest --fields data/geo/fields.gpkg --out-mask data/interim/field_mask.tif --no-low-priority
@@ -48,4 +46,75 @@ stages:
       - data/processed/baseline.npz
     metrics:
       - reports/metrics.json:
+          cache: false
+
+  rq1_benchmark:
+    cmd: OMP_NUM_THREADS=1 python scripts/run_rq1_benchmark.py
+    deps:
+      - scripts/run_rq1_benchmark.py
+      - src/ssl_anomaly/baseline/operational.py
+      - src/ssl_anomaly/eval/cv.py
+      - src/ssl_anomaly/io/era5.py
+    outs:
+      - data/processed/era5.zarr
+      - data/processed/splits.json
+    metrics:
+      - reports/rq1_benchmark.json:
+          cache: false
+
+  rq2_pretexts:
+    cmd: OMP_NUM_THREADS=1 python scripts/run_rq2_pretexts.py
+    deps:
+      - scripts/run_rq2_pretexts.py
+      - src/ssl_anomaly/models/pretexts.py
+    metrics:
+      - reports/rq2_pretexts.json:
+          cache: false
+
+  rq3_lst_ssl:
+    cmd: OMP_NUM_THREADS=1 python scripts/run_rq3_lst_ssl.py
+    deps:
+      - scripts/run_rq3_lst_ssl.py
+      - src/ssl_anomaly/models/pretexts.py
+    metrics:
+      - reports/rq3_lst_ssl.json:
+          cache: false
+
+  rq4_cloud_stability:
+    cmd: OMP_NUM_THREADS=1 python scripts/run_rq4_cloud_and_stability.py
+    deps:
+      - scripts/run_rq4_cloud_and_stability.py
+      - src/ssl_anomaly/eval/cloud_robustness.py
+    metrics:
+      - reports/rq4_cloud_and_stability.json:
+          cache: false
+
+  rq5_early_detection:
+    cmd: OMP_NUM_THREADS=1 python scripts/run_rq5_early_detection.py
+    deps:
+      - scripts/run_rq5_early_detection.py
+      - src/ssl_anomaly/eval/early_detection.py
+    metrics:
+      - reports/rq5_early_detection.json:
+          cache: false
+
+  rq6_xai:
+    cmd: OMP_NUM_THREADS=1 python scripts/run_rq6_xai.py
+    deps:
+      - scripts/run_rq6_xai.py
+      - src/ssl_anomaly/xai/attribution.py
+      - src/ssl_anomaly/xai/faithfulness.py
+    metrics:
+      - reports/rq6_xai.json:
+          cache: false
+
+  rq7_rq8_validation:
+    cmd: OMP_NUM_THREADS=1 python scripts/run_rq7_rq8.py
+    deps:
+      - scripts/run_rq7_rq8.py
+      - src/ssl_anomaly/eval/validation_gate.py
+      - src/ssl_anomaly/eval/probing.py
+      - src/ssl_anomaly/eval/contamination.py
+    metrics:
+      - reports/rq7_rq8.json:
           cache: false

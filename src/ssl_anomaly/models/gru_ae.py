@@ -112,14 +112,16 @@ class GRUAutoencoder(nn.Module):
         lengths: torch.Tensor | None = None,
         delta: float = 1.0,
         trim_frac: float = 0.0,
+        target: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Huber loss on masked tokens, with optional trimming of high-loss samples.
 
         Returns (loss_scalar, per_token_loss) where per_token_loss has shape (B, T).
         """
         recon, _ = self.forward(x, lengths)
+        tgt = x if target is None else target
         # Huber / smooth L1
-        tok_loss = F.smooth_l1_loss(recon, x, reduction="none", beta=delta)
+        tok_loss = F.smooth_l1_loss(recon, tgt, reduction="none", beta=delta)
         tok_loss = tok_loss.mean(dim=-1)  # (B, T)
         tok_loss = tok_loss * mask.float()
         # Per-sample loss (mean over masked tokens)

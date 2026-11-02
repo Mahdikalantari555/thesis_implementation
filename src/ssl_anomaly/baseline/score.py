@@ -113,6 +113,68 @@ def cycle_max_score(s: np.ndarray) -> float:
     return float(np.nanmax(np.abs(s))) if np.isfinite(s).any() else 0.0
 
 
+def cusum_detector(
+    s: np.ndarray,
+    *,
+    drift_k: float = 1.0,
+    decision_h: float = 4.5,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Page's tabular CUSUM along observed phase bins for gradual slow-drift detection.
+
+    Accumulates ``C_t = max(0, C_{t-1} + |s_t| - drift_k)`` solely across finite
+    observed bins so unobserved NaN bins neither accumulate nor reset the statistic.
+    Returns ``(flag_bool, cusum_stat)`` of shape ``(bins,)``, where unobserved bins
+    have ``flag_bool=False`` and ``cusum_stat=NaN``.
+    """
+    arr = np.asarray(s, dtype=np.float64)
+    stat = np.full_like(arr, np.nan, dtype=np.float64)
+    flag = np.zeros(arr.shape, dtype=bool)
+    c_pos = 0.0
+    for idx in range(arr.size):
+        val = arr[idx]
+        if not np.isfinite(val):
+            continue
+        c_pos = max(0.0, c_pos + abs(float(val)) - float(drift_k))
+        stat[idx] = c_pos
+        if c_pos > decision_h:
+            flag[idx] = True
+    return flag, stat
+
+
+def ewma_detector(
+    s: np.ndarray,
+    *,
+    alpha: float = 0.35,
+    L_sigma: float = 2.8,
+    baseline_mu: float = 1.0,
+    baseline_sigma: float = 0.65,
+) -> tuple[np.ndarray, np.ndarray]:
+    """EWMA control-chart slow-drift detector over observed phase bins.
+
+    Updates ``E_t = alpha * |s_t| + (1 - alpha) * E_{t-1}`` across observed bins and
+    flags bins exceeding exact finite-step upper control limit
+    ``mu + L_sigma * sigma * sqrt((alpha / (2 - alpha)) * (1 - (1 - alpha)**(2*m)))``.
+    """
+    arr = np.asarray(s, dtype=np.float64)
+    ewma = np.full_like(arr, np.nan, dtype=np.float64)
+    flag = np.zeros(arr.shape, dtype=bool)
+    a = float(np.clip(alpha, 0.05, 0.95))
+    e_val = float(baseline_mu)
+    step_m = 0
+    for idx in range(arr.size):
+        val = arr[idx]
+        if not np.isfinite(val):
+            continue
+        step_m += 1
+        e_val = a * abs(float(val)) + (1.0 - a) * e_val
+        ewma[idx] = e_val
+        asymp = (a / (2.0 - a)) * (1.0 - (1.0 - a) ** (2 * step_m))
+        ucl = float(baseline_mu) + float(L_sigma) * float(baseline_sigma) * float(np.sqrt(max(asymp, 1e-8)))
+        if e_val > ucl:
+            flag[idx] = True
+    return flag, ewma
+
+
 def score_all_cycles(
     X: dict[str, np.ndarray],
     cycle_info: dict[str, np.ndarray],
