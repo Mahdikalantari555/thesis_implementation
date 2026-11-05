@@ -18,14 +18,7 @@ build/
 venv/
 env/
 
-# Data (DVC tracked)
-data/raw/
-data/interim/
-data/processed/
-data/geo/
-data/manifests/
-!data/.gitkeep
-!data/**/.gitkeep
+
 
 # IDE / editor
 .vscode/
@@ -63,3 +56,10 @@ src/ssl_anomaly/_rs*.so
 releases/
 reports/figures/*.html
 reports/figures/*.png
+
+# Platform (React/Vite) build artifacts
+platform/node_modules/
+platform/dist/
+platform/.vite/
+platform/.vite-temp/
+platform/.pnpm-store/
