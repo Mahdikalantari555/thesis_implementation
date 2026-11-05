@@ -1,10 +1,18 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
-import type { IndicatorId, ModelId } from '../data/mock';
-import { FIELDS } from '../data/mock';
+import React, { createContext, useContext, useMemo, useState } from "react";
+import type { IndicatorId, ModelId } from "../data/mock";
+import { DATES, FIELDS, LAST_IDX } from "../data/mock";
 
 export interface Experiment {
-  id: string; name: string; created: string; model: ModelId; indicator: IndicatorId;
-  fields: string[]; range: [number, number]; note: string; stats: string;
+  id: string;
+  /** Model name + indicator name at save time (already localized when saved). */
+  name: string;
+  created: string;
+  model: ModelId;
+  indicator: IndicatorId;
+  fields: string[];
+  range: [number, number];
+  note: string;
+  stats: string;
 }
 
 interface Ctx {
@@ -24,39 +32,73 @@ interface Ctx {
 const AnalysisCtx = createContext<Ctx>(null!);
 export const useAnalysis = () => useContext(AnalysisCtx);
 
+/**
+ * Default selection, derived from whatever data is actually loaded.
+ *
+ * The previous implementation hard-coded `FIELDS[9].id` / `FIELDS[10]` /
+ * `FIELDS[18]`, which throws on an empty or short dataset (BUG-05). Every
+ * access is now optional-chained and falls back to `''`, satisfying the
+ * "Empty data guard" scenario of the bug-audit spec.
+ */
+const defaultFieldId = FIELDS[0]?.id ?? "";
+const defaultSelectedFields = FIELDS.slice(0, 3).map(f => f.id);
+
+const defaultRange: [number, number] = [0, LAST_IDX];
+
+/** Comfortable default view: the stress window of the demonstration series. */
+const defaultDateIdx = (() => {
+  if (!DATES.length) return 0;
+  const i = DATES.findIndex(d => d.startsWith("2023-06"));
+  return i >= 0 ? i : Math.min(LAST_IDX, Math.floor(LAST_IDX / 2));
+})();
+
+export const DEFAULT_DATE_IDX = defaultDateIdx;
+
 export function AnalysisProvider({ children }: { children: React.ReactNode }) {
-  const [view, setView] = useState('overview');
+  const [view, setView] = useState("overview");
   const [dark, setDark] = useState(false);
-  const [selectedField, setSelectedField] = useState(FIELDS[9].id); // F-010
-  const [selectedFields, setSelectedFields] = useState<string[]>([FIELDS[9].id, FIELDS[10].id, FIELDS[18].id]);
-  const [model, setModel] = useState<ModelId>('b1_dsh');
+  const [selectedField, setSelectedField] = useState(defaultFieldId);
+  const [selectedFields, setSelectedFields] = useState<string[]>(defaultSelectedFields);
+  const [model, setModel] = useState<ModelId>("b1_dsh");
   const [compareModels, setCompareModels] = useState<ModelId[]>([
-    'b1_dsh',
-    'b1_cusum',
-    'masked_transformer',
-    'sts_net',
-    'tiny_cnn_mamba',
-    'time2agri',
+    "b1_dsh",
+    "b1_cusum",
+    "masked_transformer",
+    "sts_net",
+    "tiny_cnn_mamba",
+    "time2agri",
   ]);
-  const [indicator, setIndicator] = useState<IndicatorId>('ndvi');
-  const [range, setRange] = useState<[number, number]>([0, 47]);
-  const [experiments, setExperiments] = useState<Experiment[]>([
-    { id: 'exp-1', name: 'B1 DSH vs CWSI — Khuzestan R01–R04, 2022–2023', created: '2026-04-18', model: 'b1_dsh', indicator: 'cwsi', fields: [FIELDS[0]?.id || 'F-001', FIELDS[1]?.id || 'F-002', FIELDS[2]?.id || 'F-003'], range: [12, 35], note: 'Water-salinity anomaly verification; check lag-1 response.', stats: 'r = 0.58 · ρ = 0.54 · n = 72' },
-    { id: 'exp-2', name: 'Model agreement — Tiny-CNN-Mamba vs STS-Net', created: '2026-05-02', model: 'tiny_cnn_mamba', indicator: 'cwsi', fields: FIELDS.slice(0, 12).map(f => f.id), range: [0, 47], note: 'Compare Bidirectional Mamba vs Spatio-Temporal CAE event overlap.', stats: 'κ = 0.68 · Jaccard = 0.64' },
-  ]);
+  const [indicator, setIndicator] = useState<IndicatorId>("ndvi");
+  const [range, setRangeState] = useState<[number, number]>(defaultRange);
+  const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [showDemoBanner, setShowDemoBanner] = useState(true);
 
-  const toggleField = (id: string) => {
-    setSelectedField(id);
-    setSelectedFields(prev => prev.includes(id) ? prev : [...prev, id].slice(-8));
+  /** Keep the shared range inside the loaded date axis, ordered and non-empty. */
+  const setRange = (next: [number, number]) => {
+    const lo = Math.max(0, Math.min(LAST_IDX, Math.min(next[0], next[1])));
+    const hi = Math.max(0, Math.min(LAST_IDX, Math.max(next[0], next[1])));
+    setRangeState([lo, hi]);
   };
 
-  const value = useMemo<Ctx>(() => ({
-    view, setView, dark, setDark, selectedField, setSelectedField, selectedFields, setSelectedFields, toggleField,
-    model, setModel, compareModels, setCompareModels, indicator, setIndicator, range, setRange,
-    experiments, addExperiment: (e) => setExperiments(p => [e, ...p]), removeExperiment: (id) => setExperiments(p => p.filter(x => x.id !== id)),
-    showDemoBanner, setShowDemoBanner,
-  }), [view, dark, selectedField, selectedFields, model, compareModels, indicator, range, experiments, showDemoBanner]);
+  const toggleField = (id: string) => {
+    if (!id) return;
+    setSelectedField(id);
+    setSelectedFields(prev => (prev.includes(id) ? prev : [...prev, id].slice(-8)));
+  };
+
+  const value = useMemo<Ctx>(
+    () => ({
+      view, setView, dark, setDark, selectedField, setSelectedField, selectedFields, setSelectedFields, toggleField,
+      model, setModel, compareModels, setCompareModels, indicator, setIndicator, range, setRange,
+      experiments,
+      addExperiment: e => setExperiments(p => [e, ...p]),
+      removeExperiment: id => setExperiments(p => p.filter(x => x.id !== id)),
+      showDemoBanner, setShowDemoBanner,
+    }),
+    // `setRange`/`toggleField` only close over setState functions (stable).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [view, dark, selectedField, selectedFields, model, compareModels, indicator, range, experiments, showDemoBanner]
+  );
 
   return <AnalysisCtx.Provider value={value}>{children}</AnalysisCtx.Provider>;
 }
