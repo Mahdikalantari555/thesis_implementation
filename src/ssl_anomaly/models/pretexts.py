@@ -18,7 +18,7 @@ import torch.nn.functional as F
 
 from .masked_tf import SinusoidalPositionalEncoding, TransformerBlock
 
-PRETEXT_ARMS = ("masked_recon", "traj_contrastive", "anomaly_degradation")
+PRETEXT_ARMS = ("masked_recon", "traj_contrastive", "anomaly_degradation", "time2agri")
 
 
 class PretextTransformer(nn.Module):
@@ -60,7 +60,7 @@ class PretextTransformer(nn.Module):
                 nn.GELU(),
                 nn.Linear(d_model, d_in),
             )
-        elif arm == "traj_contrastive":
+        elif arm in ("traj_contrastive", "time2agri"):
             self.task_head = nn.Sequential(
                 nn.Linear(d_model, d_model),
                 nn.GELU(),
@@ -151,6 +151,49 @@ def make_contrastive_views(
     return v1, p1, v2, p2
 
 
+def make_time2agri_views(
+    tokens: torch.Tensor,
+    pad_mask: torch.Tensor,
+    n_bands: int,
+    rng: np.random.Generator,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Time2Agri agricultural trajectory augmentations (Gupta & Sobti 2025).
+
+    Generates two contrastive views using:
+      1. Crop calendar phase shift (temporal roll of 1-2 bins within unpadded region).
+      2. Multi-temporal cloud gap masking (extended 2-4 consecutive token drops).
+      3. Canopy moisture and vegetation gain jitter on spectral channels.
+    """
+    B, T, d_in = tokens.shape
+    v1 = tokens.clone()
+    v2 = tokens.clone()
+    p1 = pad_mask.clone()
+    p2 = pad_mask.clone()
+
+    for i in range(B):
+        unpadded = torch.where(~pad_mask[i])[0]
+        if len(unpadded) >= 6:
+            # View 1: Calendar phase shift (+/- 1-2 bins)
+            shift = int(rng.choice([-2, -1, 1, 2]))
+            v1_sub = v1[i, unpadded, :n_bands].clone()
+            v1[i, unpadded, :n_bands] = torch.roll(v1_sub, shifts=shift, dims=0)
+
+            # View 2: Extended agricultural cloud gap (drop consecutive 2 to 4 bins)
+            gap_len = int(rng.integers(2, min(5, len(unpadded) // 2)))
+            gap_start = int(rng.integers(0, len(unpadded) - gap_len + 1))
+            gap_indices = unpadded[gap_start : gap_start + gap_len]
+            p2[i, gap_indices] = True
+
+    # View 1: Mild spectral noise
+    v1[:, :, :n_bands] += 0.05 * torch.randn_like(v1[:, :, :n_bands])
+
+    # View 2: Canopy gain scaling on spectral bands
+    canopy_scale = 1.0 + 0.08 * torch.randn(B, 1, n_bands, dtype=tokens.dtype, device=tokens.device)
+    v2[:, :, :n_bands] = v2[:, :, :n_bands] * canopy_scale + 0.05 * torch.randn_like(v2[:, :, :n_bands])
+
+    return v1, p1, v2, p2
+
+
 def synthesize_anomalybert_degradation(
     tokens: torch.Tensor,
     pad_mask: torch.Tensor,
@@ -222,13 +265,18 @@ def _arm_batch_loss(
         ).mean(dim=-1)
         return (err * m_t.float()).sum() / m_t.float().sum().clamp(min=1.0)
 
-    if arm == "traj_contrastive":
-        v1, p1, v2, p2 = make_contrastive_views(bx, bp, n_bands, rng)
+    if arm in ("traj_contrastive", "time2agri"):
+        if arm == "time2agri":
+            v1, p1, v2, p2 = make_time2agri_views(bx, bp, n_bands, rng)
+            temp = 0.15
+        else:
+            v1, p1, v2, p2 = make_contrastive_views(bx, bp, n_bands, rng)
+            temp = 0.20
         _, e1 = model.encode_sequence(v1, mask=None, key_padding_mask=p1)
         _, e2 = model.encode_sequence(v2, mask=None, key_padding_mask=p2)
         z1 = model.task_head(e1)
         z2 = model.task_head(e2)
-        return info_nce_loss(z1, z2, temperature=0.2)
+        return info_nce_loss(z1, z2, temperature=temp)
 
     # anomaly_degradation
     corrupted, y_deg = synthesize_anomalybert_degradation(bx, bp, n_bands, rng)
@@ -384,7 +432,7 @@ def score_cycle_pretext(
         s = np.sort(tok_rms)
         return float(np.mean(s[-min(3, T) :]))
 
-    if model.arm == "traj_contrastive":
+    if model.arm in ("traj_contrastive", "time2agri"):
         _, emb = model.encode_sequence(x, mask=None, key_padding_mask=pad)
         e_np = emb[0].numpy()
         e_norm = e_np / max(float(np.linalg.norm(e_np)), 1e-8)
@@ -402,3 +450,77 @@ def score_cycle_pretext(
     probs = torch.sigmoid(model.task_head(h).squeeze(-1))[0].numpy()
     p_s = np.sort(probs)
     return float(np.mean(p_s[-min(3, T) :]))
+
+
+class Time2AgriModel(nn.Module):
+    """Time2Agri agricultural trajectory contrastive model (Gupta & Sobti 2025)."""
+
+    def __init__(
+        self,
+        d_in: int,
+        n_bands: int,
+        d_model: int = 64,
+        proj_dim: int = 32,
+        n_heads: int = 4,
+        n_layers: int = 3,
+        d_ff: int = 128,
+        dropout: float = 0.1,
+        max_len: int = 128,
+    ) -> None:
+        super().__init__()
+        self.d_in = d_in
+        self.n_bands = n_bands
+        self.d_model = d_model
+        self.proj_dim = proj_dim
+
+        self.encoder = PretextTransformer(
+            d_in=d_in,
+            n_bands=n_bands,
+            d_model=d_model,
+            n_heads=n_heads,
+            n_layers=n_layers,
+            d_ff=d_ff,
+            dropout=dropout,
+            max_len=max_len,
+            arm="time2agri",
+        )
+        self.proj_head = nn.Sequential(
+            nn.Linear(d_model, d_model),
+            nn.GELU(),
+            nn.Linear(d_model, proj_dim),
+        )
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        mask: torch.Tensor | None = None,
+        key_padding_mask: torch.Tensor | None = None,
+        lengths: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        h_seq, pooled_emb = self.encoder.encode_sequence(
+            x, mask=mask, key_padding_mask=key_padding_mask
+        )
+        proj_emb = F.normalize(self.proj_head(pooled_emb), dim=-1)
+        return proj_emb, pooled_emb
+
+    def encode_trajectory(
+        self, x: torch.Tensor, key_padding_mask: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        """Return normalized contrastive projection embedding of shape (B, proj_dim)."""
+        proj_emb, _ = self.forward(x, key_padding_mask=key_padding_mask)
+        return proj_emb
+
+    def compute_anomaly_score(
+        self,
+        x: torch.Tensor,
+        ref_embeddings: torch.Tensor | None = None,
+        key_padding_mask: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """Compute anomaly score based on cosine divergence in contrastive space."""
+        z, _ = self.forward(x, key_padding_mask=key_padding_mask)
+        if ref_embeddings is None:
+            return 1.0 - (z * z).sum(dim=-1)
+        ref_norm = F.normalize(ref_embeddings, dim=-1)
+        sim = z @ ref_norm.T
+        max_sim, _ = sim.max(dim=-1)
+        return 1.0 - max_sim

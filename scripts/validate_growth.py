@@ -12,6 +12,12 @@ import threading
 from pathlib import Path
 import warnings
 import numpy as np
+import sys
+
+# Ensure src is on sys.path
+_src_dir = Path(__file__).resolve().parents[1] / 'src'
+if str(_src_dir) not in sys.path:
+    sys.path.insert(0, str(_src_dir))
 
 # Load the lightweight module directly; avoid importing all optional SSL dependencies.
 path = Path(__file__).resolve().parents[1] / 'src/ssl_anomaly/eval/growth_validation.py'
@@ -74,12 +80,15 @@ def run(data, *, band, holdouts, quantile, train_end, val_end, test_end, seed,
         ssl_spec = importlib.util.spec_from_file_location('growth_ssl', ssl_path)
         ssl = importlib.util.module_from_spec(ssl_spec)
         ssl_spec.loader.exec_module(ssl)
-        for name in ('gru_ae', 'masked_transformer'):
+        for name in ('gru_ae', 'masked_transformer', 'sts_net', 'tiny_cnn_mamba', 'time2agri'):
             model_map[name] = lambda name=name: ssl.MaskedSSL(name, epochs=epochs, seed=seed)
         model_map['random_gru_ae'] = lambda: ssl.MaskedSSL('gru_ae', epochs=epochs, seed=seed, train_enabled=False)
         model_map['random_masked_transformer'] = lambda: ssl.MaskedSSL('masked_transformer', epochs=epochs, seed=seed, train_enabled=False)
         model_map['causal_gru'] = lambda: ssl.MaskedSSL('gru_ae', epochs=epochs, seed=seed, causal=True)
         model_map['causal_transformer'] = lambda: ssl.MaskedSSL('masked_transformer', epochs=epochs, seed=seed, causal=True)
+        model_map['causal_sts_net'] = lambda: ssl.MaskedSSL('sts_net', epochs=epochs, seed=seed, causal=True)
+        model_map['causal_cnn_mamba'] = lambda: ssl.MaskedSSL('tiny_cnn_mamba', epochs=epochs, seed=seed, causal=True)
+        model_map['causal_time2agri'] = lambda: ssl.MaskedSSL('time2agri', epochs=epochs, seed=seed, causal=True)
     if not models or len(set(models)) != len(models) or any(name not in model_map for name in models):
         raise ValueError('unknown, empty or duplicate models')
     result['protocol']['models'] = list(models)

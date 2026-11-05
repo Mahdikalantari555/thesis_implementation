@@ -49,6 +49,8 @@ def quality_mask(qa_pixel: np.ndarray, cfg: QualityCfg) -> np.ndarray:
     """
     qa = qa_pixel.astype(np.uint16)
     bad = np.zeros_like(qa, dtype=bool)
+    # Bit 0: Fill (no-data) pixels are never valid.
+    bad |= (qa & 1) == 1
     if cfg.dilated_cloud:
         bad |= ((qa >> cfg.bits_dilated_cloud) & 1) == 1
     if cfg.cirrus:

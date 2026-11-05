@@ -11,17 +11,17 @@ import torch
 
 
 def _model_class(filename, name):
-    path = Path(__file__).resolve().parents[1] / 'models' / filename
-    spec = importlib.util.spec_from_file_location('_growth_' + name, path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return getattr(module, name)
+    import importlib
+    mod_name = f"ssl_anomaly.models.{filename.removesuffix('.py')}"
+    mod = importlib.import_module(mod_name)
+    return getattr(mod, name)
 
 
 class MaskedSSL:
     def __init__(self, architecture, *, epochs=15, seed=42, mask_fraction=.25, batch_size=32, causal=False, train_enabled=True):
-        if architecture not in ('gru_ae', 'masked_transformer'):
-            raise ValueError('unsupported architecture')
+        valid_archs = ('gru_ae', 'masked_transformer', 'sts_net', 'tiny_cnn_mamba', 'time2agri')
+        if architecture not in valid_archs:
+            raise ValueError(f'unsupported architecture {architecture}; expected {valid_archs}')
         if epochs < 1 or batch_size < 1 or not 0 < mask_fraction <= 1:
             raise ValueError('invalid training parameters')
         self.architecture, self.epochs, self.seed = architecture, epochs, seed
@@ -59,6 +59,16 @@ class MaskedSSL:
         if self.architecture == 'gru_ae':
             cls = _model_class('gru_ae.py', 'GRUAutoencoder')
             self.model = cls(d_in=d_in, d_model=32, n_layers=1, dropout=0)
+        elif self.architecture == 'sts_net':
+            cls = _model_class('sts_net.py', 'STSNetAutoencoder')
+            self.model = cls(d_in=d_in, d_model=32, latent_dim=16)
+        elif self.architecture == 'tiny_cnn_mamba':
+            cls = _model_class('cnn_mamba.py', 'TinyCNNMamba')
+            self.model = cls(d_in=d_in, d_model=32, d_state=8, n_layers=2, latent_dim=16)
+        elif self.architecture == 'time2agri':
+            cls = _model_class('pretexts.py', 'PretextTransformer')
+            self.model = cls(d_in=d_in, n_bands=self.n_bands, d_model=32, n_heads=4, n_layers=2,
+                             d_ff=64, dropout=.1, max_len=max(128, self.shape[0]), arm='masked_recon')
         else:
             cls = _model_class('masked_tf.py', 'MaskedTransformer')
             self.model = cls(d_in=d_in, d_model=32, n_heads=4, n_layers=2,
@@ -96,6 +106,11 @@ class MaskedSSL:
                     inputs[future] = 0
                 if self.architecture == 'masked_transformer':
                     recon, _ = self.model(inputs, mask=masks, key_padding_mask=pad)
+                elif self.architecture in ('sts_net', 'tiny_cnn_mamba'):
+                    recon, _ = self.model(inputs)
+                elif self.architecture == 'time2agri':
+                    h, _ = self.model.encode_sequence(inputs, mask=masks, key_padding_mask=pad)
+                    recon = self.model.task_head(h)
                 else:
                     recon, _ = self.model(inputs, lengths=lengths)
                 target_mask = observed & masks.unsqueeze(-1)
@@ -128,6 +143,11 @@ class MaskedSSL:
                     pad = pad | future
                 if self.architecture == 'masked_transformer':
                     recon, _ = self.model(inputs, mask=mask, key_padding_mask=pad)
+                elif self.architecture in ('sts_net', 'tiny_cnn_mamba'):
+                    recon, _ = self.model(inputs)
+                elif self.architecture == 'time2agri':
+                    h, _ = self.model.encode_sequence(inputs, mask=mask, key_padding_mask=pad)
+                    recon = self.model.task_head(h)
                 else:
                     recon, _ = self.model(inputs, lengths=lengths)
                 prediction = recon[torch.arange(len(rows)), cols, :self.n_bands]
