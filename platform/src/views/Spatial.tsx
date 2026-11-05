@@ -1,101 +1,197 @@
-import { useMemo, useState } from 'react';
-import { XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line, ScatterChart, Scatter } from 'recharts';
-import MapView from '../components/MapView';
-import { Panel, Label, Select, Stat, Badge, fmt } from '../components/ui';
-import { useAnalysis } from '../context/AnalysisContext';
-import { FIELDS, MODELS, INDICATORS, getSeries, moransI, pearson, mean, DATES, fieldById } from '../data/mock';
+import { useMemo, useState } from "react";
+import { XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line, ScatterChart, Scatter } from "recharts";
+import MapView from "../components/MapView";
+import { Panel, Label, Select, Stat, Badge, EmptyState } from "../components/ui";
+import { useAnalysis, DEFAULT_DATE_IDX } from "../context/AnalysisContext";
+import { FIELDS, MODELS, INDICATORS, getSeries, moransI, pearson, mean, DATES, LAST_IDX, fieldById, clampIdx, monthAt } from "../data/mock";
+import { useLocale, useT } from "../i18n";
 
 export default function Spatial() {
   const { model, setModel, indicator, setIndicator, selectedField, setSelectedField } = useAnalysis();
-  const [dateIdx, setDateIdx] = useState(35);
-  const [mode, setMode] = useState<'anomaly' | 'indicator' | 'lisa'>('anomaly');
+  const t = useT();
+  const { fmt } = useLocale();
+  const [dateIdx, setDateIdx] = useState(clampIdx(DEFAULT_DATE_IDX));
+  const [mode, setMode] = useState<"anomaly" | "indicator" | "lisa">("anomaly");
+  const safeIdx = clampIdx(dateIdx);
 
-  const values = useMemo(() => FIELDS.map(f => getSeries(f.id)[dateIdx].scores[model]), [model, dateIdx]);
+  const values = useMemo(() => FIELDS.map(f => getSeries(f.id)[safeIdx]?.scores[model] ?? 0), [model, safeIdx]);
   const weights = useMemo(() => {
+    const index = new Map(FIELDS.map((f, i) => [f.id, i]));
     const m = new Map<string, string[]>();
-    FIELDS.forEach((f, i) => m.set(String(i), f.neighbors.map(n => String(FIELDS.findIndex(x => x.id === n)))));
+    FIELDS.forEach((f, i) => {
+      // `findIndex` used to produce "-1" for neighbour ids missing from FIELDS,
+      // which then indexed `values[-1]` (silently NaN) inside Moran's I (BUG-09).
+      m.set(String(i), f.neighbors.map(n => index.get(n)).filter((j): j is number => typeof j === "number").map(String));
+    });
     return m;
   }, []);
   const moran = moransI(values, weights);
 
   // Spatial correlation: field score vs indicator (field means)
-  const fieldMeans = useMemo(() => FIELDS.map(f => {
-    const s = getSeries(f.id);
-    return { field: f.code, score: +mean(s.map(o => o.scores[model])).toFixed(3), ind: +mean(s.map(o => (o as any)[indicator])).toFixed(3), nbScore: +mean(f.neighbors.flatMap(n => getSeries(n).map(o => o.scores[model]))).toFixed(3) };
-  }), [model, indicator]);
+  const fieldMeans = useMemo(
+    () =>
+      FIELDS.map(f => {
+        const s = getSeries(f.id);
+        const nbScores = f.neighbors.flatMap(n => getSeries(n).map(o => o.scores[model]));
+        return {
+          field: f.code,
+          score: +mean(s.map(o => o.scores[model])).toFixed(3),
+          ind: +mean(s.map(o => (o as unknown as Record<string, number>)[indicator])).toFixed(3),
+          nbScore: +mean(nbScores).toFixed(3),
+        };
+      }),
+    [model, indicator]
+  );
   const spatialR = pearson(fieldMeans.map(d => d.score), fieldMeans.map(d => d.ind));
   const nbR = pearson(fieldMeans.map(d => d.score), fieldMeans.map(d => d.nbScore));
 
   // Variogram-like: correlation by neighbour distance proxy (grid distance)
   const variogram = useMemo(() => {
     const bins = [0, 1, 2, 3, 4, 5].map(d => ({ dist: d, pairs: [] as number[] }));
-    FIELDS.forEach((a, i) => FIELDS.forEach((b, j) => {
-      if (j <= i) return;
-      const dist = Math.round(Math.hypot(a.centroid[0] - b.centroid[0], a.centroid[1] - b.centroid[1]) * 120);
-      const bin = bins[Math.min(5, dist)];
-      bin.pairs.push(Math.abs(values[i] - values[j]));
-    }));
+    FIELDS.forEach((a, i) =>
+      FIELDS.forEach((b, j) => {
+        if (j <= i) return;
+        const dist = Math.round(Math.hypot(a.centroid[0] - b.centroid[0], a.centroid[1] - b.centroid[1]) * 120);
+        bins[Math.min(5, dist)].pairs.push(Math.abs(values[i] - values[j]));
+      })
+    );
     return bins.map(b => ({ dist: b.dist, semivar: b.pairs.length ? +(mean(b.pairs) / 2).toFixed(3) : 0, n: b.pairs.length }));
   }, [values]);
 
   const field = fieldById(selectedField);
-  const neighborRows = field.neighbors.map(nid => { const nf = fieldById(nid); const o = getSeries(nid)[dateIdx]; return { id: nid, code: nf.code, score: o.scores[model], ndvi: o.ndvi, cwsi: o.cwsi }; });
+  const selfObs = getSeries(field.id)[safeIdx];
+  const neighborRows = field.neighbors
+    .filter(nid => FIELDS.some(f => f.id === nid))
+    .map(nid => {
+      const nf = fieldById(nid);
+      const o = getSeries(nid)[safeIdx];
+      return { id: nid, code: nf.code, score: o?.scores[model], ndvi: o?.ndvi, cwsi: o?.cwsi };
+    });
+
+  // Moran's I per month — computed once per model instead of on every render.
+  const moranTrend = useMemo(
+    () =>
+      DATES.map((d, i) => {
+        const vals = FIELDS.map(f => getSeries(f.id)[i]?.scores[model] ?? 0);
+        return { date: d.slice(0, 7), moran: +moransI(vals, weights).toFixed(3) };
+      }),
+    [model, weights]
+  );
+
+  if (!FIELDS.length) {
+    return <EmptyState title={t("ui.noData")} desc={t("ui.noDataDesc")} />;
+  }
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3 items-end border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3">
-        <div><Label>Model</Label><Select value={model} onChange={v => setModel(v as any)}>{MODELS.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</Select></div>
-        <div><Label>Indicator</Label><Select value={indicator} onChange={v => setIndicator(v as any)}>{INDICATORS.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</Select></div>
-        <div><Label>Map mode</Label><Select value={mode} onChange={v => setMode(v as any)}><option value="anomaly">Anomaly score</option><option value="indicator">Indicator</option><option value="lisa">LISA-like clusters</option></Select></div>
-        <div className="flex-1 min-w-48"><Label>Date — {DATES[dateIdx].slice(0, 7)}</Label><input type="range" min={0} max={47} value={dateIdx} onChange={e => setDateIdx(+e.target.value)} className="w-full accent-teal-700" /></div>
+        <div>
+          <Label>{t("spatial.controls.model")}</Label>
+          <Select value={model} onChange={v => setModel(v as typeof model)}>
+            {MODELS.map(m => (
+              <option key={m.id} value={m.id}>
+                {t(`model.${m.id}.name`)}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <Label>{t("spatial.controls.indicator")}</Label>
+          <Select value={indicator} onChange={v => setIndicator(v as typeof indicator)}>
+            {INDICATORS.map(i => (
+              <option key={i.id} value={i.id}>
+                {i.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <Label>{t("spatial.controls.mode")}</Label>
+          <Select value={mode} onChange={v => setMode(v as typeof mode)}>
+            <option value="anomaly">{t("spatial.controls.modeAnomaly")}</option>
+            <option value="indicator">{t("spatial.controls.modeIndicator")}</option>
+            <option value="lisa">{t("spatial.controls.modeLisa")}</option>
+          </Select>
+        </div>
+        <div className="flex-1 min-w-48">
+          <Label>{t("spatial.controls.date", { date: monthAt(safeIdx) })}</Label>
+          <input type="range" min={0} max={LAST_IDX} value={safeIdx} onChange={e => setDateIdx(+e.target.value)} aria-label={t("spatial.controls.date", { date: monthAt(safeIdx) })} className="w-full accent-teal-700" />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-slate-200 dark:bg-slate-800 border border-slate-200 dark:border-slate-800">
-        <Stat label="Moran's I (score)" value={fmt(moran)} sub={moran > 0.3 ? 'strong clustering' : moran > 0.1 ? 'moderate clustering' : 'weak / random'} />
-        <Stat label="Score ↔ indicator (field means)" value={fmt(spatialR)} sub={`r across ${FIELDS.length} fields`} />
-        <Stat label="Score ↔ neighbour score" value={fmt(nbR)} sub="spatial autocorrelation proxy" />
-        <Stat label="Fields" value={String(FIELDS.length)} sub={`${FIELDS.length} in spatial adjacency`} />
+        <Stat
+          label={t("spatial.stat.moran")}
+          value={fmt.number(moran, 3)}
+          sub={moran > 0.3 ? t("spatial.stat.moranStrong") : moran > 0.1 ? t("spatial.stat.moranModerate") : t("spatial.stat.moranWeak")}
+        />
+        <Stat label={t("spatial.stat.correlation")} value={fmt.number(spatialR, 3)} sub={t("spatial.stat.correlationSub", { n: fmt.integer(FIELDS.length) })} />
+        <Stat label={t("spatial.stat.neighbour")} value={fmt.number(nbR, 3)} sub={t("spatial.stat.neighbourSub")} />
+        <Stat label={t("spatial.stat.fields")} value={fmt.integer(FIELDS.length)} sub={t("spatial.stat.fieldsSub", { n: fmt.integer(FIELDS.length) })} />
       </div>
 
       <div className="grid grid-cols-12 gap-4">
-        <Panel title="Anomaly distribution map" subtitle="Click a field to inspect its neighbours" className="col-span-12 xl:col-span-7" pad={false}>
-          <div className="h-[460px]"><MapView colorMode={mode} model={model} indicator={indicator} dateIdx={dateIdx} opacity={0.85} height="460px" /></div>
+        <Panel title={t("spatial.map.title")} subtitle={t("spatial.map.subtitle")} className="col-span-12 xl:col-span-7" pad={false}>
+          <div className="h-[460px]">
+            <MapView colorMode={mode} model={model} indicator={indicator} dateIdx={safeIdx} opacity={0.85} height="460px" />
+          </div>
         </Panel>
 
         <div className="col-span-12 xl:col-span-5 space-y-4">
-          <Panel title={`Neighbour comparison — ${field.code}`} subtitle="Selected field vs adjacent fields at same date">
+          <Panel title={t("spatial.neighbours.title", { field: field.code })} subtitle={t("spatial.neighbours.subtitle")}>
             <table className="w-full text-[11px]">
-              <thead><tr className="text-slate-400"><th className="text-left py-1 font-medium">Field</th><th className="text-right py-1 font-medium">Score</th><th className="text-right py-1 font-medium">NDVI</th><th className="text-right py-1 font-medium">CWSI</th></tr></thead>
+              <thead>
+                <tr className="text-slate-400">
+                  <th className="text-start py-1 font-medium">{t("spatial.neighbours.field")}</th>
+                  <th className="text-end py-1 font-medium">{t("spatial.neighbours.score")}</th>
+                  <th className="text-end py-1 font-medium">NDVI</th>
+                  <th className="text-end py-1 font-medium">CWSI</th>
+                </tr>
+              </thead>
               <tbody>
-                <tr className="bg-teal-50 dark:bg-teal-950/40 font-medium"><td className="py-1.5">{field.code} (selected)</td><td className="text-right font-mono">{getSeries(field.id)[dateIdx].scores[model].toFixed(3)}</td><td className="text-right font-mono">{getSeries(field.id)[dateIdx].ndvi.toFixed(2)}</td><td className="text-right font-mono">{getSeries(field.id)[dateIdx].cwsi.toFixed(2)}</td></tr>
-                {neighborRows.map(r => <tr key={r.id} className="border-t border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50" onClick={() => setSelectedField(r.id)}><td className="py-1.5">{r.code}</td><td className="text-right font-mono">{r.score.toFixed(3)}</td><td className="text-right font-mono">{r.ndvi.toFixed(2)}</td><td className="text-right font-mono">{r.cwsi.toFixed(2)}</td></tr>)}
+                <tr className="bg-teal-50 dark:bg-teal-950/40 font-medium">
+                  <td className="py-1.5">
+                    {field.code} ({t("field.selected")})
+                  </td>
+                  <td className="text-end font-mono">{selfObs ? <bdi>{fmt.number(selfObs.scores[model], 3)}</bdi> : "—"}</td>
+                  <td className="text-end font-mono">{selfObs ? fmt.number(selfObs.ndvi, 2) : "—"}</td>
+                  <td className="text-end font-mono">{selfObs ? fmt.number(selfObs.cwsi, 2) : "—"}</td>
+                </tr>
+                {neighborRows.map(r => (
+                  <tr key={r.id} className="border-t border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50" onClick={() => setSelectedField(r.id)}>
+                    <td className="py-1.5">{r.code}</td>
+                    <td className="text-end font-mono">{r.score === undefined ? "—" : <bdi>{fmt.number(r.score, 3)}</bdi>}</td>
+                    <td className="text-end font-mono">{r.ndvi === undefined ? "—" : fmt.number(r.ndvi, 2)}</td>
+                    <td className="text-end font-mono">{r.cwsi === undefined ? "—" : fmt.number(r.cwsi, 2)}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
-            <div className="text-[11px] text-slate-500 mt-2">If neighbours show similar elevation, the pattern may be regional (weather, soil) rather than field-specific stress. If isolated, check management / sensor artefacts.</div>
+            <div className="text-[11px] text-slate-500 mt-2">{t("spatial.neighbours.note")}</div>
           </Panel>
 
-          <Panel title="Empirical variogram (score)" subtitle="Semivariance vs distance proxy — rising curve = spatial structure">
-            <div className="h-48">
+          <Panel title={t("spatial.variogram.title")} subtitle={t("spatial.variogram.subtitle")}>
+            <div dir="ltr" className="h-48">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={variogram} margin={{ top: 5, right: 15, left: -15, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                  <XAxis dataKey="dist" tick={{ fontSize: 10 }} label={{ value: 'Distance (proxy units)', position: 'insideBottom', offset: -2, fontSize: 10 }} />
+                  <XAxis dataKey="dist" tick={{ fontSize: 10 }} label={{ value: t("spatial.variogram.xAxis"), position: "insideBottom", offset: -2, fontSize: 10 }} />
                   <YAxis tick={{ fontSize: 10 }} />
                   <Tooltip contentStyle={{ fontSize: 11 }} />
-                  <Line type="monotone" dataKey="semivar" stroke="#0f766e" strokeWidth={2} dot={{ r: 3 }} name="Semivariance" />
+                  <Line type="monotone" dataKey="semivar" stroke="#0f766e" strokeWidth={2} dot={{ r: 3 }} name={t("spatial.variogram.seriesName")} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </Panel>
 
-          <Panel title="Field-mean scatter" subtitle={`Mean score vs mean ${INDICATORS.find(i => i.id === indicator)?.name} (one point per field)`}>
-            <div className="h-48">
+          <Panel title={t("spatial.scatter.title")} subtitle={t("spatial.scatter.subtitle", { indicator: INDICATORS.find(i => i.id === indicator)?.name ?? "" })}>
+            <div dir="ltr" className="h-48">
               <ResponsiveContainer width="100%" height="100%">
                 <ScatterChart margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis type="number" dataKey="score" domain={[0, 1]} tick={{ fontSize: 10 }} />
                   <YAxis type="number" dataKey="ind" tick={{ fontSize: 10 }} />
-                  <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ fontSize: 11 }} />
+                  <Tooltip cursor={{ strokeDasharray: "3 3" }} contentStyle={{ fontSize: 11 }} />
                   <Scatter data={fieldMeans} fill={MODELS.find(m => m.id === model)?.color} fillOpacity={0.55} />
                 </ScatterChart>
               </ResponsiveContainer>
@@ -103,19 +199,23 @@ export default function Spatial() {
           </Panel>
         </div>
 
-        <Panel title="Moran's I over time" subtitle="Spatial clustering of scores per month — persistent positive I suggests regional patterns" className="col-span-12">
-          <div className="h-52">
+        <Panel title={t("spatial.trend.title")} subtitle={t("spatial.trend.subtitle")} className="col-span-12">
+          <div dir="ltr" className="h-52">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={DATES.map((d, i) => { const vals = FIELDS.map(f => getSeries(f.id)[i].scores[model]); return { date: d.slice(0, 7), moran: +moransI(vals, weights).toFixed(3) }; })} margin={{ top: 5, right: 15, left: -15, bottom: 0 }}>
+              <LineChart data={moranTrend} margin={{ top: 5, right: 15, left: -15, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                 <XAxis dataKey="date" tick={{ fontSize: 9 }} interval={4} />
                 <YAxis domain={[-0.5, 1]} tick={{ fontSize: 10 }} />
                 <Tooltip contentStyle={{ fontSize: 11 }} />
-                <Line type="monotone" dataKey="moran" stroke="#7c3aed" strokeWidth={2} dot={false} name="Moran's I" />
+                <Line type="monotone" dataKey="moran" stroke="#7c3aed" strokeWidth={2} dot={false} name={t("spatial.trend.seriesName")} />
               </LineChart>
             </ResponsiveContainer>
           </div>
-          <div className="flex gap-2 mt-2"><Badge color="#7c3aed">I &gt; 0 clustered</Badge><Badge>I ≈ 0 random</Badge><Badge>I &lt; 0 dispersed</Badge></div>
+          <div className="flex flex-wrap gap-2 mt-2">
+            <Badge color="#7c3aed">{t("spatial.trend.legendPositive")}</Badge>
+            <Badge>{t("spatial.trend.legendZero")}</Badge>
+            <Badge>{t("spatial.trend.legendNegative")}</Badge>
+          </div>
         </Panel>
       </div>
     </div>
