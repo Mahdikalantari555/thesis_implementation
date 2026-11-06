@@ -34,8 +34,8 @@ export default function Reports() {
   const exportSeries = () => {
     const s = getSeries(selectedField);
     downloadCSV(`series_${selectedField}_${model}.csv`, [
-      ["date", "missing", model, "ndvi", "evi", "savi", "ndmi", "tvdi", "cwsi", "eta", "precip", "temp"],
-      ...s.map(o => [o.date, o.missing ? 1 : 0, o.scores[model].toFixed(4), o.ndvi.toFixed(4), o.evi.toFixed(4), o.savi.toFixed(4), o.ndmi.toFixed(4), o.tvdi.toFixed(4), o.cwsi.toFixed(4), o.eta.toFixed(4), o.precip.toFixed(2), o.temp.toFixed(2)]),
+      ["date", "missing", model, "ndvi", "evi", "savi", "ndmi", "tvdi", "cwsi", "eta", "precip", "temp", "provenance"],
+      ...s.map(o => [o.date, o.missing ? 1 : 0, o.scores[model].toFixed(4), (o.ndvi ?? 0).toFixed(4), (o.evi ?? 0).toFixed(4), (o.savi ?? 0).toFixed(4), (o.ndmi ?? 0).toFixed(4), (o.tvdi ?? 0).toFixed(4), (o.cwsi ?? 0).toFixed(4), (o.eta ?? 0).toFixed(4), (o.precip ?? 0).toFixed(2), (o.temp ?? 0).toFixed(2), o.provenance ? JSON.stringify(o.provenance) : ""]),
     ]);
   };
 

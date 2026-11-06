@@ -63,3 +63,9 @@ platform/dist/
 platform/.vite/
 platform/.vite-temp/
 platform/.pnpm-store/
+
+
+# AI Tools
+.agents
+.memdb
+.opencode

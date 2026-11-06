@@ -6,6 +6,7 @@
 // synthetic values with a seeded RNG instead). It is now the single data source.
 import farmsKhuzestanData from './farms_khuzestan.json';
 import khuSeries from './series_khuzestan.json';
+import { CHANNELS, type ChannelSpec } from './channels';
 
 export type ModelId =
   | 'b0_calendar'
@@ -63,20 +64,33 @@ export interface IndicatorDef {
   descKey: string;
   kind: 'spectral' | 'thermal' | 'water' | 'weather';
   kindKey: string;
+  /** Optional declared derivation relationship (mirrors channel registry). */
+  derivedFrom?: string;
+  provenanceDefault?: 'observed' | 'modelled' | 'proxy' | 'absent' | 'legacy';
 }
 
-export const INDICATORS: IndicatorDef[] = [
-  { id: 'ndvi', name: 'NDVI', unit: 'index', color: '#16a34a', range: [0, 1], descKey: 'indicator.ndvi.desc', kind: 'spectral', kindKey: 'kind.spectral' },
-  { id: 'evi', name: 'EVI', unit: 'index', color: '#65a30d', range: [0, 1], descKey: 'indicator.evi.desc', kind: 'spectral', kindKey: 'kind.spectral' },
-  { id: 'savi', name: 'SAVI', unit: 'index', color: '#059669', range: [0, 1], descKey: 'indicator.savi.desc', kind: 'spectral', kindKey: 'kind.spectral' },
-  { id: 'ndmi', name: 'NDMI', unit: 'index', color: '#0891b2', range: [-1, 1], descKey: 'indicator.ndmi.desc', kind: 'water', kindKey: 'kind.water' },
-  { id: 'tvdi', name: 'TVDI', unit: 'index', color: '#ea580c', range: [0, 1], descKey: 'indicator.tvdi.desc', kind: 'thermal', kindKey: 'kind.thermal' },
-  { id: 'cwsi', name: 'CWSI', unit: 'index', color: '#dc2626', range: [0, 1], descKey: 'indicator.cwsi.desc', kind: 'thermal', kindKey: 'kind.thermal' },
-  { id: 'eta', name: 'ETa', unit: 'mm/d', color: '#0284c7', range: [0, 8], descKey: 'indicator.eta.desc', kind: 'water', kindKey: 'kind.water' },
-  { id: 'lst', name: 'LST', unit: '°C', color: '#9333ea', range: [15, 55], descKey: 'indicator.lst.desc', kind: 'thermal', kindKey: 'kind.thermal' },
-  { id: 'precip', name: 'Precipitation', unit: 'mm', color: '#475569', range: [0, 300], descKey: 'indicator.precip.desc', kind: 'weather', kindKey: 'kind.weather' },
-  { id: 'temp', name: 'Air Temp.', unit: '°C', color: '#b45309', range: [10, 48], descKey: 'indicator.temp.desc', kind: 'weather', kindKey: 'kind.weather' },
-];
+const INDICATOR_COLOR: Record<string, string> = {
+  ndvi: '#16a34a', evi: '#65a30d', savi: '#059669', ndmi: '#0891b2',
+  tvdi: '#ea580c', cwsi: '#dc2626', eta: '#0284c7', lst: '#9333ea',
+  precip: '#475569', temp: '#b45309',
+};
+const INDICATOR_NAME: Record<string, string> = {
+  ndvi: 'NDVI', evi: 'EVI', savi: 'SAVI', ndmi: 'NDMI', tvdi: 'TVDI',
+  cwsi: 'CWSI', eta: 'ETa', lst: 'LST', precip: 'Precipitation', temp: 'Air Temp.',
+};
+
+export const INDICATORS: IndicatorDef[] = CHANNELS.map((c: ChannelSpec) => ({
+  id: c.name as IndicatorId,
+  name: INDICATOR_NAME[c.name] ?? c.name.toUpperCase(),
+  unit: c.unit,
+  color: INDICATOR_COLOR[c.name] ?? '#64748b',
+  range: c.physicalRange,
+  descKey: `indicator.${c.name}.desc`,
+  kind: c.kind,
+  kindKey: `kind.${c.kind}`,
+  derivedFrom: c.derivedFrom,
+  provenanceDefault: c.provenanceDefault,
+}));
 
 export const indicatorById = (id: IndicatorId) => INDICATORS.find(i => i.id === id) || INDICATORS[0];
 
@@ -89,23 +103,26 @@ export interface Field {
   block?: string;
   areaHa: number;
   variety: string;
-  planted: string;
-  harvest: string;
+  planted: string | null;
+  harvest: string | null;
   centroid: [number, number];
   polygon: [number, number][]; // [lat, lng]
   baselineHealth: number;
   stressEvent: { startIdx: number; endIdx: number; severity: number } | null;
   neighbors: string[];
+  contractVersion?: number;
 }
 
 type RawFarm = {
   id?: string; code?: string; name?: string; farm?: string; municipality?: string; block?: string;
-  areaHa?: number; variety?: string; planted?: string; harvest?: string;
+  areaHa?: number; variety?: string; planted?: string | null; harvest?: string | null;
   centroid?: [number, number]; polygon?: [number, number][]; baselineHealth?: number;
-  stressEvent?: Field['stressEvent']; neighbors?: string[];
+  stressEvent?: Field['stressEvent']; neighbors?: string[]; contractVersion?: number;
 };
 
-export const FIELDS: Field[] = ((farmsKhuzestanData ?? []) as RawFarm[]).map((f, i) => ({
+export const KHUZESTAN_CENTROID: [number, number] = [31.0217, 48.2794];
+
+export const FIELDS: Field[] = ((farmsKhuzestanData ?? []) as unknown as RawFarm[]).map((f, i) => ({
   id: f.id ?? `F-${String(i + 1).padStart(3, '0')}`,
   code: f.code ?? `L${String(i + 1).padStart(2, '0')}`,
   name: f.name ?? `Field ${i + 1}`,
@@ -114,8 +131,9 @@ export const FIELDS: Field[] = ((farmsKhuzestanData ?? []) as RawFarm[]).map((f,
   block: f.block || 'R01',
   areaHa: typeof f.areaHa === 'number' ? f.areaHa : 25,
   variety: f.variety || 'CP69-1062',
-  planted: f.planted || '2021/03',
-  harvest: f.harvest || '2024/11',
+  planted: f.planted ?? null,
+  contractVersion: f.contractVersion ?? 2,
+  harvest: f.harvest ?? null,
   centroid: f.centroid ?? KHUZESTAN_CENTROID,
   polygon: f.polygon ?? [],
   baselineHealth: f.baselineHealth || 0.65,
@@ -125,21 +143,23 @@ export const FIELDS: Field[] = ((farmsKhuzestanData ?? []) as RawFarm[]).map((f,
 
 export const hasFields = FIELDS.length > 0;
 
+/** True when any field was loaded without contractVersion >= 2 (legacy payload). */
+export const isLegacyPayload = !FIELDS.length
+  ? false
+  : (farmsKhuzestanData as any[]).some(f => (f?.contractVersion ?? 0) < 2);
+
+const PLACEHOLDER_FIELD: Field = {
+  id: '', code: '—', name: '—', farm: '—', municipality: '—', block: '—', areaHa: 0,
+  variety: '—', planted: null, harvest: null, centroid: KHUZESTAN_CENTROID, polygon: [],
+  baselineHealth: 0, stressEvent: null, neighbors: [],
+};
+
 /**
  * Field lookup that never returns `undefined` for an empty dataset — callers
  * guard on `hasFields`, and the inspector falls back to a placeholder record
  * instead of crashing on `FIELDS[0].id` (BUG-05 in docs/platform_bug_audit.md).
  */
 export const fieldById = (id: string): Field => FIELDS.find(f => f.id === id) ?? FIELDS[0] ?? PLACEHOLDER_FIELD;
-
-/** Default map view: Khuzestan sugarcane agro-industry (Amir Kabir / Debal Khazai). */
-export const KHUZESTAN_CENTROID: [number, number] = [31.0217, 48.2794];
-
-const PLACEHOLDER_FIELD: Field = {
-  id: '', code: '—', name: '—', farm: '—', municipality: '—', block: '—', areaHa: 0,
-  variety: '—', planted: '—', harvest: '—', centroid: KHUZESTAN_CENTROID, polygon: [],
-  baselineHealth: 0, stressEvent: null, neighbors: [],
-};
 
 
 // ── Time axis: single source of truth ────────────────────────────────────────
@@ -189,58 +209,105 @@ export const DATA_PROVENANCE = {
   lastDate: DATES[N - 1] ?? "",
 } as const;
 
+export interface ObsProvenance {
+  ndvi: 'observed' | 'modelled' | 'proxy' | 'absent' | 'legacy';
+  evi: 'observed' | 'modelled' | 'proxy' | 'absent' | 'legacy';
+  savi: 'observed' | 'modelled' | 'proxy' | 'absent' | 'legacy';
+  ndmi: 'observed' | 'modelled' | 'proxy' | 'absent' | 'legacy';
+  tvdi: 'observed' | 'modelled' | 'proxy' | 'absent' | 'legacy';
+  cwsi: 'observed' | 'modelled' | 'proxy' | 'absent' | 'legacy';
+  eta: 'observed' | 'modelled' | 'proxy' | 'absent' | 'legacy';
+  lst: 'observed' | 'modelled' | 'proxy' | 'absent' | 'legacy';
+  precip: 'observed' | 'modelled' | 'proxy' | 'absent' | 'legacy';
+  temp: 'observed' | 'modelled' | 'proxy' | 'absent' | 'legacy';
+}
+
 export interface Obs {
   date: string;
+  sampleDate: string;
   idx: number;
-  ndvi: number;
-  evi: number;
-  savi: number;
-  ndmi: number;
-  tvdi: number;
-  cwsi: number;
-  eta: number;
-  lst: number;
-  precip: number;
-  temp: number;
-  scores: Record<ModelId, number>;
+  acquisitionDate: string | null;
   missing: boolean;
+  stalenessReason: string | null;
+  ndvi: number | null;
+  evi: number | null;
+  savi: number | null;
+  ndmi: number | null;
+  tvdi: number | null;
+  cwsi: number | null;
+  eta: number | null;
+  lst: number | null;
+  precip: number | null;
+  temp: number | null;
+  scores: Record<ModelId, number>;
+  provenance: ObsProvenance | null;
+  scoreCollinearity: string | null;
 }
 
 const NUMERIC_FALLBACK = 0.5;
 const SCORE_KEYS = MODELS.map(m => m.id);
+const CHANNEL_KEYS: (keyof ObsProvenance)[] = ['ndvi', 'evi', 'savi', 'ndmi', 'tvdi', 'cwsi', 'eta', 'lst', 'precip', 'temp'];
 
 /**
  * Normalise one exported observation. Exported payloads are read with
  * `as unknown` because JSON imports are untyped; this keeps the rest of the
- * app on the strongly-typed `Obs` shape.
+ * app on the strongly-typed `Obs` shape. Missing channels become `null` and
+ * carry `provenance: "absent"` — no constant substitutions.
  */
+
+/**
+ * `value(obs, channel)` returns the measurement or `NaN` for null/missing.
+ * Route every statistics call site through this helper instead of reading
+ * raw channel numbers directly.
+ */
+export function value(obs: Obs | undefined | null, channel: keyof ObsProvenance): number {
+  if (!obs) return NaN;
+  const v = obs[channel];
+  return typeof v === 'number' && Number.isFinite(v) ? v : NaN;
+}
+
 function normaliseObs(raw: unknown, idx: number): Obs {
   const o = (raw ?? {}) as Record<string, unknown>;
-  const scores = (o.scores ?? {}) as Record<string, unknown>;
+  const rawScores = o.scores as Record<string, unknown> | null | undefined;
   const nums = {} as Record<ModelId, number>;
   SCORE_KEYS.forEach(k => {
-    const v = scores[k];
+    const v = rawScores?.[k];
     nums[k] = typeof v === "number" && Number.isFinite(v) ? v : NUMERIC_FALLBACK;
   });
-  const num = (key: string, fallback: number) => {
+  const num = (key: string): number | null => {
     const v = o[key];
-    return typeof v === "number" && Number.isFinite(v) ? v : fallback;
+    return typeof v === "number" && Number.isFinite(v) ? v : null;
   };
+  const prov = (o.provenance ?? {}) as Partial<ObsProvenance>;
+  const defaultProv: ObsProvenance = {
+    ndvi: 'absent', evi: 'absent', savi: 'absent', ndmi: 'absent', tvdi: 'absent',
+    cwsi: 'absent', eta: 'absent', lst: 'absent', precip: 'absent', temp: 'absent',
+  };
+  for (const k of CHANNEL_KEYS) {
+    const pv = prov[k];
+    if (pv) defaultProv[k] = pv;
+  }
+  const missing = Boolean(o.missing);
   return {
     date: String(o.date ?? dateAt(idx)),
+    sampleDate: String(o.sampleDate ?? o.date ?? dateAt(idx)),
     idx: typeof o.idx === "number" ? o.idx : idx,
-    ndvi: num("ndvi", 0.45),
-    evi: num("evi", 0.38),
-    savi: num("savi", 0.42),
-    ndmi: num("ndmi", 0.15),
-    tvdi: num("tvdi", 0.35),
-    cwsi: num("cwsi", 0.3),
-    eta: num("eta", 3.8),
-    lst: num("lst", 28.5),
-    precip: num("precip", 0),
-    temp: num("temp", 28.5),
+    acquisitionDate: typeof o.acquisitionDate === 'string' ? o.acquisitionDate : null,
+    missing,
+    stalenessReason: typeof o.stalenessReason === 'string' ? o.stalenessReason : null,
+    ndvi: num("ndvi"),
+    evi: num("evi"),
+    savi: num("savi"),
+    ndmi: num("ndmi"),
+    tvdi: num("tvdi"),
+    cwsi: num("cwsi"),
+    eta: num("eta"),
+    lst: num("lst"),
+    precip: num("precip"),
+    temp: num("temp"),
     scores: nums,
-    missing: Boolean(o.missing),
+    provenance: defaultProv,
+    scoreCollinearity: typeof o.scoreCollinearity === "string" ? o.scoreCollinearity : null,
   };
 }
 
@@ -312,6 +379,7 @@ export function std(xs: number[]) {
 }
 
 export function quantile(xs: number[], q: number) {
+  if (!xs.length) return NaN;
   const s = [...xs].sort((a, b) => a - b);
   return s[Math.min(s.length - 1, Math.floor(q * s.length))];
 }
@@ -392,9 +460,12 @@ export function getPairs(model: ModelId, indicator: IndicatorId, fieldIds: strin
   const lo = Math.min(range[0], range[1]), hi = Math.max(range[0], range[1]);
   fieldIds.forEach(fid => {
     getSeries(fid).forEach(o => {
-      if (o.idx >= lo && o.idx <= hi && !o.missing) {
-        xs.push(o.scores[model]);
-        ys.push((o as any)[indicator] as number);
+      if (o.idx < lo || o.idx > hi) return;
+      const ind = (o as any)[indicator];
+      const score = o.scores[model];
+      if (typeof ind === 'number' && Number.isFinite(ind) && typeof score === 'number' && Number.isFinite(score)) {
+        xs.push(score);
+        ys.push(ind);
         meta.push({ field: fid, date: o.date });
       }
     });

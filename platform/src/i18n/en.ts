@@ -214,6 +214,8 @@ export const en = {
   "map.inspector.openTemporal": "Open in Temporal",
   "map.inspector.validate": "Validate",
   "map.inspector.stressEvent": "Mock stress event: {from} → {to} (severity {severity})",
+  "map.inspector.stale": "Stale sample: {reason} (sample {sample}, acquired {acquired})",
+  "map.inspector.acquired": "Acquired {acquired} for sample {sample}",
   "map.history.title": "Score history",
   "map.history.subtitle": "{model} vs {indicator}",
   "map.history.score": "Score",
@@ -486,6 +488,18 @@ export const en = {
 
   // ── Locale-aware formatting ──────────────────────────────────────────────
   "date.range": "{from} → {to}",
+
+  // ── Data provenance / staleness ────────────────────────────────────────────
+  "prov.observed": "Observed",
+  "prov.modelled": "Modelled",
+  "prov.proxy": "Proxy",
+  "prov.absent": "Not measured",
+  "prov.legacy": "Legacy payload",
+  "prov.title": "Provenance",
+  "stale.marker": "Stale",
+  "stale.reason": "No acquisition within window",
+  "legacy.notice.title": "Legacy payload detected",
+  "legacy.notice.body": "This payload was written before contractVersion 2. Some channels are labelled legacy/absent and may not match the current UI.",
 } as const;
 
 export type EnKeys = keyof typeof en;

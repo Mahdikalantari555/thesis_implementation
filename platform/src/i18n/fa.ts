@@ -220,6 +220,8 @@ export const fa = {
   "map.inspector.openTemporal": "گشودن در نمای زمانی",
   "map.inspector.validate": "اعتبارسنجی",
   "map.inspector.stressEvent": "رویداد تنش آزمایشی: {from} → {to} (شدت {severity})",
+  "map.inspector.stale": "نمونه قدیمی: {reason} (نمونه {sample}، اخذ {acquired})",
+  "map.inspector.acquired": "اخذ {acquired} برای نمونه {sample}",
   "map.history.title": "تاریخچه امتیاز",
   "map.history.subtitle": "{model} در برابر {indicator}",
   "map.history.score": "امتیاز",
@@ -492,6 +494,18 @@ export const fa = {
 
   // ── Locale-aware formatting ──────────────────────────────────────────────
   "date.range": "{from} → {to}",
+
+  // ── Data provenance / staleness ────────────────────────────────────────────
+  "prov.observed": "مشاهدات‌شده",
+  "prov.modelled": "مدل‌سازی‌شده",
+  "prov.proxy": "پروکسی",
+  "prov.absent": "Medida نشده است",
+  "prov.legacy": "بار قدیمی",
+  "prov.title": "منبع داده",
+  "stale.marker": "قدیمی",
+  "stale.reason": "هیچ مشاهده‌ای در بازه نیست",
+  "legacy.notice.title": "بار قدیمی شناسایی شد",
+  "legacy.notice.body": "این بار قبل از contractVersion ۲ نوشته شده است. برخی کانال‌ها legacy/absent هستند و ممکن است با UI فعلی سازنده نباشند.",
 } satisfies Record<keyof typeof en, string>;
 
 export type FaKeys = keyof typeof fa;

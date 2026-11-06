@@ -20,15 +20,22 @@ export default function Temporal() {
   const data = useMemo(
     () =>
       series.map(o => {
-        const row: Record<string, string | number | null> = { date: o.date.slice(0, 7), idx: o.idx, missing: o.missing ? 1 : 0 };
-        showModels.forEach(m => (row[`m_${m}`] = o.missing ? null : +o.scores[m].toFixed(3)));
+        const row: Record<string, string | number | null> = { date: o.date.slice(0, 7), idx: o.idx, missing: o.missing ? 1 : 0, sampleDate: o.sampleDate, acquisitionDate: o.acquisitionDate, stale: o.missing && o.stalenessReason ? o.stalenessReason : null };
+        showModels.forEach(m => {
+          const sv = o.scores?.[m];
+          row[`m_${m}`] = o.missing || sv == null ? null : +Number(sv).toFixed(3);
+        });
         showVars.forEach(v => {
-          let val = (o as unknown as Record<string, number>)[v];
+          let val = (o as unknown as Record<string, number | null>)[v];
+          if (val == null || o.missing) {
+            row[`v_${v}`] = null;
+            return;
+          }
           if (normalize) {
             const ind = INDICATORS.find(i => i.id === v)!;
             val = (val - ind.range[0]) / (ind.range[1] - ind.range[0]);
           }
-          row[`v_${v}`] = o.missing ? null : +val.toFixed(3);
+          row[`v_${v}`] = Number.isFinite(val) ? +Number(val).toFixed(3) : null;
         });
         return row;
       }),
@@ -141,7 +148,20 @@ export default function Temporal() {
                   <XAxis dataKey="date" tick={{ fontSize: 10 }} interval={3} />
                   <YAxis yAxisId="left" domain={[0, 1]} tick={{ fontSize: 10 }} label={{ value: t("temporal.chart.anomalyScore"), angle: -90, position: "insideLeft", fontSize: 10 }} />
                   <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} hide={normalize} />
-                  <Tooltip contentStyle={{ fontSize: 11 }} />
+                  <Tooltip content={
+  (p: any) => p.active && p.payload && p.payload.length ? (
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-1.5 text-[11px] shadow-sm">
+      <div className="font-medium">{t("map.inspector.stale", { reason: "", sample: p.payload[0]?.payload?.sampleDate ?? "", acquired: p.payload[0]?.payload?.acquisitionDate ?? "" }) !== undefined ? p.payload[0]?.payload?.sampleDate ?? "" : ""}</div>
+      <div className="text-slate-400">{p.payload[0]?.payload?.acquisitionDate ? t("map.inspector.acquired", { sample: p.payload[0]?.payload?.sampleDate ?? "", acquired: p.payload[0]?.payload?.acquisitionDate ?? "" }) : ""}</div>
+      {p.payload.map((e: any) => (
+        <div key={String(e.dataKey)}>
+          <span style={{ color: e.color ?? e.stroke }}>{e.name}: </span>
+          <span className="font-mono">{e.value == null ? "-" : e.value}</span>
+        </div>
+      ))}
+    </div>
+  ) : null
+} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   <ReferenceLine yAxisId="left" y={ANOMALY_THRESHOLD} stroke="#ea580c" strokeDasharray="5 4" label={{ value: t("temporal.chart.threshold"), fontSize: 9, fill: "#ea580c" }} />
                   {showModels.map(m => (
@@ -183,7 +203,14 @@ export default function Temporal() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {showVars.slice(0, 4).map(v => {
               const ind = INDICATORS.find(i => i.id === v)!;
-              const d = series.map(o => ({ date: o.date.slice(0, 7), val: o.missing ? null : +((o as unknown as Record<string, number>)[v]).toFixed(3), score: +o.scores[model].toFixed(3) }));
+              const d = series.map(o => {
+                const rawVal = (o as unknown as Record<string, number | null>)[v];
+                return {
+                  date: o.date.slice(0, 7),
+                  val: o.missing || rawVal == null || !Number.isFinite(rawVal) ? null : +Number(rawVal).toFixed(3),
+                  score: o.scores?.[model] != null && Number.isFinite(o.scores[model]) ? +Number(o.scores[model]).toFixed(3) : null,
+                };
+              });
               return (
                 <Panel key={v} title={t("temporal.smallMultiples.title", { indicator: ind.name, model: t(`model.${model}.name`) })} subtitle={t("temporal.smallMultiples.subtitle", { desc: t(ind.descKey), unit: ind.unit })} pad={false}>
                   <div dir="ltr" className="h-40 p-2">

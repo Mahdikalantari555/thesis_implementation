@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, LineChart, Line, CartesianGrid, Legend } from "recharts";
-import { FIELDS, MODELS, INDICATORS, getSeries, DATES, mean, quantile, ANOMALY_THRESHOLD, COVERAGE, N, DATA_PROVENANCE, FIELDS_WITH_SERIES } from "../data/mock";
-import { Panel, Stat, Badge, DemoDataBadge, EmptyState, anomalyColor } from "../components/ui";
+import { FIELDS, MODELS, INDICATORS, getSeries, DATES, mean, quantile, ANOMALY_THRESHOLD, COVERAGE, N, DATA_PROVENANCE, FIELDS_WITH_SERIES, isLegacyPayload } from "../data/mock";
+import { Panel, Stat, Badge, DemoDataBadge, EmptyState, anomalyColor, fmtObs, LegacyPayloadNotice } from "../components/ui";
 import { useAnalysis } from "../context/AnalysisContext";
 import { useLocale, useT } from "../i18n";
 import { AlertTriangle, CalendarDays, Database, Layers, MapPin } from "lucide-react";
@@ -32,7 +32,7 @@ export default function Overview() {
         const o = getSeries(f.id)[i];
         return o && !o.missing ? [o.scores[model]] : [];
       });
-      return { date: d.slice(0, 7), mean: +mean(vals).toFixed(3), p90: +quantile(vals, 0.9).toFixed(3) };
+      return { date: d.slice(0, 7), mean: +(Number.isFinite(mean(vals)) ? mean(vals) : 0).toFixed(3), p90: +(Number.isFinite(quantile(vals, 0.9)) ? quantile(vals, 0.9) : 0).toFixed(3) };
     });
     const completeness = totalObs ? 100 * (1 - missing / totalObs) : 0;
     const anomalies = FIELDS.flatMap(f => getSeries(f.id).map(o => ({ field: f, obs: o })))
@@ -64,6 +64,7 @@ export default function Overview() {
 
   return (
     <div className="space-y-4">
+      {isLegacyPayload && <LegacyPayloadNotice />}
       {/* Dataset strip */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-px bg-slate-200 dark:bg-slate-800 border border-slate-200 dark:border-slate-800">
         <Stat label={t("overview.stat.fields")} value={fmt.integer(FIELDS.length)} sub={t("overview.stat.fieldsSub", { area: fmt.integer(totalArea) })} />
@@ -217,7 +218,7 @@ export default function Overview() {
                     {a.field.code} — {a.field.name} · {a.field.municipality}
                   </span>
                   <span className="block text-[11px] text-slate-500">
-                    {a.obs.date.slice(0, 7)} · NDVI {fmt.number(a.obs.ndvi, 2)} · CWSI {fmt.number(a.obs.cwsi, 2)}
+                    {a.obs.date.slice(0, 7)} · NDVI {fmtObs(a.obs.ndvi, 2)} · CWSI {fmtObs(a.obs.cwsi, 2)}
                   </span>
                 </span>
                 <Badge color={anomalyColor(a.obs.scores[model])}>{fmt.number(a.obs.scores[model], 3)}</Badge>

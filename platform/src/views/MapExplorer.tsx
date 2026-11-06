@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from "recharts";
 import MapView from "../components/MapView";
-import { Panel, Badge, Label, Select, DemoDataBadge, EmptyState, anomalyColor } from "../components/ui";
+import { Panel, Badge, Label, Select, DemoDataBadge, EmptyState, anomalyColor, fmtObs, ProvenanceChip, LegacyPayloadNotice } from "../components/ui";
 import { useAnalysis, DEFAULT_DATE_IDX } from "../context/AnalysisContext";
-import { FIELDS, MODELS, INDICATORS, getSeries, fieldById, DATES, LAST_IDX, ANOMALY_THRESHOLD, mean, COVERAGE, monthAt, clampIdx } from "../data/mock";
+import { FIELDS, MODELS, INDICATORS, getSeries, fieldById, DATES, LAST_IDX, ANOMALY_THRESHOLD, mean, COVERAGE, monthAt, clampIdx, isLegacyPayload } from "../data/mock";
 import { useLocale, useT } from "../i18n";
 import { Eye, EyeOff, Search, GitCompareArrows } from "lucide-react";
 
@@ -26,7 +26,11 @@ export default function MapExplorer() {
   const safeCompareIdx = clampIdx(compareIdx);
   const obs = series[safeDateIdx];
 
-  const chartData = series.map(o => ({ date: o.date.slice(0, 7), score: +o.scores[model].toFixed(3), ind: +((o as unknown as Record<string, number>)[indicator]).toFixed(3) }));
+  const chartData = series.map(o => ({
+    date: o.date.slice(0, 7),
+    score: o.scores?.[model] != null ? +Number(o.scores[model]).toFixed(3) : null,
+    ind: (() => { const v = (o as unknown as Record<string, number | null>)[indicator]; return v != null && Number.isFinite(v) ? +Number(v).toFixed(3) : null; })(),
+  }));
 
   const filtered = useMemo(() => FIELDS.filter(f => (f.code + f.name + f.municipality + f.farm).toLowerCase().includes(query.toLowerCase())), [query]);
   const selectedStats = useMemo(() => {
@@ -43,6 +47,7 @@ export default function MapExplorer() {
     <div className="grid grid-cols-12 gap-4">
       {/* Left controls */}
       <div className="col-span-12 lg:col-span-3 space-y-4">
+        {isLegacyPayload && <LegacyPayloadNotice />}
         <Panel title={t("map.layer.title")}>
           <div className="space-y-3">
             <div>
@@ -254,13 +259,30 @@ export default function MapExplorer() {
             </div>
             <div className="bg-white dark:bg-slate-900 p-2">
               <div className="text-[9px] uppercase text-slate-400">NDVI</div>
-              <div className="text-[13px] font-semibold">{obs ? <bdi>{fmt.number(obs.ndvi, 2)}</bdi> : "—"}</div>
+              <div className="text-[13px] font-semibold">{obs ? <bdi>{fmtObs(obs.ndvi, 2)}</bdi> : "—"}</div>
             </div>
             <div className="bg-white dark:bg-slate-900 p-2">
               <div className="text-[9px] uppercase text-slate-400">CWSI</div>
-              <div className="text-[13px] font-semibold">{obs ? <bdi>{fmt.number(obs.cwsi, 2)}</bdi> : "—"}</div>
+              <div className="text-[13px] font-semibold">{obs ? <bdi>{fmtObs(obs.cwsi, 2)}</bdi> : "—"}</div>
             </div>
           </div>
+          {obs && obs.stalenessReason && (
+            <div className="mt-2 text-[11px] border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 p-2 text-amber-800 dark:text-amber-200">
+              {t("map.inspector.stale", { reason: obs.stalenessReason, sample: obs.sampleDate, acquired: obs.acquisitionDate || "" })}
+            </div>
+          )}
+          {obs && obs.acquisitionDate && obs.acquisitionDate !== obs.sampleDate && (
+            <div className="mt-1 text-[11px] text-slate-400">
+              {t("map.inspector.acquired", { sample: obs.sampleDate, acquired: obs.acquisitionDate })}
+            </div>
+          )}
+          {obs?.provenance && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {Object.entries(obs.provenance).map(([ch, st]) => (
+                <ProvenanceChip key={ch} state={st as any} title={`${ch}: ${st}`} />
+              ))}
+            </div>
+          )}
           {field.stressEvent && DATES[field.stressEvent.startIdx] && DATES[field.stressEvent.endIdx] && (
             <div className="mt-3 text-[11px] border border-orange-200 bg-orange-50 dark:bg-orange-950/30 dark:border-orange-900 p-2 text-orange-800 dark:text-orange-200">
               {t("map.inspector.stressEvent", {

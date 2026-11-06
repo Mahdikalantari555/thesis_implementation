@@ -94,13 +94,57 @@ export function SigBadge({ p }: { p: number }) {
   return <Badge color={color}>{label}</Badge>;
 }
 
-export const fmt = (v: number, d = 3) => (isNaN(v) ? "—" : v.toFixed(d));
-export const fmt2 = (v: number) => (isNaN(v) ? "—" : v.toFixed(2));
+export const fmt = (v: number | null | undefined, d = 3) => (v == null || isNaN(v) ? "—" : v.toFixed(d));
+export const fmt2 = (v: number | null | undefined) => (v == null || isNaN(v) ? "—" : v.toFixed(2));
 
-export function anomalyColor(v: number): string {
+export function anomalyColor(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return "#94a3b8";
   if (v >= 0.75) return "#be123c";
   if (v >= 0.65) return "#ea580c";
   if (v >= 0.5) return "#d97706";
   if (v >= 0.35) return "#65a30d";
   return "#0f766e";
+}
+
+export function ProvenanceChip({ state, title }: { state: 'observed' | 'modelled' | 'proxy' | 'absent' | 'legacy'; title?: string }): React.ReactElement {
+  const t = useT();
+  const labels: Record<'observed' | 'modelled' | 'proxy' | 'absent' | 'legacy', string> = {
+    observed: t("prov.observed"),
+    modelled: t("prov.modelled"),
+    proxy: t("prov.proxy"),
+    absent: t("prov.absent"),
+    legacy: t("prov.legacy"),
+  };
+  const colors: Record<'observed' | 'modelled' | 'proxy' | 'absent' | 'legacy', string> = {
+    observed: "#0f766e",
+    modelled: "#0284c7",
+    proxy: "#d97706",
+    absent: "#94a3b8",
+    legacy: "#be123c",
+  };
+  const color = colors[state];
+  return (
+    <span
+      title={title ?? labels[state]}
+      className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 border"
+      style={{ color: color, borderColor: color + "55", background: color + "12" }}
+    >
+      <span className="w-1.5 h-1.5 rounded-full" style={{ background: color }} aria-hidden="true" />
+      {labels[state]}
+    </span>
+  );
+}
+
+export const fmtObs = (v: number | null, d = 3): string => {
+  const n = v == null ? NaN : v;
+  return isNaN(n) ? "—" : n.toFixed(d);
+};
+
+export function LegacyPayloadNotice(): React.ReactElement {
+  const t = useT();
+  return (
+    <div className="mt-2 p-2 border border-amber-400 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 text-[11px] rounded">
+      <bdi>{t("legacy.notice.title") || "Legacy payload"}</bdi>: {t("legacy.notice.body") || "This payload was written before contractVersion 2. Some channels are labelled legacy/absent and may not match the current UI."}
+    </div>
+  );
 }

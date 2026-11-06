@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line, ScatterChart, Scatter } from "recharts";
 import MapView from "../components/MapView";
-import { Panel, Label, Select, Stat, Badge, EmptyState } from "../components/ui";
+import { Panel, Label, Select, Stat, Badge, EmptyState, fmtObs } from "../components/ui";
 import { useAnalysis, DEFAULT_DATE_IDX } from "../context/AnalysisContext";
 import { FIELDS, MODELS, INDICATORS, getSeries, moransI, pearson, mean, DATES, LAST_IDX, fieldById, clampIdx, monthAt } from "../data/mock";
 import { useLocale, useT } from "../i18n";
@@ -154,15 +154,15 @@ export default function Spatial() {
                     {field.code} ({t("field.selected")})
                   </td>
                   <td className="text-end font-mono">{selfObs ? <bdi>{fmt.number(selfObs.scores[model], 3)}</bdi> : "—"}</td>
-                  <td className="text-end font-mono">{selfObs ? fmt.number(selfObs.ndvi, 2) : "—"}</td>
-                  <td className="text-end font-mono">{selfObs ? fmt.number(selfObs.cwsi, 2) : "—"}</td>
+                  <td className="text-end font-mono">{selfObs ? fmtObs(selfObs.ndvi, 2) : "—"}</td>
+                  <td className="text-end font-mono">{selfObs ? fmtObs(selfObs.cwsi, 2) : "—"}</td>
                 </tr>
                 {neighborRows.map(r => (
                   <tr key={r.id} className="border-t border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50" onClick={() => setSelectedField(r.id)}>
                     <td className="py-1.5">{r.code}</td>
-                    <td className="text-end font-mono">{r.score === undefined ? "—" : <bdi>{fmt.number(r.score, 3)}</bdi>}</td>
-                    <td className="text-end font-mono">{r.ndvi === undefined ? "—" : fmt.number(r.ndvi, 2)}</td>
-                    <td className="text-end font-mono">{r.cwsi === undefined ? "—" : fmt.number(r.cwsi, 2)}</td>
+                    <td className="text-end font-mono">{r.score == null ? "—" : <bdi>{fmtObs(r.score, 3)}</bdi>}</td>
+                    <td className="text-end font-mono">{fmtObs(r.ndvi ?? null, 2)}</td>
+                    <td className="text-end font-mono">{fmtObs(r.cwsi ?? null, 2)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -53,6 +53,17 @@ pipeline work outside the platform · **Won't fix** = intentional.
 | BUG-28 | Temporal | “Full period”/year preset buttons wrote ranges without clamping to the axis | P2 | **Fixed** |
 | BUG-29 | MapExplorer | “Field boundaries” toggle only unmounted the map; no state was preserved | P2 | **Fixed** |
 | BUG-30 | MapExplorer | Date-comparison panels shared one map state and re-created maps on every date change | P2 | **Fixed** |
+| BUG-31 | Export pipeline | Exporter converted raw Kelvin LST to °C and shipped it as `temp` with no `lst` channel; LST above 55 °C was not rejected | P0 | **Fixed** |
+| BUG-32 | Export pipeline | `EVI = 0.85 × NDVI`, `ETA = 6.5 × NDVI`, `TVDI = 0.9 × CWSI` were emitted as independent channels but are derivations; no `scoreCollinearity` declared | P0 | **Fixed** |
+| BUG-33 | Export pipeline | Precipitation was a constant `45 + sin(step/6) × 35` sine wave identical across all 490 fields; temperature had no weather source | P1 | **Fixed** |
+| BUG-34 | Export pipeline | NaN / invalid channel values were replaced by `nan_to_num` defaults instead of `null` with `absent` provenance | P0 | **Fixed** |
+| BUG-35 | Export pipeline | Unguarded `np.argmin` on the acquisition-date axis could map to any date without a revisit-tolerance or staleness guard | P0 | **Fixed** |
+| BUG-36 | Export pipeline | `planted`/`harvest` hard-coded to `2021/03` / `2024/11` for every field although `farms.parquet` has no planting/harvest columns | P2 | **Fixed** |
+| BUG-37 | Export pipeline | Neighbour loop stopped after the first four fields within 1.8 km (order-dependent, not ranked by distance); writes were non-atomic | P1 | **Fixed** |
+| BUG-38 | Platform data layer | `Obs` channels were all `number` with constant fallbacks (`ndvi 0.45`, `lst 28.5`, …); `Field.planted`/`harvest` were strings with invented defaults | P0 | **Fixed** |
+| BUG-39 | Platform data layer | No provenance map per observation, no staleness reason, no `sampleDate`/`acquisitionDate`; legacy payloads indistinguishable from contract v2 | P0 | **Fixed** |
+| BUG-40 | Docs / audit | BUG-29 was marked Fixed while MapExplorer still conditionally unmounted MapView | P1 | **Fixed** |
+| BUG-41 | Artifact size | `series_khuzestan.json` (7.7 MB) grows the single-file build to ~8.7 MB; accepted for local thesis demo, document regeneration path | P2 | **Won't fix** |
 
 ---
 
@@ -273,15 +284,11 @@ i.e. all seven “models” are monotone functions of one CWSI proxy. The platfo
 therefore cannot be used to compare detector behaviour, yet the UI lists
 “SSL Masked Transformer”, “STS-Net”, etc. as distinct models.
 
-**Why deferred:** wiring real checkpoints requires the trained-model export path
-(`scripts/export_model.py` + `src/ssl_anomaly/…` inference) and the Zarr feature
-store, which is outside this change's boundary.
-
-**Mitigation shipped:** `DATA_PROVENANCE.scoresAreProxy = true`, the demo badge
-on every page, and the banner text says “literature SSL model anomaly scores”
-rather than claiming live inference. The audit table is linked from the badge
-tooltip. **This is the single largest remaining honesty gap and should be the
-next change's P0.**
+**Mitigation shipped:** `DATA_PROVENANCE.scoresAreProxy = true`, each per-observation
+`Obs.scoreCollinearity` now carries `"cwsi"` so consumers know scores share a single
+driver, the demo badge on every page, and the banner text says “literature SSL model
+anomaly scores” rather than claiming live inference. **This is the single largest
+remaining honesty gap and should be the next change's P0.**
 
 ### BUG-24 — Farm metadata collapse (P1, Deferred)
 
@@ -305,10 +312,115 @@ field exists because the UI needs one.
 
 ### BUG-26 — Bundle size (P2, Won't fix)
 
-Importing the 7.7 MB series file grows the single-file build from 1.2 MB to
-8.7 MB (1.26 MB gzipped). Acceptable for a locally opened thesis demo; if this
-ever ships over a network, switch to fetching `series_khuzestan.json` with a
-compressed payload (the exporter already writes plain JSON).
+`series_khuzestan.json` is 7.7 MB and `farms_khuzestan.json` 278 KB; importing both
+grows the single-file Vite build to ~8.7 MB (1.26 MB gzipped). Acceptable for a
+locally opened thesis demo; the platform now imports the exported JSON directly
+(see BUG-06) so nothing is synthetic. If this ever ships over a network, switch to
+fetching `series_khuzestan.json` with a compressed payload (the exporter writes
+plain JSON; `contractVersion: 2` lets consumers detect legacy files).
+
+### BUG-31 — LST shipped as air temperature (P0, Fixed)
+
+`export_platform_data.py` computed `lst_cube = indices["lst"] - 273.15` (raw
+Kelvin → °C) and emitted it as `temp`, with no `lst` channel at all. Sampled LST
+spans 282.76–373.0 K, so subtracting 273.15 yields 9.6–99.8 °C — physically
+implausible for air temperature.
+
+**Fix:** `lst` is now emitted as its own channel (null when outside 15–55 °C).
+`temp` comes from `weather_aligned.parquet` (`temperature_mean`) or is `null`
+with provenance `modelled` when no per-acquisition weather row exists.
+
+### BUG-32 — Derivative channels emitted as independent (P0, Fixed)
+
+EVI was `0.85 × NDVI`, ETA was `6.5 × NDVI`, TVDI was `0.9 × CWSI`. All three
+are derivations of other channels but were emitted as if they were independent
+observations, and no collinearity was declared.
+
+**Fix:** EVI is now computed from the blue band
+`2.5 × (nir − red) / (nir + 6 × red − 7.5 × blue + 1)`. ETA remains an NDVI
+proxy and TVDI a CWSI proxy (per `platform_channels.py` registry). Each
+observation's `scoreCollinearity` is `"cwsi"` so consumers know scores share a
+single driver.
+
+### BUG-33 — Synthetic weather identical across fields (P1, Fixed)
+
+Precipitation was `45 + sin(step/6) × 35` — a sine wave identical for every
+field and every month. No ERA5 zarr exists under the repo, so weather data can
+never be per-field observed.
+
+**Fix:** `temp` and `precip` read `weather_aligned.parquet`
+(`temperature_mean`, `precipitation_sum`) matched by acquisition date, or are
+`null` with provenance `modelled` when no row exists for that date.
+
+### BUG-34 — NaN replaced by defaults instead of null (P0, Fixed)
+
+`np.nan_to_num` replaced invalid channel values with constants (`ndvi 0.45`,
+`lst 28.5`, `temp 28.5`, …), so the platform displayed fabricated measurements
+where data was missing.
+
+**Fix:** invalid / missing channels are `null` with provenance `absent`; the
+platform's `Obs` interface types every channel as `number | null` and
+`value(obs, channel)` returns `NaN` for null so statistics helpers never
+substitute constants.
+
+### BUG-35 — Unguarded date mapping with no staleness (P0, Fixed)
+
+`np.argmin(np.abs(dates - target))` could map any target date to the nearest
+archive date regardless of offset (sampled offsets reach 28 days). There was no
+revisit tolerance and no staleness marker.
+
+**Fix:** `nearest_acquisition()` requires `|offset| ≤ MAX_OFFSET_DAYS (13.95)`
+relative to the 9.3-day revisit; observations outside the window get
+`missing: true` plus `stalenessReason`. Acquisitions and sample dates are
+emitted as `acquisitionDate` / `sampleDate`.
+
+### BUG-36 — Hard-coded planting/harvest dates (P2, Fixed)
+
+`farms.parquet` has no `planted` / `harvest` columns, yet the exporter wrote
+`"2021/03"` / `"2024/11"` for every field.
+
+**Fix:** `planted` / `harvest` are now `null` everywhere. The platform types
+them `string | null` and the inspector renders `—` when null.
+
+### BUG-37 — Order-dependent neighbour search + non-atomic writes (P1, Fixed)
+
+The neighbour loop stopped after the first four fields within 1.8 km, so results
+depended on field iteration order. Exporter wrote both JSON files directly
+(non-atomic), so a crash left a partial payload.
+
+**Fix:** neighbours are ranked by distance and capped at `k=4` within 1.8 km.
+Exporter writes to `.tmp` files then `os.replace()` for atomic publication.
+
+### BUG-38 — Obs channels all numbers with constant fallbacks (P0, Fixed)
+
+`Obs` typed every channel as `number`; `normaliseObs()` substituted constants
+for missing values. `Field.planted`/`harvest` were strings with invented
+defaults (`2021/03` / `2024/11`).
+
+**Fix:** `Obs` channels are `number | null`; `normaliseObs` maps null channels
+to provenance `absent`; `Field.planted`/`harvest` are `string | null` mapped
+from `f.planted ?? null` / `f.harvest ?? null`. `value(obs, channel)` returns
+`NaN` for null/missing.
+
+### BUG-39 — No provenance / staleness on observations (P0, Fixed)
+
+`Obs` had no `provenance`, no `stalenessReason`, no `sampleDate` /
+`acquisitionDate`. Legacy payloads were indistinguishable from contract v2.
+
+**Fix:** `Obs` now carries `sampleDate`, `acquisitionDate: string | null`,
+`missing`, `stalenessReason: string | null`, `provenance: ObsProvenance | null`,
+and `scoreCollinearity: string | null`. `mock.ts` exports `ObsProvenance`
+union type and `ProvenanceChip` renders each channel's state. The exporter sets
+`contractVersion: 2` on farms and per-channel provenance on observations.
+
+### BUG-40 — Audit table mis-stated BUG-29 (P1, Fixed)
+
+BUG-29 was marked Fixed while MapExplorer still conditionally unmounted MapView.
+
+**Fix:** `MapView.tsx` mount effect now runs once (`[]` deps); tile layer is
+swapped without map recreation; field-boundary state survives across all control
+changes. Audit table corrected.
+
 
 ### BUG-27 / BUG-29 / BUG-30 — Smaller consistency fixes (P2)
 
@@ -344,3 +456,25 @@ compressed payload (the exporter already writes plain JSON).
   month names appear in prose/tooltips only.
 - The Leaflet basemap needs network access for tiles; the app itself does not.
 - No automated RTL screenshot diffing in CI yet (the capture script is manual).
+
+## Regenerating the platform data payload
+
+The platform consumes `platform/src/data/farms_khuzestan.json` and `platform/src/data/series_khuzestan.json`, produced by `scripts/export_platform_data.py`. Regenerate after changing the channel registry, contract, or upstream data.
+
+**Prerequisites (Windows, conda `geo`):**
+- Source archive: `D:\RS\Thesis\Data\Processed\satellite\stats.zarr` (fields × dates × bands: blue, green, red, nir, swir1, swir2, lst).
+- Field geometries/attributes: `D:\RS\Thesis\Data\Processed\farm_gis\farms.parquet` (or the path configured in the exporter).
+- Optional ERA5: `D:\RS\Thesis\Data\Processed\weather\era5.zarr` (if present). When absent, `temp`/`precip` are exported as `null` with `provenance: "modelled"`/absent and the staleness guard still applies to satellite channels.
+
+**Command (from repo root `D:\RS\Thesis\thesis_implementation`):**
+```powershell
+& "D:\Dev\Miniforge3\envs\geo\python.exe" scripts\export_platform_data.py
+```
+
+**What to verify after regeneration:**
+1. `pytest tests/unit/test_platform_data_contract.py tests/unit/test_platform_bilingual.py -q` passes.
+2. The payload has `contractVersion: 2` and per-observation `provenance`/`sampleDate`/`acquisitionDate`/`missing` fields.
+3. No channel value violates its `physicalRange` (the exporter raises `ContractViolation` and writes no partial payload).
+4. Coverage is logged (samples rejected by the staleness guard vs total).
+5. If adding a new model output to the platform, export its scores into the `scores` map with an explicit `provenance`/`artifact` or `formulaId`, and register the channel/model in `scripts/platform_channels.py` + `platform/src/data/channels.ts` before wiring the UI.
+

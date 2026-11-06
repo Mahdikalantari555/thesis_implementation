@@ -89,7 +89,8 @@ export default function MapView({ colorMode, model, indicator, dateIdx, opacity,
           const hi = self > 0.5, nhi = nbAvg > 0.5;
           fill = hi && nhi ? "#be123c" : hi && !nhi ? "#2563eb" : !hi && nhi ? "#7c3aed" : "#94a3b8";
         }
-        tooltip += `<br/>${scoreLabel}: ${obs.scores[model].toFixed(3)}`;
+        const scoreVal = obs.scores?.[model];
+        tooltip += `<br/>${scoreLabel}: ${scoreVal != null && Number.isFinite(scoreVal) ? scoreVal.toFixed(3) : "—"}`;
       }
 
       if (!f.polygon.length) return;
