@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, LineChart, Line, CartesianGrid, Legend } from "recharts";
-import { FIELDS, MODELS, INDICATORS, getSeries, DATES, mean, quantile, ANOMALY_THRESHOLD, COVERAGE, N, DATA_PROVENANCE, FIELDS_WITH_SERIES, isLegacyPayload } from "../data/mock";
-import { Panel, Stat, Badge, DemoDataBadge, EmptyState, anomalyColor, fmtObs, LegacyPayloadNotice } from "../components/ui";
+import { FIELDS, MODELS, INDICATORS, getSeries, DATES, mean, quantile, ANOMALY_THRESHOLD, COVERAGE, N, DATA_PROVENANCE, FIELDS_WITH_SERIES, isLegacyPayload } from "../data/data";
+import { Panel, Stat, Badge, PipelineDataBadge, EmptyState, anomalyColor, fmtObs, LegacyPayloadNotice } from "../components/ui";
 import { useAnalysis } from "../context/AnalysisContext";
 import { useLocale, useT } from "../i18n";
 import { AlertTriangle, CalendarDays, Database, Layers, MapPin } from "lucide-react";
@@ -21,8 +21,13 @@ export default function Overview() {
         totalObs++;
         if (o.missing) missing++;
         MODELS.forEach(m => {
-          perModel[m.id].push(o.scores[m.id]);
-          if (m.id === model) allScores.push(o.scores[m.id]);
+          const sv = o.scores[m.id];
+          // Absent scores stay out of every statistic — substituting a
+          // constant (the old 0.5 fallback) fabricated data.
+          if (typeof sv === "number" && Number.isFinite(sv)) {
+            perModel[m.id].push(sv);
+            if (m.id === model) allScores.push(sv);
+          }
         });
       })
     );
@@ -30,14 +35,18 @@ export default function Overview() {
     const monthly = DATES.map((d, i) => {
       const vals = FIELDS.flatMap(f => {
         const o = getSeries(f.id)[i];
-        return o && !o.missing ? [o.scores[model]] : [];
+        const sv = o && !o.missing ? o.scores[model] : null;
+        return typeof sv === "number" && Number.isFinite(sv) ? [sv] : [];
       });
       return { date: d.slice(0, 7), mean: +(Number.isFinite(mean(vals)) ? mean(vals) : 0).toFixed(3), p90: +(Number.isFinite(quantile(vals, 0.9)) ? quantile(vals, 0.9) : 0).toFixed(3) };
     });
     const completeness = totalObs ? 100 * (1 - missing / totalObs) : 0;
     const anomalies = FIELDS.flatMap(f => getSeries(f.id).map(o => ({ field: f, obs: o })))
-      .filter(x => !x.obs.missing && x.obs.scores[model] >= ANOMALY_THRESHOLD)
-      .sort((a, b) => b.obs.scores[model] - a.obs.scores[model])
+      .filter(x => {
+        const sv = x.obs.scores[model];
+        return !x.obs.missing && typeof sv === "number" && sv >= ANOMALY_THRESHOLD;
+      })
+      .sort((a, b) => (b.obs.scores[model] as number) - (a.obs.scores[model] as number))
       .slice(0, 8);
 
     // Year columns are derived from the date axis instead of a hard-coded
@@ -47,7 +56,10 @@ export default function Overview() {
       const s = getSeries(f.id);
       const row: Record<string, string | number> = { field: f.code };
       years.forEach(y => {
-        const vals = s.filter(o => o.date.startsWith(y)).map(o => o.scores[model]);
+        const vals = s
+          .filter(o => o.date.startsWith(y))
+          .map(o => o.scores[model])
+          .filter((v): v is number => typeof v === "number");
         row[y] = vals.length ? +mean(vals).toFixed(2) : NaN;
       });
       return row;
@@ -56,7 +68,7 @@ export default function Overview() {
     return { totalObs, missing, completeness, hist, monthly, anomalies, fieldYear, perModel, years };
   }, [model]);
 
-  const totalArea = FIELDS.reduce((s, f) => s + f.areaHa, 0);
+  const totalArea = FIELDS.reduce((s, f) => s + (f.areaHa ?? 0), 0);
 
   if (!FIELDS.length || !N) {
     return <EmptyState title={t("ui.noData")} desc={t("ui.noDataDesc")} />;
@@ -215,13 +227,13 @@ export default function Overview() {
                 <AlertTriangle size={14} className="text-orange-600 shrink-0" />
                 <span className="flex-1 min-w-0">
                   <span className="block text-[12px] font-medium truncate">
-                    {a.field.code} — {a.field.name} · {a.field.municipality}
+                    {a.field.code} — {a.field.name || a.field.code} · {a.field.municipality || "—"}
                   </span>
                   <span className="block text-[11px] text-slate-500">
                     {a.obs.date.slice(0, 7)} · NDVI {fmtObs(a.obs.ndvi, 2)} · CWSI {fmtObs(a.obs.cwsi, 2)}
                   </span>
                 </span>
-                <Badge color={anomalyColor(a.obs.scores[model])}>{fmt.number(a.obs.scores[model], 3)}</Badge>
+                <Badge color={anomalyColor(a.obs.scores[model])}>{fmt.number(a.obs.scores[model] ?? NaN, 3)}</Badge>
               </button>
             ))}
             {stats.anomalies.length === 0 && <div className="p-6 text-[12px] text-slate-500">{t("overview.notable.empty")}</div>}
@@ -287,7 +299,7 @@ export default function Overview() {
           <MapPin size={13} />
           {t("overview.footer.range", { from: DATES[range[0]]?.slice(0, 7) ?? "—", to: DATES[range[1]]?.slice(0, 7) ?? "—" })}
         </span>
-        <DemoDataBadge />
+        <PipelineDataBadge />
         <Badge color="#64748b">
           {DATA_PROVENANCE.source} · {fmt.integer(FIELDS_WITH_SERIES.length)} / {fmt.integer(FIELDS.length)} {locale === "fa" ? "قطعه با سری" : "fields with series"}
         </Badge>

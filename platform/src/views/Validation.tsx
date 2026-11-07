@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { ScatterChart, Scatter, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Line, ComposedChart, ReferenceLine, BarChart, Bar, Cell } from "recharts";
-import { Panel, Label, Select, Stat, SigBadge, DemoDataBadge, EmptyState } from "../components/ui";
+import { Panel, Label, Select, Stat, SigBadge, PipelineDataBadge, EmptyState } from "../components/ui";
 import { useAnalysis } from "../context/AnalysisContext";
-import { MODELS, INDICATORS, FIELDS, getPairs, pearson, spearman, kendall, partialCorr, linReg, fisherCI, pValue, laggedCorr, DATES, LAST_IDX, ANOMALY_THRESHOLD, FIELDS_WITH_SERIES, type IndicatorId } from "../data/mock";
+import { MODELS, INDICATORS, FIELDS, getPairs, pearson, spearman, kendall, partialCorr, linReg, fisherCI, pValue, laggedCorr, DATES, LAST_IDX, ANOMALY_THRESHOLD, FIELDS_WITH_SERIES, type IndicatorId } from "../data/data";
 import { useLocale, useT } from "../i18n";
 import { ShieldAlert, Info } from "lucide-react";
 
@@ -155,7 +155,7 @@ export default function Validation() {
         <button onClick={save} className="h-8 px-3 bg-teal-700 text-white text-[12px]">
           {saved ? t("validation.controls.saved") : t("validation.controls.save")}
         </button>
-        <DemoDataBadge />
+        <PipelineDataBadge />
       </div>
 
       {!n && <EmptyState title={t("ui.noData")} desc={t("ui.noDataDesc")} />}

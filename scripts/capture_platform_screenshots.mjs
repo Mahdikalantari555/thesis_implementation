@@ -1,19 +1,23 @@
 #!/usr/bin/env node
 /**
- * Capture Persian (fa) screenshots of all eight platform pages.
+ * Capture platform screenshots of all eight views AND audit the runtime:
+ * per-view console errors, page exceptions and failed network requests, plus
+ * a Map Explorer tile scenario against scripts/serve_tiles.py.
  *
- * Used as pull-request evidence for the `make-platform-bilingual-and-audit-page-bugs`
- * change (task 9.2/9.3): reviewers can see the RTL layout, Persian typography,
- * translated labels, and the data-driven controls before merging.
+ * Originally the PR-evidence capture for `make-platform-bilingual-and-audit-page-bugs`
+ * (task 9.2/9.3); extended by `wire-platform-to-real-data` (tasks 5.1/5.2) into
+ * the runtime verification gate: every view must render with zero console
+ * errors / zero page exceptions, and the raster overlay must demonstrably
+ * render RGB and NDVI tiles with the tile server alive.
  *
- * The script is deliberately dependency-free apart from `puppeteer-core`, and it
- * drives *headless Chrome over the DevTools protocol*: no npm install is needed
- * in `platform/` (the platform itself gains no new runtime dependency), and the
- * caller supplies the browser binary —
+ * Dependency-free apart from Node's built-ins: headless Chrome/Edge over the
+ * raw DevTools protocol, the caller supplies the binary —
  *
  *   node scripts/capture_platform_screenshots.mjs \
  *     --executable /path/to/chrome \
- *     [--out reports/screenshots/fa] [--locale fa] [--width 1680] [--height 1500]
+ *     [--out reports/screenshots/en] [--locale en] [--width 1680] [--height 1500]
+ *     [--no-tile-server]   # server-down run: skip the tile scenario and treat
+ *                          # 127.0.0.1:8765 console noise as expected degradation
  *
  * The build is a single self-contained HTML file (`platform/dist/index.html`),
  * but its inlined bundle is an ES module, and `file://` module loading is
@@ -21,10 +25,7 @@
  * The script therefore starts a throwaway static server on 127.0.0.1 for the
  * duration of the capture — still fully offline (fonts are self-hosted, no CDN).
  *
- * If no Chrome/Chromium binary is available (e.g. a slim CI container), the
- * script exits 2 with an explanatory message; the manual fallback is:
- *   1. `cd platform && npm run build`
- *   2. open `platform/dist/index.html`, click FA, and screenshot each nav entry.
+ * Exit codes: 0 gate passed, 1 gate failed (see audit.json), 2 no browser.
  */
 
 import { spawn } from "node:child_process";
@@ -37,10 +38,11 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const DIST = path.join(ROOT, "platform", "dist", "index.html");
+const TILE_BASE = "http://127.0.0.1:8765";
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
 function parseArgs(argv) {
-  const out = { out: path.join(ROOT, "reports", "screenshots", "fa"), locale: "fa", width: 1680, height: 1500, port: 0 };
+  const out = { out: path.join(ROOT, "reports", "screenshots", "fa"), locale: "fa", width: 1680, height: 1500, port: 0, noTileServer: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => argv[++i];
@@ -50,6 +52,7 @@ function parseArgs(argv) {
     else if (a === "--width") out.width = Number(next());
     else if (a === "--height") out.height = Number(next());
     else if (a === "--port") out.port = Number(next());
+    else if (a === "--no-tile-server") out.noTileServer = true;
     else if (a === "--help" || a === "-h") {
       console.log(fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("*/")[0]);
       process.exit(0);
@@ -82,6 +85,8 @@ function findExecutable() {
     "/usr/bin/google-chrome-stable",
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     "C:/Program Files/Google/Chrome/Application/chrome.exe",
+    "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+    "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
   ].filter(Boolean);
   for (const c of candidates) {
     try {
@@ -112,7 +117,6 @@ async function connect(webSocketDebuggerUrl) {
       msg.error ? reject(new Error(`${msg.error.message} (${msg.error.code})`)) : resolve(msg.result);
     } else if (msg.method) {
       const list = events.get(msg.method) ?? [];
-      events.set(msg.method, []);
       list.forEach(fn => fn(msg.params));
     }
   };
@@ -188,6 +192,330 @@ function serveDist() {
   return new Promise(resolve => server.listen(0, "127.0.0.1", () => resolve({ server, port: server.address().port })));
 }
 
+// ── Runtime audit (wire-platform-to-real-data task 5.1) ─────────────────────
+const audit = {
+  startedAt: new Date().toISOString(),
+  locale: args.locale,
+  tileServerExpectedUp: !args.noTileServer,
+  views: {},
+  tileScenario: null,
+};
+let currentView = null;
+
+function isTileServerNoise(text) {
+  return typeof text === "string" && text.includes("127.0.0.1:8765");
+}
+
+function recordConsole(type, text) {
+  if (!currentView) return;
+  const v = audit.views[currentView] ?? (audit.views[currentView] = { console: [], pageErrors: [], failedRequests: [], screenshot: null });
+  if (type === "error" || type === "assert") v.console.push(text);
+}
+
+function recordPageError(text) {
+  if (!currentView) return;
+  const v = audit.views[currentView] ?? (audit.views[currentView] = { console: [], pageErrors: [], failedRequests: [], screenshot: null });
+  v.pageErrors.push(text);
+}
+
+function recordFailedRequest(url, errorText) {
+  if (!currentView) return;
+  const v = audit.views[currentView] ?? (audit.views[currentView] = { console: [], pageErrors: [], failedRequests: [], screenshot: null });
+  v.failedRequests.push({ url, errorText });
+}
+
+// Tile responses seen on the Network domain (status codes for the scenario).
+const tileResponses = [];
+const tileFailures = [];
+
+async function attachAuditListeners(session) {
+  const { send, once } = session;
+  // connect() exposes no on(); piggyback via Runtime.consoleAPICalled etc. by
+  // registering raw handlers through a tiny event tap: connect() dispatches
+  // method events to `once()`-style lists, so use a long-lived once() that
+  // re-arms itself.
+  const tap = async (method, handler) => {
+    (async () => {
+      for (;;) {
+        try {
+          const params = await once(method);
+          handler(params);
+        } catch {
+          return; // websocket closed
+        }
+      }
+    })();
+  };
+
+  await send("Runtime.enable");
+  await send("Log.enable");
+  await send("Network.enable");
+  await tap("Runtime.consoleAPICalled", p => {
+    const text = (p.args || []).map(a => a.value ?? a.description ?? "").join(" ").slice(0, 500);
+    recordConsole(p.type, text);
+  });
+  await tap("Runtime.exceptionThrown", p => {
+    const d = p.exceptionDetails;
+    const text = d?.exception?.description || d?.text || "unknown exception";
+    recordPageError(text.slice(0, 500));
+  });
+  await tap("Log.entryAdded", p => {
+    const e = p.entry;
+    if (e?.level === "error") recordConsole("error", `[${e.source}] ${e.text}`.slice(0, 500));
+  });
+  await tap("Network.responseReceived", p => {
+    const url = p.response?.url ?? "";
+    if (/:8765\/tiles\//.test(url)) tileResponses.push({ url, status: p.response.status });
+  });
+  await tap("Network.loadingFailed", p => {
+    // loadingFailed carries only an requestId; CanceledRequestText is not mapped
+    // back to URLs without bookkeeping, so match via the requestWillBeSent map.
+    const url = requestUrls.get(p.requestId) ?? "(unknown)";
+    if (/:8765\/tiles\//.test(url)) tileFailures.push({ url, errorText: p.errorText });
+    recordFailedRequest(url, p.errorText);
+  });
+  await tap("Network.requestWillBeSent", p => {
+    requestUrls.set(p.requestId, p.request.url);
+  });
+}
+
+const requestUrls = new Map();
+
+async function evaluateJson(send, expression) {
+  const r = await send("Runtime.evaluate", { expression, returnByValue: true });
+  const v = r?.result?.value;
+  if (typeof v === "string") {
+    try {
+      return JSON.parse(v);
+    } catch {
+      return v; // raw string (returnByValue passes it through unwrapped)
+    }
+  }
+  return v ?? null;
+}
+
+async function activateView(send, locale, id) {
+  const labels = navLabels(locale);
+  const clicked = await send("Runtime.evaluate", {
+    expression: `(() => {
+      const buttons = [...document.querySelectorAll('aside nav button')];
+      const target = buttons.find(b => (b.textContent || '').includes(${JSON.stringify(labels[id])}));
+      if (!target) return false;
+      target.click();
+      return true;
+    })()`,
+    returnByValue: true,
+  });
+  if (!clicked.result.value) throw new Error(`could not activate nav item "${id}"`);
+  for (let i = 0; i < 40; i++) {
+    const active = await send("Runtime.evaluate", {
+      expression: `(() => { const b = [...document.querySelectorAll('aside nav button')].find(x => x.getAttribute('aria-current') === 'page'); return b ? b.textContent : ''; })()`,
+      returnByValue: true,
+    });
+    if ((active.result.value || "").includes(labels[id])) break;
+    await sleep(150);
+  }
+}
+
+/** Set a React-controlled <select> to the option matching `predicate` source. */
+async function setSelect(send, findExpr, value) {
+  const ok = await send("Runtime.evaluate", {
+    expression: `(() => {
+      const sel = (${findExpr});
+      if (!sel) return false;
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+      setter.call(sel, ${JSON.stringify(value)});
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    })()`,
+    returnByValue: true,
+  });
+  return !!ok.result.value;
+}
+
+const LAYER_SELECT_EXPR = `(() => {
+  const selects = [...document.querySelectorAll('select')];
+  return selects.find(s => [...s.options].some(o => o.value === 'rgb') && [...s.options].some(o => o.value === 'ndvi')) ?? null;
+})()`;
+
+/**
+ * The observation-date slider: the only range input whose max is the shared
+ * date-axis length (opacity sliders are 0–1). One slider now drives both the
+ * field series and the raster overlay (wire-platform-to-real-data task 6.3).
+ */
+const DATE_SLIDER_EXPR = `(() => {
+  const sliders = [...document.querySelectorAll('input[type=range]')];
+  return sliders.find(el => Number(el.max) > 5) ?? null;
+})()`;
+
+async function setRangeSlider(send, findExpr, value) {
+  const ok = await send("Runtime.evaluate", {
+    expression: `(() => {
+      const el = (${findExpr});
+      if (!el) return false;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      setter.call(el, String(${JSON.stringify(value)}));
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    })()`,
+    returnByValue: true,
+  });
+  return !!ok.result.value;
+}
+
+/** Poll until at least `min` loaded raster tiles (src on :8765) are present. */
+async function waitForRasterTiles(send, urlPart, min = 1, timeoutMs = 25000) {
+  const started = Date.now();
+  let last = { total: 0, ok: 0 };
+  while (Date.now() - started < timeoutMs) {
+    last = (await evaluateJson(
+      send,
+      `(() => {
+        const imgs = [...document.querySelectorAll('img.leaflet-tile-loaded')].filter(i => i.src.includes('${urlPart}'));
+        const ok = imgs.filter(i => i.complete && i.naturalWidth > 0);
+        return JSON.stringify({ total: imgs.length, ok: ok.length });
+      })()`
+    )) ?? last;
+    if (last.ok >= min) return last;
+    await sleep(300);
+  }
+  return last;
+}
+
+/** Effective opacity of a raster tile = product of computed opacity up the tree. */
+async function rasterOpacity(send) {
+  return evaluateJson(
+    send,
+    `(() => {
+      const img = [...document.querySelectorAll('img.leaflet-tile')].find(i => i.src.includes(':8765/tiles/'));
+      if (!img) return null;
+      let el = img, op = 1;
+      while (el && el !== document.documentElement) {
+        const o = parseFloat(getComputedStyle(el).opacity);
+        if (Number.isFinite(o)) op *= o;
+        el = el.parentElement;
+      }
+      return Math.round(op * 1000) / 1000;
+    })()`
+  );
+}
+
+/** Drag-pan the Leaflet map via real input events (fires live tile requests). */
+async function dragPan(send, dx, dy) {
+  const rect = await evaluateJson(
+    send,
+    `JSON.stringify((() => {
+      const r = document.querySelector('.leaflet-container').getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    })())`
+  );
+  if (!rect) throw new Error("no .leaflet-container found");
+  const steps = 8;
+  await send("Input.dispatchMouseEvent", { type: "mousePressed", x: rect.x, y: rect.y, button: "left", clickCount: 1 });
+  for (let i = 1; i <= steps; i++) {
+    await send("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x: rect.x + (dx * i) / steps,
+      y: rect.y + (dy * i) / steps,
+      button: "left",
+      buttons: 1,
+    });
+    await sleep(30);
+  }
+  await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: rect.x + dx, y: rect.y + dy, button: "left", clickCount: 1 });
+}
+
+/** Map Explorer tile scenario: RGB + NDVI render, pan, opacity persistence. */
+async function runTileScenario(send, outDir) {
+  const scenario = { rgbTiles: 0, ndviTiles: 0, tileResponses: null, tileFailures: null, opacityAfterRgb: null, opacityAfterNdvi: null, pans: 0, ok: false, drivenByDateSlider: false };
+  currentView = "map";
+  await activateView(send, args.locale, "map");
+  await sleep(2000);
+
+  const hasLayerSel = await evaluateJson(send, `!!(${LAYER_SELECT_EXPR})`);
+  if (!hasLayerSel) throw new Error("raster layer select not found (no scene for the default observation date?)");
+
+  // Drive the observation-date slider (task 6.3): move to idx 6 so the raster
+  // demonstrably follows the single date control.
+  tileResponses.length = 0;
+  tileFailures.length = 0;
+  scenario.drivenByDateSlider = await setRangeSlider(send, DATE_SLIDER_EXPR, 6);
+  await sleep(800);
+
+  // RGB
+  const rgb = await waitForRasterTiles(send, "/tiles/");
+  scenario.rgbTiles = rgb.ok;
+  scenario.opacityAfterRgb = await rasterOpacity(send);
+  await dragPan(send, -260, 120);
+  await dragPan(send, 200, -140);
+  scenario.pans = 2;
+  await sleep(1200);
+  const rgbAfterPan = await waitForRasterTiles(send, "/tiles/");
+  fs.writeFileSync(path.join(outDir, "tile_rgb.png"), await screenshot(send));
+  scenario.opacityAfterPan = await rasterOpacity(send);
+
+  // NDVI — same observation date, switch layer
+  await setSelect(send, LAYER_SELECT_EXPR, "ndvi");
+  await sleep(300);
+  const ndvi = await waitForRasterTiles(send, "/ndvi/");
+  scenario.ndviTiles = ndvi.ok;
+  scenario.opacityAfterNdvi = await rasterOpacity(send);
+  await sleep(1000);
+  fs.writeFileSync(path.join(outDir, "tile_ndvi.png"), await screenshot(send));
+
+  // Task 6.1 evidence: "Hide" removes only the field-polygon layer — the
+  // raster overlay AND basemap tiles stay on the map.
+  const hideLabel = args.locale === "fa" ? "پنهان" : "Hide";
+  const clickedHide = await evaluateJson(
+    send,
+    `(() => {
+      const b = [...document.querySelectorAll('button')].find(x => (x.textContent || '').trim() === ${JSON.stringify(hideLabel)});
+      if (!b) return false;
+      b.click();
+      return true;
+    })()`
+  );
+  await sleep(900);
+  scenario.hideFields = await evaluateJson(
+    send,
+    `JSON.stringify({
+      clicked: ${clickedHide ? "true" : "false"},
+      polygonPaths: document.querySelectorAll('.leaflet-overlay-pane path').length,
+      rasterTiles: [...document.querySelectorAll('img.leaflet-tile-loaded')].filter(i => i.src.includes(':8765')).length,
+      basemapTiles: [...document.querySelectorAll('img.leaflet-tile-loaded')].filter(i => !i.src.includes(':8765')).length,
+    })`
+  );
+  fs.writeFileSync(path.join(outDir, "tile_nofields.png"), await screenshot(send));
+  // restore the polygons for the remaining audit steps
+  const showLabel = args.locale === "fa" ? "نمایش" : "Show";
+  await evaluateJson(
+    send,
+    `(() => {
+      const b = [...document.querySelectorAll('button')].find(x => (x.textContent || '').trim() === ${JSON.stringify(showLabel)});
+      if (!b) return false;
+      b.click();
+      return true;
+    })()`
+  );
+
+  // Everything observed on the Network domain during the whole scenario
+  // (RGB, pans, NDVI) must be a 200 PNG with zero transport failures.
+  scenario.tileResponses = tileResponses.slice();
+  scenario.tileFailures = tileFailures.slice();
+  scenario.tileResponsesOk = tileResponses.length > 0 && tileResponses.every(r => r.status === 200);
+  const hideOk = !!scenario.hideFields && scenario.hideFields.clicked && scenario.hideFields.polygonPaths === 0 && scenario.hideFields.rasterTiles > 0 && scenario.hideFields.basemapTiles > 0;
+  scenario.hideFieldsOk = hideOk;
+  scenario.ok =
+    scenario.drivenByDateSlider && rgb.ok > 0 && ndvi.ok > 0 && rgbAfterPan.ok > 0 && scenario.tileResponsesOk && tileFailures.length === 0 && hideOk;
+  return scenario;
+}
+
+async function screenshot(send) {
+  const { data } = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+  return Buffer.from(data, "base64");
+}
+
 async function main() {
   if (!fs.existsSync(DIST)) {
     console.error(`[capture] missing build: ${DIST}\n          run:  cd platform && npm run build`);
@@ -245,8 +573,9 @@ async function main() {
     session = await connect(pageTarget.webSocketDebuggerUrl);
     const { send, once } = session;
 
+    await attachAuditListeners(session);
+
     await send("Page.enable");
-    await send("Runtime.enable");
     await send("Emulation.setDeviceMetricsOverride", {
       width: args.width,
       height: args.height,
@@ -302,29 +631,14 @@ async function main() {
     // fallback face (font-display: swap would otherwise show Inter/system).
     await send("Runtime.evaluate", { expression: "document.fonts.ready.then(() => true)", awaitPromise: true });
     await sleep(600);
+    // Mount-phase console noise lands on the first view the loop activates.
+    currentView = "overview";
 
     for (const page of PAGES) {
-      const clicked = await send("Runtime.evaluate", {
-        expression: `(() => {
-          const buttons = [...document.querySelectorAll('aside nav button')];
-          const target = buttons.find(b => (b.textContent || '').includes(${JSON.stringify(navLabels(args.locale)[page.id])}));
-          if (!target) return false;
-          target.click();
-          return true;
-        })()`,
-        returnByValue: true,
-      });
-      if (!clicked.result.value) throw new Error(`could not activate nav item "${page.id}"`);
+      currentView = page.id;
+      await activateView(send, args.locale, page.id);
       // Wait until the clicked nav entry is marked active, then let charts
       // animate in and Leaflet lay out its tiles.
-      for (let i = 0; i < 40; i++) {
-        const active = await send("Runtime.evaluate", {
-          expression: `(() => { const b = [...document.querySelectorAll('aside nav button')].find(x => x.getAttribute('aria-current') === 'page'); return b ? b.textContent : ''; })()`,
-          returnByValue: true,
-        });
-        if ((active.result.value || "").includes(navLabels(args.locale)[page.id])) break;
-        await sleep(150);
-      }
       await sleep(1500); // chart animations + Leaflet tile layout
 
       // Size the viewport to the *full* page, wait for Recharts'
@@ -335,9 +649,9 @@ async function main() {
       const fullHeight = Math.max(args.height, Math.ceil(height.result.value ?? args.height));
       await send("Emulation.setDeviceMetricsOverride", { width: args.width, height: fullHeight, deviceScaleFactor: 2, mobile: false });
       await sleep(1200);
-      const { data } = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
       const target = path.join(args.out, page.file);
-      fs.writeFileSync(target, Buffer.from(data, "base64"));
+      fs.writeFileSync(target, await screenshot(send));
+      (audit.views[page.id] ??= { console: [], pageErrors: [], failedRequests: [], screenshot: null }).screenshot = path.basename(target);
       console.log(`[capture] ${path.relative(ROOT, target)}  (${args.width}×${fullHeight} css)`);
       // Reset for the next page so its layout is measured at the base viewport.
       await send("Emulation.setDeviceMetricsOverride", { width: args.width, height: args.height, deviceScaleFactor: 2, mobile: false });
@@ -345,8 +659,51 @@ async function main() {
       const { result } = await send("Runtime.evaluate", { expression: "document.documentElement.scrollHeight", returnByValue: true });
     }
 
+    // Map Explorer tile scenario (server must be up) — RGB + NDVI evidence.
+    if (!args.noTileServer) {
+      console.log("[capture] running Map Explorer tile scenario…");
+      audit.tileScenario = await runTileScenario(send, args.out);
+      console.log(
+        `[capture] tile scenario · rgb=${audit.tileScenario.rgbTiles} ndvi=${audit.tileScenario.ndviTiles} ` +
+          `responses=${audit.tileScenario.tileResponses.length} failures=${audit.tileScenario.tileFailures.length} ` +
+          `opacity rgb→ndvi: ${audit.tileScenario.opacityAfterRgb}→${audit.tileScenario.opacityAfterNdvi} (pan: ${audit.tileScenario.opacityAfterPan})`
+      );
+    }
+
+    // ── Gate evaluation ──────────────────────────────────────────────────────
+    // In the server-down run (--no-tile-server) the <img> requests to
+    // 127.0.0.1:8765 fail with ERR_CONNECTION_REFUSED: that noise is the
+    // *expected* graceful-degradation signal (basemap + polygons stay intact),
+    // so both the console lines and the :8765 failed requests are excluded.
+    const tileNoise = text =>
+      args.noTileServer && (/127\.0\.0\.1:8765/.test(text) || /net::ERR_CONNECTION_REFUSED/.test(text));
+    let pass = true;
+    for (const page of PAGES) {
+      const v = audit.views[page.id] ?? {};
+      const consoleErrors = (v.console ?? []).filter(t => !tileNoise(t) && !(args.noTileServer && isTileServerNoise(t)));
+      const pageErrors = v.pageErrors ?? [];
+      const badTiles = (v.failedRequests ?? []).filter(f => /:8765\/tiles\//.test(f.url) && !args.noTileServer);
+      const ok = consoleErrors.length === 0 && pageErrors.length === 0 && badTiles.length === 0 && !!v.screenshot;
+      if (!ok) pass = false;
+      console.log(
+        `[gate] ${page.id}: ${ok ? "OK" : "FAIL"} (console=${consoleErrors.length} page=${pageErrors.length} tileFails=${badTiles.length} shot=${v.screenshot ? "yes" : "no"})`
+      );
+      for (const c of consoleErrors.slice(0, 5)) console.log(`   console: ${c}`);
+      for (const e of pageErrors.slice(0, 5)) console.log(`   page: ${e}`);
+      for (const f of badTiles.slice(0, 5)) console.log(`   tile: ${f.url} ${f.errorText}`);
+    }
+    if (!args.noTileServer) {
+      const s = audit.tileScenario;
+      const ok = s && s.ok && s.rgbTiles > 0 && s.ndviTiles > 0;
+      if (!ok) pass = false;
+      console.log(`[gate] tile-scenario: ${ok ? "OK" : "FAIL"}`);
+    }
+    audit.pass = pass;
+    audit.finishedAt = new Date().toISOString();
+    fs.writeFileSync(path.join(args.out, "audit.json"), JSON.stringify(audit, null, 2));
     fs.writeFileSync(path.join(args.out, "README.md"), README_TEXT(args));
-    console.log(`[capture] done → ${path.relative(ROOT, args.out)}`);
+    console.log(`[capture] ${pass ? "GATE PASSED" : "GATE FAILED"} → ${path.relative(ROOT, args.out)}`);
+    if (!pass) process.exitCode = 1;
   } finally {
     try {
       server.close();
@@ -394,19 +751,16 @@ const NAV_LABELS_FA = {
 
 const navLabels = locale => (locale === "fa" ? NAV_LABELS_FA : NAV_LABELS_EN);
 
-const README_TEXT = a => `# Persian platform screenshots (fa)
+const README_TEXT = a => `# Platform screenshots + runtime audit (${a.locale})
 
-Generated by \`node scripts/capture_platform_screenshots.mjs --locale fa\`.
+Generated by \`node scripts/capture_platform_screenshots.mjs --locale ${a.locale}\`${
+  a.noTileServer ? " **with --no-tile-server (server-down degradation run)**" : " with the tile server running (tile scenario included)"
+}.
 
-| File | Page | Route id |
-| --- | --- | --- |
-${PAGES.map((p, i) => `| \`${p.file}\` | ${i + 1}. ${p.id} | \`${p.id}\` |`).join("\n")}
-
-- Viewport: ${a.width}×${a.height} CSS px at deviceScaleFactor 2.
-- Locale restored from \`localStorage\` (\`agrianomaly.locale = ${a.locale}\`) before first paint,
-  so \`<html dir="rtl" lang="fa">\` and the Vazirmatn font stack are active in every frame.
-- Source: the single-file production build (\`platform/dist/index.html\`), loaded over \`file://\`.
-- Regenerate: \`cd platform && npm run build && cd .. && node scripts/capture_platform_screenshots.mjs --executable /path/to/chrome\`.
+- \`01…08_*.png\` — the eight views, viewport ${a.width}×${a.height} CSS px at deviceScaleFactor 2.
+- \`tile_rgb.png\` / \`tile_ndvi.png\` — Map Explorer raster-overlay evidence (only in server-up runs).
+- \`audit.json\` — per-view console errors / page exceptions / failed requests and the tile-scenario result.
+- Gate: zero console errors, zero page errors, tiles render with the server up (wire-platform-to-real-data).
 `;
 
 main().catch(err => {

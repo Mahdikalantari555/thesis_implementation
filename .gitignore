@@ -63,12 +63,14 @@ platform/dist/
 platform/.vite/
 platform/.vite-temp/
 platform/.pnpm-store/
+platform/.tmpbuild/
 
 
 # AI Tools
 .agents
 .memdb
 .opencode
+.zcode
 
 # Data artifacts
 data/.tmp*

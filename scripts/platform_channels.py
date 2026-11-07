@@ -61,7 +61,10 @@ CHANNEL_REGISTRY: tuple[ChannelSpec, ...] = (
     ChannelSpec("eta", "mm/d", (0.0, 8.0), "proxy", True, "water", "ndvi"),
     ChannelSpec("lst", "\u00b0C", (15.0, 55.0), "observed", False, "thermal"),  # conditional
     ChannelSpec("precip", "mm", (0.0, 300.0), "modelled", True, "weather"),
-    ChannelSpec("temp", "\u00b0C", (10.0, 48.0), "modelled", True, "weather"),
+    # ERA5 daily-mean air temperature over Khuzestan spans ~7-44 degC
+    # (weather_aligned.parquet 2013-2026); the old (10, 48) envelope was tuned
+    # for LST-derived estimates and rejected real reanalysis rows.
+    ChannelSpec("temp", "\u00b0C", (0.0, 55.0), "modelled", True, "weather"),
 )
 
 CHANNEL_NAMES: tuple[str, ...] = tuple(c.name for c in CHANNEL_REGISTRY)

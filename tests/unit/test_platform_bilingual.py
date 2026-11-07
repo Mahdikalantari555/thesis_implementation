@@ -177,11 +177,13 @@ def test_khuzestan_region_is_stated():
 
 
 def test_series_json_is_consumed():
-    mock = (SRC / "data" / "mock.ts").read_text(encoding="utf-8")
-    assert "from './series_khuzestan.json'" in mock
-    assert "from './farms_khuzestan.json'" in mock
+    # data.ts (renamed from mock.ts — it is the typed loader for real pipeline
+    # JSON, not mock data) must remain the single data source.
+    data = (SRC / "data" / "data.ts").read_text(encoding="utf-8")
+    assert "from './series_khuzestan.json'" in data
+    assert "from './farms_khuzestan.json'" in data
     # The synthetic generator must be gone: no seeded RNG in the data layer.
-    assert "function rng(" not in mock
+    assert "function rng(" not in data
 
 
 def test_map_view_does_not_recreate_on_theme_change():

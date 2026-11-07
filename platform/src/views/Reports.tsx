@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Panel, Badge, EmptyState, DemoDataBadge } from "../components/ui";
+import { Panel, Badge, EmptyState, PipelineDataBadge } from "../components/ui";
 import { useAnalysis } from "../context/AnalysisContext";
-import { DATES, getSeries, getPairs, pearson, spearman, downloadCSV, modelById, indicatorById } from "../data/mock";
+import { DATES, getSeries, getPairs, pearson, spearman, downloadCSV, modelById, indicatorById } from "../data/data";
 import { useLocale, useT } from "../i18n";
 import { Download, Trash2, FileText, Plus, Image as ImageIcon } from "lucide-react";
 
@@ -33,9 +33,13 @@ export default function Reports() {
 
   const exportSeries = () => {
     const s = getSeries(selectedField);
+    // Absent channels export as *empty cells*, never 0.0000 — a fabricated
+    // zero in a research CSV is worse than a gap (wire-platform-to-real-data).
+    const cell = (v: number | null, d = 4) => (v == null || !Number.isFinite(v) ? "" : v.toFixed(d));
+    const score = (v: number | null) => (v == null || !Number.isFinite(v) ? "" : v.toFixed(4));
     downloadCSV(`series_${selectedField}_${model}.csv`, [
       ["date", "missing", model, "ndvi", "evi", "savi", "ndmi", "tvdi", "cwsi", "eta", "precip", "temp", "provenance"],
-      ...s.map(o => [o.date, o.missing ? 1 : 0, o.scores[model].toFixed(4), (o.ndvi ?? 0).toFixed(4), (o.evi ?? 0).toFixed(4), (o.savi ?? 0).toFixed(4), (o.ndmi ?? 0).toFixed(4), (o.tvdi ?? 0).toFixed(4), (o.cwsi ?? 0).toFixed(4), (o.eta ?? 0).toFixed(4), (o.precip ?? 0).toFixed(2), (o.temp ?? 0).toFixed(2), o.provenance ? JSON.stringify(o.provenance) : ""]),
+      ...s.map(o => [o.date, o.missing ? 1 : 0, score(o.scores[model]), cell(o.ndvi), cell(o.evi), cell(o.savi), cell(o.ndmi), cell(o.tvdi), cell(o.cwsi), cell(o.eta), cell(o.precip, 2), cell(o.temp, 2), o.provenance ? JSON.stringify(o.provenance) : ""]),
     ]);
   };
 
@@ -106,7 +110,7 @@ export default function Reports() {
             <div className="border border-slate-200 dark:border-slate-800 p-2 text-[11px] text-slate-500 leading-relaxed">
               {t("reports.export.note")}
               <div className="mt-2">
-                <DemoDataBadge />
+                <PipelineDataBadge />
               </div>
             </div>
           </div>

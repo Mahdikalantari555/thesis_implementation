@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line, ScatterChart, Scatter, Legend } from "recharts";
 import { Panel, Label, Badge, EmptyState } from "../components/ui";
 import { useAnalysis } from "../context/AnalysisContext";
-import { MODELS, INDICATORS, FIELDS, getSeries, getPairs, pearson, mean, quantile, ANOMALY_THRESHOLD, DATES, type ModelId } from "../data/mock";
+import { MODELS, INDICATORS, FIELDS, getSeries, getPairs, pearson, mean, quantile, ANOMALY_THRESHOLD, DATES, type ModelId } from "../data/data";
 import { useLocale, useT } from "../i18n";
 
 export default function ModelComparison() {
@@ -17,7 +17,8 @@ export default function ModelComparison() {
   const distData = useMemo(() => {
     const bins = Array.from({ length: 10 }, (_, i) => ({ bin: `${(i / 10).toFixed(1)}` }) as Record<string, string | number>);
     compareModels.forEach(m => {
-      const vals = FIELDS.flatMap(f => getSeries(f.id).map(o => o.scores[m]));
+      // Absent scores are excluded, not folded in as a constant.
+      const vals = FIELDS.flatMap(f => getSeries(f.id).map(o => o.scores[m])).filter((v): v is number => typeof v === "number");
       if (!vals.length) return;
       const sorted = [...vals].sort((a, b) => a - b);
       bins.forEach((b, i) => {
@@ -38,9 +39,10 @@ export default function ModelComparison() {
           const xs: number[] = [], ys: number[] = [];
           FIELDS.forEach(f =>
             getSeries(f.id).forEach(o => {
-              if (!o.missing) {
-                xs.push(o.scores[a]);
-                ys.push(o.scores[b]);
+              const va = o.scores[a], vb = o.scores[b];
+              if (typeof va === "number" && typeof vb === "number") {
+                xs.push(va);
+                ys.push(vb);
               }
             })
           );
@@ -76,7 +78,10 @@ export default function ModelComparison() {
           let inter = 0, union = 0;
           FIELDS.forEach(f =>
             getSeries(f.id).forEach(o => {
-              const ea = o.scores[a] >= ANOMALY_THRESHOLD, eb = o.scores[b] >= ANOMALY_THRESHOLD;
+              const va = o.scores[a], vb = o.scores[b];
+              // A pair member with no score cannot join the event sets.
+              const ea = typeof va === "number" && va >= ANOMALY_THRESHOLD;
+              const eb = typeof vb === "number" && vb >= ANOMALY_THRESHOLD;
               if (ea && eb) inter++;
               if (ea || eb) union++;
             })
@@ -93,7 +98,10 @@ export default function ModelComparison() {
     () =>
       getSeries(selectedField).map(o => {
         const row: Record<string, string | number> = { date: o.date.slice(0, 7) };
-        compareModels.forEach(m => (row[m] = +o.scores[m].toFixed(3)));
+        compareModels.forEach(m => {
+          const sv = o.scores[m];
+          row[m] = typeof sv === "number" ? +sv.toFixed(3) : "";
+        });
         return row;
       }),
     [compareModels, selectedField]
@@ -103,7 +111,7 @@ export default function ModelComparison() {
   const box = useMemo(
     () =>
       compareModels.map(m => {
-        const vals = FIELDS.flatMap(f => getSeries(f.id).map(o => o.scores[m])).sort((a, b) => a - b);
+        const vals = FIELDS.flatMap(f => getSeries(f.id).map(o => o.scores[m])).filter((v): v is number => typeof v === "number").sort((a, b) => a - b);
         if (!vals.length) return { model: t(`model.${m}.name`), color: "#64748b", min: NaN, p25: NaN, median: NaN, p75: NaN, max: NaN };
         return {
           model: t(`model.${m}.name`),
@@ -122,7 +130,12 @@ export default function ModelComparison() {
   const pairScatter = useMemo(() => {
     if (compareModels.length < 2) return [];
     const [a, b] = compareModels;
-    return FIELDS.flatMap(f => getSeries(f.id).map(o => ({ x: +o.scores[a].toFixed(3), y: +o.scores[b].toFixed(3) })));
+    return FIELDS.flatMap(f =>
+      getSeries(f.id)
+        .map(o => ({ va: o.scores[a], vb: o.scores[b] }))
+        .filter((p): p is { va: number; vb: number } => typeof p.va === "number" && typeof p.vb === "number")
+        .map(p => ({ x: +p.va.toFixed(3), y: +p.vb.toFixed(3) }))
+    );
   }, [compareModels]);
 
   // Field-level means, memoized once per model selection (the inline version
@@ -130,7 +143,13 @@ export default function ModelComparison() {
   const fieldLevel = useMemo(
     () =>
       FIELDS.map(f => {
-        const means = compareModels.map(m => mean(getSeries(f.id).map(o => o.scores[m])));
+        const means = compareModels.map(m =>
+          mean(
+            getSeries(f.id)
+              .map(o => o.scores[m])
+              .filter((v): v is number => typeof v === "number")
+          )
+        );
         const spread = means.length ? Math.max(...means) - Math.min(...means) : 0;
         return { f, means, spread };
       })

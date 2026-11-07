@@ -1,0 +1,120 @@
+{
+  "startedAt": "2026-11-07T07:30:56.785Z",
+  "locale": "en",
+  "tileServerExpectedUp": false,
+  "views": {
+    "overview": {
+      "console": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "screenshot": "01_overview.png"
+    },
+    "map": {
+      "console": [
+        "[network] Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "[network] Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "[network] Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "[network] Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "[network] Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "[network] Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "[network] Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "[network] Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "[network] Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "[network] Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "[network] Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "[network] Failed to load resource: net::ERR_CONNECTION_REFUSED"
+      ],
+      "pageErrors": [],
+      "failedRequests": [
+        {
+          "url": "http://127.0.0.1:8765/tiles/2023-06-15/rgb/12/2596/1676.png",
+          "errorText": "net::ERR_CONNECTION_REFUSED"
+        },
+        {
+          "url": "http://127.0.0.1:8765/tiles/2023-06-15/rgb/12/2597/1676.png",
+          "errorText": "net::ERR_CONNECTION_REFUSED"
+        },
+        {
+          "url": "http://127.0.0.1:8765/tiles/2023-06-15/rgb/12/2596/1675.png",
+          "errorText": "net::ERR_CONNECTION_REFUSED"
+        },
+        {
+          "url": "http://127.0.0.1:8765/tiles/2023-06-15/rgb/12/2597/1675.png",
+          "errorText": "net::ERR_CONNECTION_REFUSED"
+        },
+        {
+          "url": "http://127.0.0.1:8765/tiles/2023-06-15/rgb/12/2596/1677.png",
+          "errorText": "net::ERR_CONNECTION_REFUSED"
+        },
+        {
+          "url": "http://127.0.0.1:8765/tiles/2023-06-15/rgb/12/2597/1677.png",
+          "errorText": "net::ERR_CONNECTION_REFUSED"
+        },
+        {
+          "url": "http://127.0.0.1:8765/tiles/2023-06-15/rgb/12/2595/1676.png",
+          "errorText": "net::ERR_CONNECTION_REFUSED"
+        },
+        {
+          "url": "http://127.0.0.1:8765/tiles/2023-06-15/rgb/12/2598/1676.png",
+          "errorText": "net::ERR_CONNECTION_REFUSED"
+        },
+        {
+          "url": "http://127.0.0.1:8765/tiles/2023-06-15/rgb/12/2595/1675.png",
+          "errorText": "net::ERR_CONNECTION_REFUSED"
+        },
+        {
+          "url": "http://127.0.0.1:8765/tiles/2023-06-15/rgb/12/2598/1675.png",
+          "errorText": "net::ERR_CONNECTION_REFUSED"
+        },
+        {
+          "url": "http://127.0.0.1:8765/tiles/2023-06-15/rgb/12/2595/1677.png",
+          "errorText": "net::ERR_CONNECTION_REFUSED"
+        },
+        {
+          "url": "http://127.0.0.1:8765/tiles/2023-06-15/rgb/12/2598/1677.png",
+          "errorText": "net::ERR_CONNECTION_REFUSED"
+        }
+      ],
+      "screenshot": "02_geospatial-explorer.png"
+    },
+    "temporal": {
+      "console": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "screenshot": "03_temporal-analysis.png"
+    },
+    "spectral": {
+      "console": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "screenshot": "04_spectral-temporal.png"
+    },
+    "validation": {
+      "console": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "screenshot": "05_validation-lab.png"
+    },
+    "comparison": {
+      "console": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "screenshot": "06_model-comparison.png"
+    },
+    "spatial": {
+      "console": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "screenshot": "07_spatial-analysis.png"
+    },
+    "reports": {
+      "console": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "screenshot": "08_reports-experiments.png"
+    }
+  },
+  "tileScenario": null,
+  "pass": true,
+  "finishedAt": "2026-11-07T07:31:32.527Z"
+}

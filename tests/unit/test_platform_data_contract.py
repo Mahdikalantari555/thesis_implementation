@@ -163,6 +163,82 @@ def test_score_formula_ids_in_series():
                     assert fid_id is None, f"{fid} {key} absent with formula {fid_id}"
 
 
+# ── wire-platform-to-real-data: real weather + real metadata + honest labels ──
+
+
+def test_weather_channels_carry_real_values():
+    """Task 2.1: precip/temp non-null fraction > 0 over dated observations (target ≥ 90%)."""
+    series = json.loads(SERIES_PATH.read_text(encoding="utf-8"))
+    dated = [
+        (o["precip"], o["temp"])
+        for obs_list in series.values()
+        for o in obs_list
+        if o.get("acquisitionDate")
+    ]
+    n = len(dated)
+    assert n > 0, "no dated observations to check weather against"
+    precip_nn = sum(1 for p, _ in dated if p is not None)
+    temp_nn = sum(1 for _, t in dated if t is not None)
+    assert precip_nn / n > 0.9, f"precip non-null fraction {precip_nn / n:.3f} over {n} dated obs"
+    assert temp_nn / n > 0.9, f"temp non-null fraction {temp_nn / n:.3f} over {n} dated obs"
+
+
+def test_null_channel_is_never_labelled_modelled_or_measured():
+    """Spec: a null value's provenance is absent/legacy — never modelled/measured —
+    and a present value is never labelled absent."""
+    series = json.loads(SERIES_PATH.read_text(encoding="utf-8"))
+    channels = ["ndvi", "evi", "savi", "ndmi", "tvdi", "cwsi", "eta", "lst", "precip", "temp"]
+    for fid, obs_list in series.items():
+        for obs in obs_list:
+            prov = obs["provenance"]
+            for ch in channels:
+                v, st = obs[ch], prov[ch]
+                if v is None:
+                    assert st in ("absent", "legacy"), f"{fid} {ch}: null labelled {st}"
+                else:
+                    assert st in ("observed", "modelled", "proxy"), f"{fid} {ch}: value {v} labelled {st}"
+
+
+def test_no_synthesized_farm_strings():
+    """Spec: zero matches for the previously synthesized patterns in the farms payload."""
+    blob = FARMS_PATH.read_text(encoding="utf-8")
+    for pattern in ("Khuzestan Unit", "Amir Kabir", "Debal Khazai"):
+        assert pattern not in blob, f"synthesized pattern {pattern!r} still in farms payload"
+
+
+def test_no_dead_stress_event_field():
+    farms = json.loads(FARMS_PATH.read_text(encoding="utf-8"))
+    assert all("stressEvent" not in f for f in farms), "stressEvent must not ship in the payload"
+
+
+def test_farm_metadata_matches_registry():
+    """Task 3.2: spot-parity of farm/municipality/variety against farms.parquet."""
+    import pandas as pd
+
+    farms = {f["code"]: f for f in json.loads(FARMS_PATH.read_text(encoding="utf-8"))}
+    reg = pd.read_parquet(ROOT.parent / "Data" / "Processed" / "coordinates" / "farms.parquet")
+    assert len(farms) == len(reg) == 490
+
+    def clean(v) -> str:
+        if v is None or (isinstance(v, float) and pd.isna(v)):
+            return ""
+        s = str(v).strip()
+        return "" if s.lower() in ("nan", "none") else s
+
+    for _, r in reg.sample(30, random_state=20261107).iterrows():
+        f = farms.get(str(r["farm"]))
+        assert f is not None, f"registry farm {r['farm']} missing from payload"
+        assert f["farm"] == clean(r["block"]), f"{f['code']} farm != registry block"
+        expected_muni = " · ".join(x for x in (clean(r["office"]), clean(r["management"])) if x)
+        assert f["municipality"] == expected_muni, f"{f['code']} municipality != registry office+management"
+        variety = clean(r["variety"])
+        if variety:
+            assert f["variety"] == variety, f"{f['code']} variety != registry"
+        else:
+            assert f["variety"] is None, f"{f['code']} variety should be null (registry empty)"
+        assert f["areaHa"] is not None and abs(f["areaHa"] - float(r["area_ha"])) < 0.05, f"{f['code']} area != registry"
+
+
 def _synthetic_checkpoint(tmp_path: Path, model_id: str = "sts_net") -> Path:
     """Write a tiny valid <model_id>_490.pt checkpoint (random-init weights)."""
     import torch

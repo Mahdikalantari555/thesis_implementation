@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { FIELDS, getSeries, clampIdx, KHUZESTAN_CENTROID, type ModelId, type IndicatorId } from "../data/mock";
+import { FIELDS, getSeries, clampIdx, KHUZESTAN_CENTROID, type ModelId, type IndicatorId } from "../data/data";
 import { useAnalysis } from "../context/AnalysisContext";
 import { useT } from "../i18n";
 import { anomalyColor } from "./ui";
@@ -18,6 +18,12 @@ interface Props {
   rasterLayer?: "rgb" | "ndvi" | null;
   /** Raster overlay opacity (0–1), independent of the polygon fill opacity. */
   rasterOpacity?: number;
+  /**
+   * When false only the field-polygon layer is hidden — the basemap and any
+   * raster overlay stay on the map (wire-platform-to-real-data task 6.1: the
+   * raster can be inspected on its own).
+   */
+  showFields?: boolean;
   height?: string;
 }
 
@@ -31,7 +37,7 @@ const ATTRIBUTION = "© OpenStreetMap © CARTO";
 // polygons and basemap untouched (graceful degradation).
 const TILE_SERVER_BASE = "http://127.0.0.1:8765";
 
-export default function MapView({ colorMode, model, indicator, dateIdx, opacity, rasterDate = null, rasterLayer = null, rasterOpacity = 1, height = "100%" }: Props) {
+export default function MapView({ colorMode, model, indicator, dateIdx, opacity, rasterDate = null, rasterLayer = null, rasterOpacity = 1, showFields = true, height = "100%" }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -84,15 +90,22 @@ export default function MapView({ colorMode, model, indicator, dateIdx, opacity,
     // The server clamps zoom to 8–14; outside that range it 404s, so Leaflet
     // scales the nearest native tile (minNativeZoom/maxNativeZoom). Tiles sit
     // in the tilePane, below the vector pane, so polygons stay on top.
+    // The layer mounts with the *current* raster opacity: without it a fresh
+    // layer starts at 1 and a scene/layer switch silently resets the slider
+    // value (wire-platform-to-real-data task 4.4).
     rasterRef.current = L.tileLayer(`${TILE_SERVER_BASE}/tiles/${rasterDate}/${rasterLayer}/{z}/{x}/{y}.png`, {
       minNativeZoom: 8,
       maxNativeZoom: 14,
       maxZoom: 18,
+      opacity: rasterOpacity,
       // Degradation is silent: failed tiles render as empty (no broken image),
       // and a dead server leaves the basemap + polygons exactly as before.
       errorTileUrl: "",
       attribution: "Landsat Collection-2 Level-2",
     }).addTo(map);
+    // rasterOpacity intentionally excluded: slider drags go through the
+    // setOpacity effect below instead of re-creating the layer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rasterDate, rasterLayer]);
 
   /** Overlay opacity — updated in place (no layer re-creation on slider drag). */
@@ -105,6 +118,9 @@ export default function MapView({ colorMode, model, indicator, dateIdx, opacity,
     const layer = layerRef.current;
     if (!layer) return;
     layer.clearLayers();
+    // "Hide field boundaries" removes only this layer; the basemap and the
+    // raster overlay stay exactly as they were (task 6.1).
+    if (!showFields) return;
     const idx = clampIdx(dateIdx);
     const scoreLabel = t("map.tooltip.score");
     const haLabel = t("map.tooltip.ha");
@@ -114,7 +130,10 @@ export default function MapView({ colorMode, model, indicator, dateIdx, opacity,
       const obs = series[idx];
       // A field without a series still renders, but is greyed out and says so.
       let fill = "#94a3b8";
-      let tooltip = `<b>${f.code}</b> · ${f.name}<br/>${f.areaHa} ${haLabel} · ${f.municipality}`;
+      // Registry text may be genuinely absent (null) — the tooltip shows "—"
+      // instead of the string "null".
+      const areaTxt = f.areaHa != null ? `${f.areaHa} ${haLabel}` : `— ${haLabel}`;
+      let tooltip = `<b>${f.code}</b> · ${f.name || f.code}<br/>${areaTxt} · ${f.municipality || "—"}`;
       if (obs) {
         if (colorMode === "anomaly") fill = anomalyColor(obs.scores[model]);
         else if (colorMode === "indicator") {
@@ -122,12 +141,12 @@ export default function MapView({ colorMode, model, indicator, dateIdx, opacity,
           const norm = indicator === "ndvi" || indicator === "evi" ? v : indicator === "tvdi" || indicator === "cwsi" ? v : Math.max(0, Math.min(1, v));
           fill = norm > 0.65 ? "#be123c" : norm > 0.5 ? "#ea580c" : norm > 0.35 ? "#d97706" : "#0f766e";
           if (indicator === "ndvi" || indicator === "evi" || indicator === "savi") fill = norm > 0.6 ? "#15803d" : norm > 0.45 ? "#65a30d" : norm > 0.3 ? "#d97706" : "#be123c";
-        } else if (colorMode === "health") fill = f.baselineHealth > 0.8 ? "#15803d" : f.baselineHealth > 0.65 ? "#65a30d" : "#d97706";
+        } else if (colorMode === "health") fill = f.baselineHealth == null ? "#94a3b8" : f.baselineHealth > 0.8 ? "#15803d" : f.baselineHealth > 0.65 ? "#65a30d" : "#d97706";
         else if (colorMode === "lisa") {
           const neighbourScores = f.neighbors.map(nid => getSeries(nid)[idx]?.scores[model]).filter((v): v is number => typeof v === "number");
           const nbAvg = neighbourScores.reduce((s, v) => s + v, 0) / Math.max(1, neighbourScores.length);
           const self = obs.scores[model];
-          const hi = self > 0.5, nhi = nbAvg > 0.5;
+          const hi = self != null && self > 0.5, nhi = nbAvg > 0.5;
           fill = hi && nhi ? "#be123c" : hi && !nhi ? "#2563eb" : !hi && nhi ? "#7c3aed" : "#94a3b8";
         }
         const scoreVal = obs.scores?.[model];
@@ -139,6 +158,10 @@ export default function MapView({ colorMode, model, indicator, dateIdx, opacity,
       const poly = L.polygon(f.polygon, {
         color: isSel ? "#0f172a" : "#ffffff",
         weight: isSel ? 2.5 : 1.2,
+        // Stroke opacity follows the same slider as the fill so 0 truly hides
+        // the layer (the old hard-coded full-opacity stroke kept white outlines
+        // visible at 0) — task 6.2.
+        opacity,
         fillColor: fill,
         fillOpacity: opacity * (isSel ? 1 : 0.82),
       }).addTo(layer);
@@ -148,7 +171,7 @@ export default function MapView({ colorMode, model, indicator, dateIdx, opacity,
         L.circleMarker(f.centroid, { radius: 5, color: "#0f172a", fillColor: "#fff", fillOpacity: 1, weight: 2 }).addTo(layer);
       }
     });
-  }, [colorMode, model, indicator, dateIdx, opacity, selectedField, toggleField, t]);
+  }, [colorMode, model, indicator, dateIdx, opacity, showFields, selectedField, toggleField, t]);
 
   return <div ref={ref} dir="ltr" style={{ height, width: "100%", zIndex: 0 }} className="bg-slate-100 dark:bg-slate-800" />;
 }

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { ComposedChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Brush, Legend, Area } from "recharts";
 import { Panel, Label, Select, Badge, EmptyState } from "../components/ui";
 import { useAnalysis } from "../context/AnalysisContext";
-import { FIELDS, MODELS, INDICATORS, getSeries, DATES, LAST_IDX, ANOMALY_THRESHOLD, type ModelId, type IndicatorId } from "../data/mock";
+import { FIELDS, MODELS, INDICATORS, getSeries, DATES, LAST_IDX, ANOMALY_THRESHOLD, type ModelId, type IndicatorId } from "../data/data";
 import { useLocale, useT } from "../i18n";
 
 const VAR_COLORS: Record<string, string> = { ndvi: "#16a34a", evi: "#65a30d", savi: "#059669", ndmi: "#0891b2", tvdi: "#ea580c", cwsi: "#dc2626", eta: "#0284c7", lst: "#9333ea", precip: "#64748b", temp: "#b45309" };
@@ -151,7 +151,7 @@ export default function Temporal() {
                   <Tooltip content={
   (p: any) => p.active && p.payload && p.payload.length ? (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-1.5 text-[11px] shadow-sm">
-      <div className="font-medium">{t("map.inspector.stale", { reason: "", sample: p.payload[0]?.payload?.sampleDate ?? "", acquired: p.payload[0]?.payload?.acquisitionDate ?? "" }) !== undefined ? p.payload[0]?.payload?.sampleDate ?? "" : ""}</div>
+      <div className="font-medium">{p.payload[0]?.payload?.sampleDate ?? ""}</div>
       <div className="text-slate-400">{p.payload[0]?.payload?.acquisitionDate ? t("map.inspector.acquired", { sample: p.payload[0]?.payload?.sampleDate ?? "", acquired: p.payload[0]?.payload?.acquisitionDate ?? "" }) : ""}</div>
       {p.payload.map((e: any) => (
         <div key={String(e.dataKey)}>

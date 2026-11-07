@@ -10,9 +10,14 @@ the platform map:
 Only stdlib http.server is used (no Flask/FastAPI); rasterio WarpedVRT does the
 reprojection per tile request and open datasets are kept in an LRU cache so a
 pan across one scene does not reopen the GeoTIFFs (design decision 1 / risk
-mitigation in add-rgb-ndvi-tile-layer). Zoom is clamped to 8-14; requests
-outside that range, unknown dates and unavailable layers get 404, which the
-frontend treats as "tile absent" and renders nothing (graceful degradation).
+mitigation in add-rgb-ndvi-tile-layer). Each cached dataset carries its own
+lock held across GDAL reads, so the concurrent requests a browser map issues
+cannot crash the process (wire-platform-to-real-data decision 1). Zoom is
+clamped to 8-14; requests outside that range, unknown dates and unavailable
+layers get a 404 with a transparent image/png body (never JSON, which <img>
+consumers ORB-block), which the frontend treats as "tile absent" and renders
+nothing (graceful degradation). HEAD is supported on all routes and successful
+tiles carry Cache-Control: max-age=3600.
 
 Usage:
     python scripts/serve_tiles.py \
@@ -75,11 +80,19 @@ def tile_bounds(z: int, x: int, y: int) -> tuple[float, float, float, float]:
 
 
 class WarpedBand:
-    """One band GeoTIFF plus its EPSG:3857 WarpedVRT (closed together)."""
+    """One band GeoTIFF plus its EPSG:3857 WarpedVRT (closed together).
+
+    ``lock`` guards the GDAL handle itself: ThreadingHTTPServer serves one
+    thread per request and a shared WarpedVRT read concurrently from two
+    threads faults the whole process with a native access violation
+    (0xC0000005). Every read of ``vrt`` holds this lock (wire-platform-to-
+    real-data decision 1).
+    """
 
     def __init__(self, path: Path):
         self.src = rasterio.open(path)
         self.vrt = WarpedVRT(self.src, crs="EPSG:3857", resampling=Resampling.bilinear)
+        self.lock = threading.Lock()
 
     def close(self) -> None:
         try:
@@ -112,20 +125,25 @@ class BandCache:
             self._entries[key] = opened
             while len(self._entries) > self.maxsize:
                 _, evicted = self._entries.popitem(last=False)
-                try:
-                    evicted.close()
-                except Exception:
-                    pass
+                self._close(evicted)
             return opened
+
+    @staticmethod
+    def _close(band: WarpedBand) -> None:
+        # Take the band's read lock so an in-flight tile render finishes
+        # before its GDAL handles are closed (lock order is always
+        # cache lock -> band lock, so this cannot deadlock).
+        with band.lock:
+            try:
+                band.close()
+            except Exception:
+                pass
 
     def close_all(self) -> None:
         with self._lock:
             while self._entries:
                 _, evicted = self._entries.popitem()
-                try:
-                    evicted.close()
-                except Exception:
-                    pass
+                self._close(evicted)
 
 
 def read_vrt_window(vrt, xmin: float, ymin: float, xmax: float, ymax: float) -> np.ndarray:
@@ -210,8 +228,15 @@ def encode_png(rgba: np.ndarray) -> bytes:
         return mem.read()
 
 
+# Fully transparent 256x256 PNG: the body of every tile-route error response.
+# Leaflet loads tiles via <img>, so JSON error bodies get ORB-blocked
+# (net::ERR_BLOCKED_BY_ORB); an image-typed transparent body renders as
+# "tile absent" instead (wire-platform-to-real-data decision 2).
+TRANSPARENT_TILE_PNG = encode_png(np.zeros((TILE_SIZE, TILE_SIZE, 4), dtype="uint8"))
+
+
 class TileRequestHandler(BaseHTTPRequestHandler):
-    server_version = "AgriTileServer/1.0"
+    server_version = "AgriTileServer/1.1"
     protocol_version = "HTTP/1.1"
 
     # Populated by serve() on the server object.
@@ -220,19 +245,39 @@ class TileRequestHandler(BaseHTTPRequestHandler):
     cache: BandCache | None = None
     index_payload: bytes = b""
 
-    def _send(self, status: int, body: bytes, content_type: str) -> None:
+    def _send(self, status: int, body: bytes, content_type: str, cacheable: bool = False) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         # Allow fetch() from the vite dev origin (tiles are plain <img> for Leaflet).
         self.send_header("Access-Control-Allow-Origin", "*")
+        if cacheable:
+            # Scenes are immutable once written, so browsers/Leaflet may reuse
+            # a tile for an hour instead of re-requesting on every pan.
+            self.send_header("Cache-Control", "max-age=3600")
         self.end_headers()
-        self.wfile.write(body)
+        if self.command != "HEAD":
+            self.wfile.write(body)
 
     def _send_json(self, status: int, payload) -> None:
         self._send(status, json.dumps(payload).encode("utf-8"), "application/json")
 
+    def _send_tile_error(self, status: int, reason: str) -> None:
+        # Tile routes are consumed by <img>: answer with a transparent PNG so
+        # the browser treats it as "tile absent" instead of ORB-blocking a
+        # JSON body. The reason is only logged server-side.
+        print(f"[serve_tiles] {status} {self.path} ({reason})", flush=True)
+        self._send(status, TRANSPARENT_TILE_PNG, "image/png")
+
     def do_GET(self) -> None:  # noqa: N802 (http.server API)
+        self._handle_request()
+
+    def do_HEAD(self) -> None:  # noqa: N802 (http.server API)
+        # Mirror GET status and headers with no body (Content-Length is still
+        # sent, as HEAD semantics require).
+        self._handle_request()
+
+    def _handle_request(self) -> None:
         path = urlparse(self.path).path
         if path == "/scenes":
             self._send(200, self.index_payload, "application/json")
@@ -244,25 +289,25 @@ class TileRequestHandler(BaseHTTPRequestHandler):
         date, layer, zs, xs, ys = match.groups()
         z, x, y = int(zs), int(xs), int(ys)
         if not (MIN_Z <= z <= MAX_Z):
-            self._send_json(404, {"error": f"zoom {z} outside {MIN_Z}-{MAX_Z}"})
+            self._send_tile_error(404, f"zoom {z} outside {MIN_Z}-{MAX_Z}")
             return
         candidates = self.scenes_by_date.get(date, [])
         if not candidates:
-            self._send_json(404, {"error": f"unknown scene date {date}"})
+            self._send_tile_error(404, f"unknown scene date {date}")
             return
         scene = next((s for s in candidates if s.get(f"has_{layer}")), None)
         if scene is None:
-            self._send_json(404, {"error": f"scene {date} has no {layer} bands"})
+            self._send_tile_error(404, f"scene {date} has no {layer} bands")
             return
         try:
             png = self._render_tile(scene["dir"], date, layer, z, x, y)
         except FileNotFoundError as exc:
-            self._send_json(404, {"error": f"missing band file: {exc}"})
+            self._send_tile_error(404, f"missing band file: {exc}")
             return
         except Exception as exc:  # pragma: no cover — defensive, keeps server alive
-            self._send_json(500, {"error": f"{type(exc).__name__}: {exc}"})
+            self._send_tile_error(500, f"{type(exc).__name__}: {exc}")
             return
-        self._send(200, png, "image/png")
+        self._send(200, png, "image/png", cacheable=True)
 
     def _render_tile(self, scene_dir: Path, date: str, layer: str, z: int, x: int, y: int) -> bytes:
         xmin, ymin, xmax, ymax = tile_bounds(z, x, y)
@@ -270,7 +315,10 @@ class TileRequestHandler(BaseHTTPRequestHandler):
         bands = {}
         for band in band_names:
             warped = self.cache.get(scene_dir, band)  # type: ignore[union-attr]
-            bands[band] = read_vrt_window(warped.vrt, xmin, ymin, xmax, ymax)
+            # Hold the handle's own lock across the GDAL read: concurrent
+            # reads on one shared WarpedVRT crash the process (0xC0000005).
+            with warped.lock:
+                bands[band] = read_vrt_window(warped.vrt, xmin, ymin, xmax, ymax)
         rgba = render_rgb(bands) if layer == "rgb" else render_ndvi(bands)
         return encode_png(rgba)
 

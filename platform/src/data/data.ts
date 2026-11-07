@@ -4,6 +4,8 @@
 //   series_khuzestan.json  — 48 monthly observations per field (2021-01 … 2024-12)
 // The series file used to be exported but never imported (the views generated
 // synthetic values with a seeded RNG instead). It is now the single data source.
+// (Renamed from mock.ts: this is the typed loader for real pipeline output,
+// not mock data — wire-platform-to-real-data task 4.3.)
 import farmsKhuzestanData from './farms_khuzestan.json';
 import khuSeries from './series_khuzestan.json';
 import { CHANNELS, SCORES, type ChannelSpec, type ScoreProvenanceState } from './channels';
@@ -94,21 +96,26 @@ export const INDICATORS: IndicatorDef[] = CHANNELS.map((c: ChannelSpec) => ({
 
 export const indicatorById = (id: IndicatorId) => INDICATORS.find(i => i.id === id) || INDICATORS[0];
 
+/**
+ * Field attributes come straight from the registry (`farms.parquet`). A value
+ * the registry does not have is `null` — the UI renders a "not recorded" state
+ * instead of substituting an invented default (wire-platform-to-real-data:
+ * "no synthesized strings in the payload").
+ */
 export interface Field {
   id: string;
   code: string;
   name: string;
   farm: string;
   municipality: string;
-  block?: string;
-  areaHa: number;
-  variety: string;
+  block: string | null;
+  areaHa: number | null;
+  variety: string | null;
   planted: string | null;
   harvest: string | null;
   centroid: [number, number];
   polygon: [number, number][]; // [lat, lng]
-  baselineHealth: number;
-  stressEvent: { startIdx: number; endIdx: number; severity: number } | null;
+  baselineHealth: number | null;
   neighbors: string[];
   contractVersion?: number;
 }
@@ -118,27 +125,26 @@ type RawFarm = {
   id?: string; code?: string; name?: string; farm?: string; municipality?: string; block?: string;
   areaHa?: number; variety?: string; planted?: string | null; harvest?: string | null;
   centroid?: [number, number]; polygon?: [number, number][]; baselineHealth?: number;
-  stressEvent?: Field['stressEvent']; neighbors?: string[]; contractVersion?: number;
+  neighbors?: string[]; contractVersion?: number;
 };
 
 export const KHUZESTAN_CENTROID: [number, number] = [31.0217, 48.2794];
 
 export const FIELDS: Field[] = ((farmsKhuzestanData ?? []) as unknown as RawFarm[]).map((f, i) => ({
   id: f.id ?? `F-${String(i + 1).padStart(3, '0')}`,
-  code: f.code ?? `L${String(i + 1).padStart(2, '0')}`,
-  name: f.name ?? `Field ${i + 1}`,
-  farm: f.farm ?? 'Khuzestan Unit',
-  municipality: f.municipality ?? 'Khuzestan',
-  block: f.block || 'R01',
-  areaHa: typeof f.areaHa === 'number' ? f.areaHa : 25,
-  variety: f.variety || 'CP69-1062',
+  code: f.code ?? '',
+  name: f.name ?? '',
+  farm: f.farm ?? '',
+  municipality: f.municipality ?? '',
+  block: f.block || null,
+  areaHa: typeof f.areaHa === 'number' && Number.isFinite(f.areaHa) ? f.areaHa : null,
+  variety: f.variety || null,
   planted: f.planted ?? null,
   contractVersion: f.contractVersion ?? 3,
   harvest: f.harvest ?? null,
   centroid: f.centroid ?? KHUZESTAN_CENTROID,
   polygon: f.polygon ?? [],
-  baselineHealth: f.baselineHealth || 0.65,
-  stressEvent: f.stressEvent ?? null,
+  baselineHealth: typeof f.baselineHealth === 'number' && Number.isFinite(f.baselineHealth) ? f.baselineHealth : null,
   neighbors: f.neighbors ?? [],
 }));
 
@@ -150,9 +156,9 @@ export const isLegacyPayload = !FIELDS.length
   : (farmsKhuzestanData as any[]).some(f => (f?.contractVersion ?? 0) < 3);
 
 const PLACEHOLDER_FIELD: Field = {
-  id: '', code: '—', name: '—', farm: '—', municipality: '—', block: '—', areaHa: 0,
-  variety: '—', planted: null, harvest: null, centroid: KHUZESTAN_CENTROID, polygon: [],
-  baselineHealth: 0, stressEvent: null, neighbors: [],
+  id: '', code: '—', name: '—', farm: '—', municipality: '—', block: null, areaHa: null,
+  variety: null, planted: null, harvest: null, centroid: KHUZESTAN_CENTROID, polygon: [],
+  baselineHealth: null, neighbors: [],
 };
 
 /**
@@ -194,7 +200,7 @@ export const dateAt = (i: number) => DATES[clampIdx(i)] ?? "";
 // provenance map: STS-Net / Tiny-CNN-Mamba / Time2Agri come from trained
 // checkpoints when available, everything else from the CWSI proxy rule (see
 // scripts/load_model_checkpoints.py and BUG-23). `scoresAreProxy` is derived
-// from the payload so the "Demonstration data" labelling stays honest.
+// from the payload so the pipeline-output labelling stays honest.
 const payloadHasModelScores = Object.values(SERIES).some(arr =>
   Array.isArray(arr) &&
   arr.some(o => {
@@ -247,7 +253,9 @@ export interface Obs {
   lst: number | null;
   precip: number | null;
   temp: number | null;
-  scores: Record<ModelId, number>;
+  /** Null when no score exists (no acquisition / absent provenance) — never a
+   * substituted constant. Charts skip null points. */
+  scores: Record<ModelId, number | null>;
   /** Per-score provenance (contract v3): "model" | "proxy" | "absent". */
   scoreProvenance: Record<ModelId, ScoreProvenanceState> | null;
   /** Per-score formula id: checkpoint id for "model", "cwsi_affine_v1" for proxy. */
@@ -256,7 +264,6 @@ export interface Obs {
   scoreCollinearity: string | null;
 }
 
-const NUMERIC_FALLBACK = 0.5;
 const SCORE_KEYS = MODELS.map(m => m.id);
 const CHANNEL_KEYS: (keyof ObsProvenance)[] = ['ndvi', 'evi', 'savi', 'ndmi', 'tvdi', 'cwsi', 'eta', 'lst', 'precip', 'temp'];
 
@@ -281,23 +288,30 @@ export function value(obs: Obs | undefined | null, channel: keyof ObsProvenance)
 function normaliseObs(raw: unknown, idx: number): Obs {
   const o = (raw ?? {}) as Record<string, unknown>;
   const rawScores = o.scores as Record<string, unknown> | null | undefined;
-  const nums = {} as Record<ModelId, number>;
+  const nums = {} as Record<ModelId, number | null>;
   SCORE_KEYS.forEach(k => {
     const v = rawScores?.[k];
-    nums[k] = typeof v === "number" && Number.isFinite(v) ? v : NUMERIC_FALLBACK;
+    nums[k] = typeof v === "number" && Number.isFinite(v) ? v : null;
   });
   const num = (key: string): number | null => {
     const v = o[key];
     return typeof v === "number" && Number.isFinite(v) ? v : null;
   };
   const prov = (o.provenance ?? {}) as Partial<ObsProvenance>;
-  const defaultProv: ObsProvenance = {
+  const provenance: ObsProvenance = {
     ndvi: 'absent', evi: 'absent', savi: 'absent', ndmi: 'absent', tvdi: 'absent',
     cwsi: 'absent', eta: 'absent', lst: 'absent', precip: 'absent', temp: 'absent',
   };
   for (const k of CHANNEL_KEYS) {
     const pv = prov[k];
-    if (pv) defaultProv[k] = pv;
+    if (pv) provenance[k] = pv;
+  }
+  // A null channel is "absent" no matter what the payload (or channel registry
+  // default) claims — a "Modelled" chip next to a "—" value misrepresents the
+  // data (spec: null is never labelled modelled/measured).
+  for (const k of CHANNEL_KEYS) {
+    const v = num(k);
+    if (v == null) provenance[k] = 'absent';
   }
   // Score provenance (contract v3) — defaults come from the score registry so
   // pre-v3 payloads keep an honest labelling of their proxy scores.
@@ -335,7 +349,7 @@ function normaliseObs(raw: unknown, idx: number): Obs {
     scores: nums,
     scoreProvenance: scoreProv,
     scoreFormulaId: scoreFormula,
-    provenance: defaultProv,
+    provenance,
     scoreCollinearity: typeof o.scoreCollinearity === "string" ? o.scoreCollinearity : null,
   };
 }
@@ -467,21 +481,34 @@ export function partialCorr(xs: number[], ys: number[], zs: number[]): number {
   return den ? (rxy - rxz * ryz) / den : NaN;
 }
 
-export function moransI(values: number[], weights: Map<string, string[]>): number {
-  const n = values.length;
-  const m = mean(values);
+/**
+ * Moran's I over areal units. Complete-case: pairs where either value is
+ * missing are *skipped*, not folded in as fabricated zeros (the old
+ * `?? 0` substitution in Spatial.tsx biased the statistic toward 0).
+ */
+export function moransI(values: (number | null)[], weights: Map<string, string[]>): number {
+  const vals = values.map(v => (typeof v === "number" && Number.isFinite(v) ? v : NaN));
+  const finite = vals.filter(v => Number.isFinite(v));
+  if (finite.length < 2) return NaN;
+  const m = mean(finite);
   let num = 0, den = 0, wsum = 0;
-  values.forEach(v => { den += (v - m) ** 2; });
+  vals.forEach(v => {
+    if (Number.isFinite(v)) den += (v - m) ** 2;
+  });
   weights.forEach((nbs, iStr) => {
     const i = parseInt(iStr, 10);
+    const vi = vals[i];
+    if (!Number.isFinite(vi)) return;
     nbs.forEach(jStr => {
       const j = parseInt(jStr, 10);
-      num += (values[i] - m) * (values[j] - m);
+      const vj = vals[j];
+      if (!Number.isFinite(vj)) return;
+      num += (vi - m) * (vj - m);
       wsum++;
     });
   });
   if (!den || !wsum) return NaN;
-  return (n / wsum) * (num / den);
+  return (finite.length / wsum) * (num / den);
 }
 
 export function getPairs(model: ModelId, indicator: IndicatorId, fieldIds: string[], range: [number, number]) {

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { ScatterChart, Scatter, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Line, ComposedChart, ReferenceLine } from "recharts";
 import { Panel, Label, Select, Stat, EmptyState } from "../components/ui";
 import { useAnalysis } from "../context/AnalysisContext";
-import { MODELS, INDICATORS, FIELDS, getPairs, pearson, spearman, linReg, laggedCorr, DATES, LAST_IDX, FIELDS_WITH_SERIES } from "../data/mock";
+import { MODELS, INDICATORS, FIELDS, getPairs, pearson, spearman, linReg, laggedCorr, DATES, LAST_IDX, FIELDS_WITH_SERIES } from "../data/data";
 import { useLocale, useT } from "../i18n";
 
 export default function Spectral() {

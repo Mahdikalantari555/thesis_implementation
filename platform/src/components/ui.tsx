@@ -39,22 +39,23 @@ export function Badge({ children, color, title }: { children: React.ReactNode; c
 }
 
 /**
- * Data-provenance badge. The bug audit requires that every view rendering the
- * demonstration series carries an explicit marker (spec: "Demo badge present"),
- * so this component is the single visual source of that claim.
+ * Data-provenance badge. Every view rendering the pipeline payload carries an
+ * explicit marker of where its values come from and their validation status
+ * (wire-platform-to-real-data: the old "Demonstration data" wording
+ * misrepresented real pipeline output as demo data).
  */
-export function DemoDataBadge({ className }: { className?: string }) {
+export function PipelineDataBadge({ className }: { className?: string }) {
   const t = useT();
   return (
     <span
-      title={t("ui.demoBadgeTitle")}
+      title={t("ui.pipelineBadgeTitle")}
       className={cn(
-        "inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 border border-amber-500/40 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40",
+        "inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 border border-teal-600/40 text-teal-800 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/40",
         className
       )}
     >
       <FlaskConical size={10} aria-hidden="true" />
-      {t("ui.demoBadge")}
+      {t("ui.pipelineBadge")}
     </span>
   );
 }

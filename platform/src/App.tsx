@@ -10,7 +10,7 @@ import Spatial from "./views/Spatial";
 import Reports from "./views/Reports";
 import { LayoutDashboard, Map as MapIcon, Activity, ScatterChart, ShieldCheck, GitCompareArrows, Globe2, FileText, Sun, Moon, Sprout, X, FlaskConical } from "lucide-react";
 import { cn } from "./utils/cn";
-import { MODELS, INDICATORS, DATES, FIELDS, COVERAGE, DATA_PROVENANCE } from "./data/mock";
+import { MODELS, INDICATORS, DATES, FIELDS, COVERAGE, DATA_PROVENANCE } from "./data/data";
 import { useLocale, useT, LOCALES, type Locale } from "./i18n";
 
 const NAV = [

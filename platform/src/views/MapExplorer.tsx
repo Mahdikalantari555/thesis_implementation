@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from "recharts";
 import MapView from "../components/MapView";
-import { Panel, Badge, Label, Select, DemoDataBadge, EmptyState, anomalyColor, fmtObs, ProvenanceChip, LegacyPayloadNotice } from "../components/ui";
+import { Panel, Badge, Label, Select, PipelineDataBadge, EmptyState, anomalyColor, fmtObs, ProvenanceChip, LegacyPayloadNotice } from "../components/ui";
 import { useAnalysis, DEFAULT_DATE_IDX } from "../context/AnalysisContext";
-import { FIELDS, MODELS, INDICATORS, getSeries, fieldById, DATES, LAST_IDX, ANOMALY_THRESHOLD, mean, COVERAGE, monthAt, clampIdx, isLegacyPayload } from "../data/mock";
+import { FIELDS, MODELS, INDICATORS, getSeries, fieldById, DATES, LAST_IDX, ANOMALY_THRESHOLD, mean, COVERAGE, monthAt, clampIdx, isLegacyPayload } from "../data/data";
 import { useLocale, useT } from "../i18n";
 import scenesIndexData from "../data/scenes_index.json";
 import { Eye, EyeOff, Search, GitCompareArrows } from "lucide-react";
@@ -34,7 +34,6 @@ export default function MapExplorer() {
   const [query, setQuery] = useState("");
   const [compareIdx, setCompareIdx] = useState(clampIdx(DEFAULT_DATE_IDX - 12 >= 0 ? DEFAULT_DATE_IDX - 12 : 0));
   const [showCompare, setShowCompare] = useState(false);
-  const [rasterScene, setRasterScene] = useState("");
   const [rasterLayer, setRasterLayer] = useState<"rgb" | "ndvi">("rgb");
   const [rasterOpacity, setRasterOpacity] = useState(0.7);
 
@@ -44,9 +43,16 @@ export default function MapExplorer() {
   const safeCompareIdx = clampIdx(compareIdx);
   const obs = series[safeDateIdx];
 
-  // Raster overlay state — active only when a scene is picked and it actually
-  // carries the bands for the chosen layer (the tile server 404s otherwise).
-  const rasterSceneEntry = useMemo(() => SCENES.find(s => s.date === rasterScene), [rasterScene]);
+  // One date control drives both layers: the observation-date slider selects
+  // the field series point, and the raster overlay shows that observation's
+  // *real* Landsat acquisition (the scenes_index entry for the same date).
+  // When the observation has no acquisition (staleness guard) or the scene
+  // lacks the requested bands, the overlay stays off (wire-platform-to-real-
+  // data task 6.3 — the separate "Landsat raster scene" select was removed).
+  const rasterSceneEntry = useMemo(
+    () => (obs?.acquisitionDate ? SCENES.find(s => s.date === obs.acquisitionDate) ?? null : null),
+    [obs?.acquisitionDate]
+  );
   const rasterLayerActive = useMemo<"rgb" | "ndvi" | null>(() => {
     if (!rasterSceneEntry) return null;
     if (rasterLayer === "rgb" && rasterSceneEntry.has_rgb) return "rgb";
@@ -55,6 +61,7 @@ export default function MapExplorer() {
     if (rasterSceneEntry.has_ndvi) return "ndvi";
     return null;
   }, [rasterSceneEntry, rasterLayer]);
+  const rasterDate = rasterLayerActive ? obs?.acquisitionDate ?? null : null;
 
   const chartData = series.map(o => ({
     date: o.date.slice(0, 7),
@@ -62,7 +69,10 @@ export default function MapExplorer() {
     ind: (() => { const v = (o as unknown as Record<string, number | null>)[indicator]; return v != null && Number.isFinite(v) ? +Number(v).toFixed(3) : null; })(),
   }));
 
-  const filtered = useMemo(() => FIELDS.filter(f => (f.code + f.name + f.municipality + f.farm).toLowerCase().includes(query.toLowerCase())), [query]);
+  const filtered = useMemo(
+    () => FIELDS.filter(f => `${f.code} ${f.name} ${f.municipality} ${f.farm}`.toLowerCase().includes(query.toLowerCase())),
+    [query]
+  );
   const selectedStats = useMemo(() => {
     const vals = selectedFields.map(fid => getSeries(fid)[safeDateIdx]?.scores[model]).filter((v): v is number => typeof v === "number");
     if (!vals.length) return { mean: NaN, max: NaN, min: NaN };
@@ -109,17 +119,6 @@ export default function MapExplorer() {
                 ))}
               </Select>
             </div>
-            <div>
-              <Label>{t("map.layer.rasterScene")}</Label>
-              <Select value={rasterScene} onChange={setRasterScene} className="w-full">
-                <option value="">{t("map.layer.rasterOff")}</option>
-                {SCENES.map(s => (
-                  <option key={s.date} value={s.date}>
-                    {s.date}
-                  </option>
-                ))}
-              </Select>
-            </div>
             {rasterSceneEntry && (
               <>
                 <div>
@@ -133,6 +132,9 @@ export default function MapExplorer() {
                   <Label>{t("map.layer.rasterOpacity", { value: fmt.number(rasterOpacity, 2) })}</Label>
                   <input type="range" min={0} max={1} step={0.05} value={rasterOpacity} onChange={e => setRasterOpacity(+e.target.value)} aria-label={t("map.layer.rasterOpacity", { value: fmt.number(rasterOpacity, 2) })} className="w-full accent-teal-700" />
                 </div>
+                <div className="text-[10px] text-slate-400 font-mono" dir="ltr">
+                  {t("map.layer.rasterSceneDate", { date: rasterSceneEntry.date })}
+                </div>
               </>
             )}
             <div className="text-[10px] text-slate-400">{t("map.layer.rasterNote")}</div>
@@ -140,7 +142,9 @@ export default function MapExplorer() {
               <Label>
                 {t("map.layer.observationDate", { date: monthAt(safeDateIdx) })} {obs?.missing && <span className="text-orange-600">{t("field.missing")}</span>}
               </Label>
-              {/* Slider bounds are derived from the shared date axis (BUG-01). */}
+              {/* Slider bounds are derived from the shared date axis (BUG-01).
+                  This single slider drives both the field series and the raster
+                  overlay (task 6.3). */}
               <input type="range" min={0} max={LAST_IDX} value={safeDateIdx} onChange={e => setDateIdx(+e.target.value)} aria-label={t("map.layer.rangeStart")} className="w-full accent-teal-700" />
               <div className="flex justify-between text-[10px] text-slate-400">
                 <span>{COVERAGE.first}</span>
@@ -149,7 +153,9 @@ export default function MapExplorer() {
             </div>
             <div>
               <Label>{t("map.layer.opacity", { value: fmt.number(opacity, 2) })}</Label>
-              <input type="range" min={0.2} max={1} step={0.05} value={opacity} onChange={e => setOpacity(+e.target.value)} aria-label={t("map.layer.opacity", { value: fmt.number(opacity, 2) })} className="w-full accent-teal-700" />
+              {/* min 0: the field layer must be fadable to invisible (task 6.2);
+                  full removal is the Hide toggle next to it. */}
+              <input type="range" min={0} max={1} step={0.05} value={opacity} onChange={e => setOpacity(+e.target.value)} aria-label={t("map.layer.opacity", { value: fmt.number(opacity, 2) })} className="w-full accent-teal-700" />
             </div>
             <div className="flex items-center justify-between text-[12px]">
               <span className="flex items-center gap-1.5">
@@ -234,14 +240,14 @@ export default function MapExplorer() {
                   onClick={() => toggleField(f.id)}
                   className={`w-full flex items-center gap-2 px-3 py-2 text-start text-[11px] hover:bg-slate-50 dark:hover:bg-slate-800/60 ${f.id === selectedField ? "bg-teal-50 dark:bg-teal-950/40" : ""}`}
                 >
-                  <span className="w-2 h-2 shrink-0" style={{ background: s === undefined ? "#cbd5e1" : anomalyColor(s) }} />
+                  <span className="w-2 h-2 shrink-0" style={{ background: s == null ? "#cbd5e1" : anomalyColor(s) }} />
                   <span className="flex-1 min-w-0">
                     <span className="block font-mono font-medium">{f.code}</span>
                     <span className="block text-slate-500 truncate">
-                      {f.municipality} · {f.areaHa} {t("map.tooltip.ha")}
+                      {f.municipality} · {f.areaHa != null ? f.areaHa : "—"} {t("map.tooltip.ha")}
                     </span>
                   </span>
-                  <span className="font-mono">{s === undefined ? "—" : fmt.number(s, 2)}</span>
+                  <span className="font-mono">{s == null ? "—" : fmt.number(s, 2)}</span>
                 </button>
               );
             })}
@@ -256,14 +262,13 @@ export default function MapExplorer() {
           title={t("map.canvas.title", { date: monthAt(safeDateIdx) })}
           subtitle={t("map.canvas.subtitle", { fields: fmt.integer(FIELDS.length), selected: fmt.integer(selectedFields.length) })}
           pad={false}
-          right={<DemoDataBadge />}
+          right={<PipelineDataBadge />}
         >
           <div className="h-[520px] relative">
-            {showFields ? (
-              <MapView colorMode={colorMode} model={model} indicator={indicator} dateIdx={safeDateIdx} opacity={opacity} rasterDate={rasterLayerActive ? rasterScene : null} rasterLayer={rasterLayerActive} rasterOpacity={rasterOpacity} height="520px" />
-            ) : (
-              <div className="h-full flex items-center justify-center text-[12px] text-slate-500">{t("map.canvas.hidden")}</div>
-            )}
+            {/* MapView stays mounted when field boundaries are hidden: only the
+                polygon layer is removed, the basemap + raster overlay remain
+                visible (task 6.1 — the whole map used to disappear here). */}
+            <MapView colorMode={colorMode} model={model} indicator={indicator} dateIdx={safeDateIdx} opacity={opacity} showFields={showFields} rasterDate={rasterDate} rasterLayer={rasterLayerActive} rasterOpacity={rasterOpacity} height="520px" />
             <div className="absolute top-3 start-3 z-[500] bg-white/95 dark:bg-slate-900/95 border border-slate-200 dark:border-slate-700 px-3 py-2 text-[11px] shadow-sm">
               <div className="font-semibold">
                 {t(`model.${model}.name`)} · {monthAt(safeDateIdx)}
@@ -292,12 +297,14 @@ export default function MapExplorer() {
         <Panel title={t("map.inspector.title")} subtitle={field.code}>
           <dl className="text-[12px] space-y-1.5">
             {[
-              [t("field.farm"), field.farm],
-              [t("field.municipality"), field.municipality],
-              [t("field.area"), `${field.areaHa} ${t("map.tooltip.ha")}`],
-              [t("field.variety"), field.variety],
-              [t("field.planted"), field.planted],
-              [t("field.harvest"), field.harvest],
+              // Registry values verbatim; a missing registry entry renders the
+              // not-recorded state "—" rather than an invented default.
+              [t("field.farm"), field.farm || "—"],
+              [t("field.municipality"), field.municipality || "—"],
+              [t("field.area"), field.areaHa != null ? `${field.areaHa} ${t("map.tooltip.ha")}` : "—"],
+              [t("field.variety"), field.variety || "—"],
+              [t("field.planted"), field.planted || "—"],
+              [t("field.harvest"), field.harvest || "—"],
               [t("field.centroid"), `${field.centroid[0].toFixed(4)}, ${field.centroid[1].toFixed(4)}`],
               [t("field.neighbours"), field.neighbors.join(", ") || "—"],
             ].map(([k, v]) => (
@@ -311,7 +318,7 @@ export default function MapExplorer() {
             <div className="bg-white dark:bg-slate-900 p-2">
               <div className="text-[9px] uppercase text-slate-400">{t("field.score")}</div>
               <div className="text-[13px] font-semibold" style={{ color: obs ? anomalyColor(obs.scores[model]) : "#64748b" }}>
-                {obs ? <bdi>{fmt.number(obs.scores[model], 3)}</bdi> : "—"}
+                {obs ? <bdi>{fmt.number(obs.scores[model] ?? NaN, 3)}</bdi> : "—"}
               </div>
               {obs?.scoreProvenance && (
                 <div className="mt-0.5 flex justify-center">
@@ -346,15 +353,6 @@ export default function MapExplorer() {
               {Object.entries(obs.provenance).map(([ch, st]) => (
                 <ProvenanceChip key={ch} state={st as any} title={`${ch}: ${st}`} />
               ))}
-            </div>
-          )}
-          {field.stressEvent && DATES[field.stressEvent.startIdx] && DATES[field.stressEvent.endIdx] && (
-            <div className="mt-3 text-[11px] border border-orange-200 bg-orange-50 dark:bg-orange-950/30 dark:border-orange-900 p-2 text-orange-800 dark:text-orange-200">
-              {t("map.inspector.stressEvent", {
-                from: DATES[field.stressEvent.startIdx].slice(0, 7),
-                to: DATES[field.stressEvent.endIdx].slice(0, 7),
-                severity: fmt.number(field.stressEvent.severity, 2),
-              })}
             </div>
           )}
           <div className="mt-3 flex gap-2">

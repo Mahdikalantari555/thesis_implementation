@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useMemo, useState } from "react";
-import type { IndicatorId, ModelId } from "../data/mock";
-import { DATES, FIELDS, LAST_IDX } from "../data/mock";
+import type { IndicatorId, ModelId } from "../data/data";
+import { DATES, FIELDS, LAST_IDX } from "../data/data";
 
 export interface Experiment {
   id: string;

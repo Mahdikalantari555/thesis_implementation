@@ -307,25 +307,28 @@ tokenizer, not cycle inputs) → proxy formula labelled `proxy`; artifact fails 
 `--no-models` forces the all-proxy path for deterministic tests. `DATA_PROVENANCE.
 scoresAreProxy` is now derived from the payload instead of hard-coded.
 
-### BUG-24 — Farm metadata collapse (P1, Deferred)
+### BUG-24 — Farm metadata collapse (P1, Fixed — wire-platform-to-real-data)
 
-All 490 records share `name = "Block L08 — Farm L08-01"`, `farm = "Khuzestan
-Unit L08"`, `municipality = "Amir Kabir / Debal Khazai Agro-Industry (Block
-L08)"`. The exporter reads `row.get("farm")` for `code` and then rebuilds the
-other labels from that single value, so the inspector and search cannot
-distinguish fields beyond `F-###`.
+All 490 records used to share synthesized labels (`farm = "Khuzestan Unit L08"`,
+`municipality = "Amir Kabir / Debal Khazai Agro-Industry (Block L08)"`,
+`variety` defaulted to `CP69-1062`, `areaHa` to 25). The exporter now maps the
+real `farms.parquet` registry columns verbatim — `farm` ← registry `block`,
+`municipality` ← `office · management`, `name` ← `code · office`, real
+`variety`/`areaHa` — and empty registry values stay empty (the inspector renders
+the not-recorded state "—"). `status` is not shipped (no view renders it).
+Contract test `test_farm_metadata_matches_registry` spot-checks 30 codes against
+the registry; `test_no_synthesized_farm_strings` asserts zero matches for the
+old patterns. Re-exported 2026-11-07: 0 synthesized strings, 87 fields with a
+genuinely null variety (registry has no value).
 
-**Fix path:** merge the real `farms.parquet` attributes (unit/block/variety) in
-`scripts/export_platform_data.py` and re-export; no platform code change needed.
-The search box already concatenates farm/municipality, so it will work once the
-data is real.
+### BUG-25 — Hard-coded planting/harvest dates (P2, Fixed — null with no source)
 
-### BUG-25 — Hard-coded planting/harvest dates (P2, Deferred)
-
-Exporter writes `"planted": "2021/03", "harvest": "2024/11"` for every field.
-The inspector displays them under “Planted”/“Harvest”. Needs ratoon-date
-attributes; tracked here rather than silently displaying a false value — the
-field exists because the UI needs one.
+The exporter no longer invents planting/harvest dates: since contract v3 the
+payload carries `null` for both (no registry source column exists — only
+`age`, which is empty for all 490 fields), the contract test asserts
+`planted is None and harvest is None`, and the inspector renders the
+not-recorded state "—" instead of a false date. Ratoon-date attributes remain a
+data-collection item, not a UI concern.
 
 ### BUG-26 — Bundle size (P2, Won't fix)
 
@@ -495,3 +498,71 @@ The platform consumes `platform/src/data/farms_khuzestan.json` and `platform/src
 4. Coverage is logged (samples rejected by the staleness guard vs total).
 5. If adding a new model output to the platform, export its scores into the `scores` map with an explicit `provenance`/`artifact` or `formulaId`, and register the channel/model in `scripts/platform_channels.py` + `platform/src/data/channels.ts` before wiring the UI.
 
+## wire-platform-to-real-data (2026-11-07) — tile-server thread race, real-data wiring, copy
+
+### BUG-27 — serve_tiles.py native crash under concurrent browser load (P0, Fixed)
+
+**Finding:** `scripts/serve_tiles.py` handed the same `WarpedVRT`/`WarpedBand`
+object to every `ThreadingHTTPServer` thread; the cache lock guarded only the
+dict, not the subsequent GDAL `read()`. A real Leaflet pan (a dozen parallel
+tile requests) reproducibly killed the process with exit 3221225477
+(0xC0000005, native access violation); the same URLs serially returned 200.
+Secondary defects on the same routes: error paths answered `<img>` requests
+with JSON (`net::ERR_BLOCKED_BY_ORB`), `do_HEAD` was missing (501), no
+`Cache-Control`, and a newly mounted raster layer ignored the current opacity
+until the slider moved.
+
+**Fix (per-handle locking shipped):** each cached `WarpedBand` owns a
+`threading.Lock` held across `read_vrt_window`; cache eviction takes the band
+lock before closing (lock order is always cache → band, so no deadlock). Tile
+route failures return 404/500 with `Content-Type: image/png` and a transparent
+256×256 body; `do_HEAD` mirrors GET on every route; successful tiles carry
+`Cache-Control: max-age=3600`; layers mount with the current raster opacity
+(`opacity` option) and keep it across scene/layer switches.
+
+**Acceptance gate (recorded):** `scripts/test_tile_concurrency.py` fired
+12-thread bursts (18 and 60 requests across dates/layers, exercising LRU
+eviction) — all responses valid PNG, process alive, subsequent request 200.
+`capture_platform_screenshots.mjs` then drove a headless-browser Leaflet
+session: date-slider-driven RGB and NDVI overlays rendered on-map, two live
+drag-pans, 28/28 tile responses 200, zero transport failures. The
+global-render-lock fallback (design alternative A) was **not** needed.
+
+### Real-data wiring in the same change
+
+- **Weather (BUG-precip/temp-null):** `export_platform_data.py` left-joins
+  `Data/Processed/weather/weather_aligned.parquet` on the observation's
+  acquisition date (`precip` ← `precipitation_sum`, `temp` ← `temperature_mean`).
+  Coverage 21070/21070 dated observations (100%). Unmatched dates stay null and
+  are labelled `absent`; a null channel can never render a "Modelled" chip
+  (frontend normalizer forces `absent` on null; contract test enforces it).
+  The `temp` physical envelope widened to [0, 55] °C — the old (10, 48) range
+  rejected real ERA5 daily means (observed 7.3–44.0 °C).
+- **Model scores = real generations:** the payload was re-exported **with**
+  checkpoint inference — `sts_net_490.pt`, `tiny_cnn_mamba_490.pt`,
+  `time2agri_490.pt` scored 799 cycles; 9,639 observation×score cells now carry
+  provenance `model` (checkpoint formula ids), baselines stay honestly `proxy`,
+  stale samples `absent`. The previous payload had been exported with
+  `--no-models`, so the platform was showing proxy values under SSL model names.
+- **No fabricated numbers in the frontend:** absent anomaly scores are `null`
+  (the old `0.5` fallback polluted Overview means, ModelComparison distributions
+  and Moran's I); Spatial's Moran's I and variogram are complete-case; CSV
+  exports write empty cells, never `0.0000`, for absent channels.
+- **Copy:** "Demonstration data" → "Pipeline output" badge (`DemoDataBadge` →
+  `PipelineDataBadge`), banner reworded to dataset-integration wording, footer
+  cadence corrected to "Landsat & METRIC · 2013–2026 archive", dead
+  `stressEvent` machinery and its i18n strings removed, `data/mock.ts` renamed
+  to `data.ts`.
+- **Map Explorer UX:** "Hide field boundaries" removes only the polygon layer
+  (basemap + raster stay); the field-opacity slider floor is 0 (was 0.2) with
+  stroke opacity following the slider; the separate "Landsat raster scene"
+  select was removed — the single observation-date slider drives both the field
+  series and the raster overlay (raster date = that observation's real
+  acquisition date).
+
+**Verification:** `pytest tests/unit/test_platform_data_contract.py` (19 passed)
+and `test_platform_bilingual.py` (16 passed); `tsc --noEmit` clean; production
+build green; screenshot/console/network gate green for all 8 views with the
+server up (evidence: `reports/screenshots/audit/`) and gracefully degraded with
+it stopped (`reports/screenshots/audit-serverdown/`). Presentation-focused
+findings: `docs/platform_presentation_audit.md`.

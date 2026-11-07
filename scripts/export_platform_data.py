@@ -88,10 +88,26 @@ def main() -> None:
     geojson_path = ROOT_DIR.parent / "Data/Processed/coordinates/farms.geojson"
     parquet_path = ROOT_DIR.parent / "Data/Processed/coordinates/farms.parquet"
     zarr_path = ROOT_DIR.parent / "Data/Processed/satellite/stats.zarr"
+    weather_path = ROOT_DIR.parent / "Data/Processed/weather/weather_aligned.parquet"
 
     log.info("Loading farm polygons and metadata...")
     gdf = gpd.read_file(geojson_path)
     df_meta = pd.read_parquet(parquet_path)
+
+    # Real weather (ERA5 reanalysis) joined on the acquisition date below.
+    # precip <- precipitation_sum, temp <- temperature_mean; observation dates
+    # without a weather row stay null and are labelled "absent" (never invented).
+    weather_by_date: dict[str, tuple[float, float]] = {}
+    if weather_path.exists():
+        wdf = pd.read_parquet(weather_path)
+        for _, wr in wdf.iterrows():
+            key = pd.Timestamp(wr["acquisition_date"]).strftime("%Y-%m-%d")
+            p, t_ = wr.get("precipitation_sum"), wr.get("temperature_mean")
+            if pd.notna(p) and pd.notna(t_):
+                weather_by_date[key] = (float(p), float(t_))
+        log.info("Weather aligned: %d dated rows from %s", len(weather_by_date), weather_path.name)
+    else:
+        log.warning("weather_aligned.parquet not found — precip/temp stay null with provenance 'absent'")
 
     if args.no_models:
         models: dict = {}
@@ -160,22 +176,33 @@ def main() -> None:
     elif not models:
         log.info("Skipping checkpoint inference (no models loaded)")
 
+    def clean_text(v) -> str:
+        """Registry text verbatim; NaN/None -> "" (never a generated default)."""
+        if v is None or (isinstance(v, float) and np.isnan(v)):
+            return ""
+        s = str(v).strip()
+        return "" if s.lower() in ("nan", "none") else s
+
     log.info("Building farm records...")
     farm_records = []
     series_by_field: dict[str, list[dict]] = {}
     rejected = 0
     total_samples = 0
+    weather_matched = 0
+    weather_dated = 0
 
     for _, row in merged.iterrows():
         fid = int(row["field_id"])
-        code = str(row.get("farm", f"L{fid:02d}"))
-        block = str(row.get("block", "R01"))
-        variety = str(row.get("variety", "CP69-1062"))
-        if variety == "nan" or not variety or variety == "None":
-            variety = "CP69-1062"
-        area = float(row.get("area_ha", 25.0))
-        if np.isnan(area):
-            area = 25.0
+        # Real registry attributes (farms.parquet). Missing values stay
+        # empty/null — synthesized defaults ("Khuzestan Unit …", CP69-1062,
+        # 25 ha) were removed in wire-platform-to-real-data.
+        code = clean_text(row.get("farm"))
+        block = clean_text(row.get("block"))
+        office = clean_text(row.get("office"))
+        management = clean_text(row.get("management"))
+        variety = clean_text(row.get("variety")) or None
+        area_raw = row.get("area_ha")
+        area = float(area_raw) if area_raw is not None and pd.notna(area_raw) else None
 
         geom = row["geometry"]
         centroid_lat = round(float(geom.centroid.y), 5)
@@ -233,6 +260,14 @@ def main() -> None:
                 continue
 
             ai, acq_date = acq
+            acq_key = acq_date.strftime("%Y-%m-%d")
+            weather_dated += 1
+            wrec = weather_by_date.get(acq_key)
+            if wrec is not None:
+                weather_matched += 1
+                precip_v, temp_v = wrec
+            else:
+                precip_v, temp_v = None, None
             red_v = float(cube[fi, ai, reader.band_index["red"]])
             nir_v = float(cube[fi, ai, reader.band_index["nir"]])
             blue_v = float(cube[fi, ai, reader.band_index["blue"]])
@@ -282,6 +317,9 @@ def main() -> None:
             eta_r = round(eta, 2) if eta is not None else None
             lst_r = round(lst_c, 1) if lst_c is not None else None
 
+            precip_r = round(precip_v, 2) if precip_v is not None else None
+            temp_r = round(temp_v, 1) if temp_v is not None else None
+
             values = {
                 "ndvi": ndvi_r,
                 "evi": evi_r,
@@ -291,8 +329,8 @@ def main() -> None:
                 "cwsi": cwsi_r,
                 "eta": eta_r,
                 "lst": lst_r,
-                "precip": None,
-                "temp": None,
+                "precip": precip_r,
+                "temp": temp_r,
             }
             for ch, v in values.items():
                 validate_observation(fid, sd.strftime("%Y-%m-%d"), ch, v)
@@ -306,8 +344,10 @@ def main() -> None:
                 "cwsi": "proxy" if cwsi_r is not None else "absent",
                 "eta": "proxy" if eta_r is not None else "absent",
                 "lst": "observed" if lst_r is not None else "absent",
-                "precip": "modelled",
-                "temp": "modelled",
+                # ERA5 reanalysis is legitimately "modelled" — but only when a
+                # value exists; an unmatched date stays null + "absent".
+                "precip": "modelled" if precip_r is not None else "absent",
+                "temp": "modelled" if temp_r is not None else "absent",
             }
 
             obs = {
@@ -325,8 +365,8 @@ def main() -> None:
                 "cwsi": cwsi_r,
                 "eta": eta_r,
                 "lst": lst_r,
-                "precip": None,
-                "temp": None,
+                "precip": precip_r,
+                "temp": temp_r,
                 "scores": scores,
                 "scoreProvenance": score_prov,
                 "scoreFormulaId": score_formula,
@@ -340,18 +380,20 @@ def main() -> None:
         farm_records.append({
             "id": field_key,
             "code": code,
-            "name": f"Block {block} — Farm {code}",
-            "farm": f"Khuzestan Unit {code[:3] if len(code) >= 3 else 'K01'}",
-            "municipality": f"Amir Kabir / Debal Khazai Agro-Industry (Block {block})",
+            "name": f"{code} · {office}" if office else code,
+            # Real registry columns: farm = the physical block identifier,
+            # municipality = administrative office (+ management unit). Both are
+            # Persian registry text passed through verbatim (FA renders naturally).
+            "farm": block,
+            "municipality": " · ".join(x for x in (office, management) if x),
             "block": block,
-            "areaHa": round(area, 1),
+            "areaHa": round(area, 1) if area is not None else None,
             "variety": variety,
             "planted": None,
             "harvest": None,
             "centroid": [centroid_lat, centroid_lng],
             "polygon": coords,
-            "baselineHealth": round(float(np.nanmean(ndvi_cube[fi, :])), 2) if np.any(np.isfinite(ndvi_cube[fi, :])) else 0.65,
-            "stressEvent": None,
+            "baselineHealth": round(float(np.nanmean(ndvi_cube[fi, :])), 2) if np.any(np.isfinite(ndvi_cube[fi, :])) else None,
             "neighbors": [],
             "contractVersion": CONTRACT_VERSION,
         })
@@ -398,6 +440,14 @@ def main() -> None:
     atomic_dump(series_json_path, series_by_field)
     log.info("Saved series for %d farms to %s", len(series_by_field), series_json_path)
     log.info("Staleness guard rejected %d of %d samples (max offset %.2f days)", rejected, total_samples, MAX_OFFSET_DAYS)
+    if weather_dated:
+        frac = weather_matched / weather_dated
+        log.info(
+            "Weather join coverage: %d/%d dated observations matched weather_aligned.parquet (%.1f%%); non-null fraction precip=%.3f temp=%.3f",
+            weather_matched, weather_dated, 100.0 * frac, frac, frac,
+        )
+    else:
+        log.warning("Weather join coverage: no dated observations to match (all samples rejected by the staleness guard)")
 
 
 if __name__ == "__main__":

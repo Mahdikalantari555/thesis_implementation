@@ -3,7 +3,7 @@ import { XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, L
 import MapView from "../components/MapView";
 import { Panel, Label, Select, Stat, Badge, EmptyState, fmtObs } from "../components/ui";
 import { useAnalysis, DEFAULT_DATE_IDX } from "../context/AnalysisContext";
-import { FIELDS, MODELS, INDICATORS, getSeries, moransI, pearson, mean, DATES, LAST_IDX, fieldById, clampIdx, monthAt } from "../data/mock";
+import { FIELDS, MODELS, INDICATORS, getSeries, moransI, pearson, mean, DATES, LAST_IDX, fieldById, clampIdx, monthAt } from "../data/data";
 import { useLocale, useT } from "../i18n";
 
 export default function Spatial() {
@@ -14,7 +14,9 @@ export default function Spatial() {
   const [mode, setMode] = useState<"anomaly" | "indicator" | "lisa">("anomaly");
   const safeIdx = clampIdx(dateIdx);
 
-  const values = useMemo(() => FIELDS.map(f => getSeries(f.id)[safeIdx]?.scores[model] ?? 0), [model, safeIdx]);
+  // Missing scores stay null — Moran's I skips them (complete-case) instead of
+  // folding fabricated zeros into the statistic.
+  const values = useMemo(() => FIELDS.map(f => getSeries(f.id)[safeIdx]?.scores[model] ?? null), [model, safeIdx]);
   const weights = useMemo(() => {
     const index = new Map(FIELDS.map((f, i) => [f.id, i]));
     const m = new Map<string, string[]>();
@@ -32,11 +34,11 @@ export default function Spatial() {
     () =>
       FIELDS.map(f => {
         const s = getSeries(f.id);
-        const nbScores = f.neighbors.flatMap(n => getSeries(n).map(o => o.scores[model]));
+        const nbScores = f.neighbors.flatMap(n => getSeries(n).map(o => o.scores[model])).filter((v): v is number => typeof v === "number");
         return {
           field: f.code,
-          score: +mean(s.map(o => o.scores[model])).toFixed(3),
-          ind: +mean(s.map(o => (o as unknown as Record<string, number>)[indicator])).toFixed(3),
+          score: +mean(s.map(o => o.scores[model]).filter((v): v is number => typeof v === "number")).toFixed(3),
+          ind: +mean(s.map(o => (o as unknown as Record<string, number | null>)[indicator]).filter((v): v is number => typeof v === "number")).toFixed(3),
           nbScore: +mean(nbScores).toFixed(3),
         };
       }),
@@ -51,8 +53,10 @@ export default function Spatial() {
     FIELDS.forEach((a, i) =>
       FIELDS.forEach((b, j) => {
         if (j <= i) return;
+        const vi = values[i], vj = values[j];
+        if (typeof vi !== "number" || typeof vj !== "number") return;
         const dist = Math.round(Math.hypot(a.centroid[0] - b.centroid[0], a.centroid[1] - b.centroid[1]) * 120);
-        bins[Math.min(5, dist)].pairs.push(Math.abs(values[i] - values[j]));
+        bins[Math.min(5, dist)].pairs.push(Math.abs(vi - vj));
       })
     );
     return bins.map(b => ({ dist: b.dist, semivar: b.pairs.length ? +(mean(b.pairs) / 2).toFixed(3) : 0, n: b.pairs.length }));
@@ -72,7 +76,7 @@ export default function Spatial() {
   const moranTrend = useMemo(
     () =>
       DATES.map((d, i) => {
-        const vals = FIELDS.map(f => getSeries(f.id)[i]?.scores[model] ?? 0);
+        const vals = FIELDS.map(f => getSeries(f.id)[i]?.scores[model] ?? null);
         return { date: d.slice(0, 7), moran: +moransI(vals, weights).toFixed(3) };
       }),
     [model, weights]
@@ -153,7 +157,7 @@ export default function Spatial() {
                   <td className="py-1.5">
                     {field.code} ({t("field.selected")})
                   </td>
-                  <td className="text-end font-mono">{selfObs ? <bdi>{fmt.number(selfObs.scores[model], 3)}</bdi> : "—"}</td>
+                  <td className="text-end font-mono">{selfObs ? <bdi>{fmt.number(selfObs.scores[model] ?? NaN, 3)}</bdi> : "—"}</td>
                   <td className="text-end font-mono">{selfObs ? fmtObs(selfObs.ndvi, 2) : "—"}</td>
                   <td className="text-end font-mono">{selfObs ? fmtObs(selfObs.cwsi, 2) : "—"}</td>
                 </tr>
