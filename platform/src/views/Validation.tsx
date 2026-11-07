@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { ScatterChart, Scatter, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Line, ComposedChart, ReferenceLine, BarChart, Bar, Cell } from "recharts";
 import { Panel, Label, Select, Stat, SigBadge, PipelineDataBadge, EmptyState } from "../components/ui";
 import { useAnalysis } from "../context/AnalysisContext";
-import { MODELS, INDICATORS, FIELDS, getPairs, pearson, spearman, kendall, partialCorr, linReg, fisherCI, pValue, laggedCorr, DATES, LAST_IDX, ANOMALY_THRESHOLD, FIELDS_WITH_SERIES, type IndicatorId } from "../data/data";
+import { MODELS, INDICATORS, FIELDS, getPairs, pearson, spearman, kendall, partialCorr, linReg, fisherCI, pValue, laggedCorr, DATES, LAST_IDX, ANOMALY_THRESHOLD, FIELDS_WITH_SERIES, downsampleForDisplay, type IndicatorId } from "../data/data";
 import { useLocale, useT } from "../i18n";
 import { ShieldAlert, Info } from "lucide-react";
 
@@ -64,7 +64,9 @@ export default function Validation() {
   const half = Math.floor(n / 2);
   const r1 = pearson(xs.slice(0, half), ys.slice(0, half)), r2 = pearson(xs.slice(half), ys.slice(half));
 
-  const scatter = xs.map((x, i) => ({ x: +x.toFixed(3), y: +ys[i].toFixed(3) }));
+  // Display layer only: stride sample of the full pair set (stats use all pairs).
+  const scatterAll = xs.map((x, i) => ({ x: +x.toFixed(3), y: +ys[i].toFixed(3) }));
+  const scatter = downsampleForDisplay(scatterAll, 5000);
   const fit = Array.from({ length: 20 }, (_, i) => {
     const x = i / 19;
     return { x: +x.toFixed(3), y: +(reg.intercept + reg.slope * x).toFixed(3) };
@@ -178,7 +180,7 @@ export default function Validation() {
                 <XAxis type="number" dataKey="x" domain={[0, 1]} tick={{ fontSize: 10 }} label={{ value: t("spectral.scatter.xAxis"), position: "insideBottom", offset: -2, fontSize: 10 }} />
                 <YAxis type="number" dataKey="y" tick={{ fontSize: 10 }} label={{ value: INDICATORS.find(i => i.id === indicator)?.name, angle: -90, position: "insideLeft", fontSize: 10 }} />
                 <Tooltip cursor={{ strokeDasharray: "3 3" }} contentStyle={{ fontSize: 11 }} />
-                <Scatter data={scatter} fill={MODELS.find(m => m.id === model)?.color} fillOpacity={0.5} />
+                <Scatter data={scatter.points} fill={MODELS.find(m => m.id === model)?.color} fillOpacity={0.5} />
                 <Line type="monotone" dataKey="y" data={fit} stroke="#be123c" strokeWidth={2} dot={false} name="OLS" />
               </ScatterChart>
             </ResponsiveContainer>

@@ -18,9 +18,11 @@ export interface ChannelSpec {
 }
 
 export const CHANNELS: ChannelSpec[] = [
-  { name: 'ndvi', unit: 'index', physicalRange: [0, 1], provenanceDefault: 'observed', required: true, kind: 'spectral' },
-  { name: 'evi', unit: 'index', physicalRange: [0, 1], provenanceDefault: 'observed', required: true, kind: 'spectral' },
-  { name: 'savi', unit: 'index', physicalRange: [0, 1], provenanceDefault: 'observed', required: true, kind: 'spectral' },
+  // Envelopes mirror scripts/platform_channels.py: observed 2013-2026 archive
+  // envelope + margin (winter medians go slightly negative).
+  { name: 'ndvi', unit: 'index', physicalRange: [-0.5, 1], provenanceDefault: 'observed', required: true, kind: 'spectral' },
+  { name: 'evi', unit: 'index', physicalRange: [-0.3, 1], provenanceDefault: 'observed', required: true, kind: 'spectral' },
+  { name: 'savi', unit: 'index', physicalRange: [-0.3, 1], provenanceDefault: 'observed', required: true, kind: 'spectral' },
   { name: 'ndmi', unit: 'index', physicalRange: [-1, 1], provenanceDefault: 'observed', required: true, kind: 'water' },
   { name: 'tvdi', unit: 'index', physicalRange: [0, 1], provenanceDefault: 'proxy', required: true, kind: 'thermal', derivedFrom: 'cwsi' },
   { name: 'cwsi', unit: 'index', physicalRange: [0, 1], provenanceDefault: 'observed', required: true, kind: 'thermal' },
@@ -47,7 +49,7 @@ export type ScoreProvenanceState = 'model' | 'proxy' | 'absent';
 export const PROXY_SCORE_FORMULA_ID = 'cwsi_affine_v1';
 
 /** Contract version recorded on every exported farm record (v3: score provenance). */
-export const CONTRACT_VERSION = 3;
+export const CONTRACT_VERSION = 4;
 
 export interface ScoreSpec {
   name: string;

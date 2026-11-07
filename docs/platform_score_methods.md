@@ -152,6 +152,37 @@ labelled **Model** (purple).
 A checkpoint that exists but fails to load, or an observation outside every
 cycle, yields `score = null` + `absent` — never a substituted number.
 
+### 4.0 Phenology cycles in plain language
+
+Sugarcane here grows in **multi-ratoon cycles**: one cycle = the span between
+two harvests, and the plant's expected state depends on **how many days have
+passed since the last harvest (DSH)**, not on the calendar date. A field at
+DSH 90 (young, fast-growing) should look very different from one at DSH 300
+(mature), and the *same* NDVI value can be normal at one phase and alarming at
+the other. That is why "low NDVI = stressed" is wrong as a blanket rule.
+
+The pipeline therefore:
+
+1. **Segments** each field's NDVI time series into cycles (harvest-based
+   segmentation: min 180 d, max 540 d, prominence 0.15 —
+   `src/ssl_anomaly/phenology/cycles.py`); censored/incomplete spans are
+   dropped. 799 buildable cycles across 490 fields today.
+2. **Bins** each cycle into **36 phase bins of 15 DSH days** (≤ 540 days),
+   taking the median observation per bin, channel 0 = NDVI + the 7 spectral
+   bands (`scripts/cycle_inputs.py::build_field_cycles`).
+3. **Scores per phase**: the trained models reconstruct each bin from the
+   *preceding bins of the same cycle* (causal leave-one-bin-out). An anomaly
+   score thus means "this field deviates from what normally happens at this
+   **phase** of the cycle" — the phase-aware reading the thesis claims. The
+   CWSI proxy rule (§4.2) has **no phase awareness** — it only reads the
+   magnitude of CWSI that day — which is exactly why model-provenance scores
+   are the scientifically meaningful ones and proxy scores are labelled as
+   such.
+
+A visualization of the segmentation (shaded cycle spans + harvest markers on
+the temporal charts, and the binned DSH-axis curve) is queued as openspec
+candidate `phenology-cycle-visualization` in `todo.md`.
+
 ## 5. Reading the field inspector (the chip row)
 
 For field L08-13 the inspector shows, per chip, the provenance of that

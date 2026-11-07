@@ -180,7 +180,8 @@ def test_series_json_is_consumed():
     # data.ts (renamed from mock.ts — it is the typed loader for real pipeline
     # JSON, not mock data) must remain the single data source.
     data = (SRC / "data" / "data.ts").read_text(encoding="utf-8")
-    assert "from './series_khuzestan.json'" in data
+    # Contract v4: the big series payload loads as raw text + JSON.parse.
+    assert "from './series_khuzestan.json?raw'" in data
     assert "from './farms_khuzestan.json'" in data
     # The synthetic generator must be gone: no seeded RNG in the data layer.
     assert "function rng(" not in data
@@ -201,17 +202,26 @@ def test_selected_field_default_is_guarded():
 
 
 def test_exported_series_matches_platform_expectations():
-    """The exporter and the platform must agree on the payload shape."""
+    """The exporter and the platform must agree on the payload shape (contract v4)."""
     series = json.loads((SRC / "data" / "series_khuzestan.json").read_text(encoding="utf-8"))
     farms = json.loads((SRC / "data" / "farms_khuzestan.json").read_text(encoding="utf-8"))
 
-    assert len(series) == len(farms) > 0, "every farm needs a time series"
-    required = {"date", "idx", "ndvi", "evi", "savi", "ndmi", "tvdi", "cwsi", "eta", "precip", "temp", "scores", "missing"}
-    first = next(iter(series.values()))
-    assert first, "series payload is empty"
-    assert required <= set(first[0]), f"missing fields: {required - set(first[0])}"
-    # The shared date axis is derived from this payload — it must be uniform.
-    date_vectors = {tuple(o["date"] for o in obs) for obs in series.values()}
-    assert len(date_vectors) == 1, "all fields must share one date axis"
-    assert len(first) == 48
-    assert first[0]["date"].startswith("2021-")
+    assert series["contractVersion"] == 4
+    fields = series["fields"]
+    assert len(fields) == len(farms) > 0, "every farm needs a time series"
+    required = {"ndvi", "evi", "savi", "ndmi", "tvdi", "cwsi", "eta", "precip", "temp", "lst"}
+    first = next(iter(fields.values()))
+    assert set(required) <= set(first["channels"]), f"missing channels: {required - set(first['channels'])}"
+    # The shared date axis is derived from this payload — uniform by construction.
+    axis = series["axis"]
+    assert len(axis) > 500, f"full acquisition axis expected, got {len(axis)}"
+    for f in fields.values():
+        for c in required:
+            assert len(f["channels"][c]) == len(axis), "channel arrays must cover the axis"
+        for k in f["scores"]:
+            assert len(f["scores"][k]) == len(axis)
+    # Every real acquisition date: months with two scenes appear twice.
+    months = {}
+    for d in axis:
+        months[d[:7]] = months.get(d[:7], 0) + 1
+    assert max(months.values()) >= 2, "multi-acquisition months must be present"

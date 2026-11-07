@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, LineChart, Line, CartesianGrid, Legend } from "recharts";
-import { FIELDS, MODELS, INDICATORS, getSeries, DATES, mean, quantile, ANOMALY_THRESHOLD, COVERAGE, N, DATA_PROVENANCE, FIELDS_WITH_SERIES, isLegacyPayload } from "../data/data";
+import { FIELDS, MODELS, INDICATORS, getSeries, DATES, mean, quantile, ANOMALY_THRESHOLD, COVERAGE, N, DATA_PROVENANCE, FIELDS_WITH_SERIES, isLegacyPayload, tickInterval } from "../data/data";
 import { Panel, Stat, Badge, PipelineDataBadge, EmptyState, anomalyColor, fmtObs, LegacyPayloadNotice } from "../components/ui";
 import { useAnalysis } from "../context/AnalysisContext";
 import { useLocale, useT } from "../i18n";
@@ -155,7 +155,7 @@ export default function Overview() {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={stats.monthly} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 9 }} interval={5} />
+                <XAxis dataKey="date" tick={{ fontSize: 10 }} interval={tickInterval(DATES.length, 12)} />
                 <YAxis domain={[0, 1]} tick={{ fontSize: 10 }} />
                 <Tooltip contentStyle={{ fontSize: 12 }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />

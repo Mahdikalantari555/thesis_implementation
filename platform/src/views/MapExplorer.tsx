@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from "recharts";
 import MapView from "../components/MapView";
-import { Panel, Badge, Label, Select, PipelineDataBadge, EmptyState, anomalyColor, fmtObs, ProvenanceChip, LegacyPayloadNotice } from "../components/ui";
+import { Panel, Badge, Label, Select, PipelineDataBadge, EmptyState, anomalyColor, fmtObs, ProvenanceChip, ProvenanceSummary, LegacyPayloadNotice } from "../components/ui";
 import { useAnalysis, DEFAULT_DATE_IDX } from "../context/AnalysisContext";
-import { FIELDS, MODELS, INDICATORS, getSeries, fieldById, DATES, LAST_IDX, ANOMALY_THRESHOLD, mean, COVERAGE, monthAt, clampIdx, isLegacyPayload } from "../data/data";
+import { FIELDS, MODELS, INDICATORS, getSeries, fieldById, DATES, LAST_IDX, ANOMALY_THRESHOLD, mean, COVERAGE, dateAt, clampIdx, isLegacyPayload, tickInterval } from "../data/data";
 import { useLocale, useT } from "../i18n";
 import scenesIndexData from "../data/scenes_index.json";
 import { Eye, EyeOff, Search, GitCompareArrows } from "lucide-react";
@@ -140,7 +140,7 @@ export default function MapExplorer() {
             <div className="text-[10px] text-slate-400">{t("map.layer.rasterNote")}</div>
             <div>
               <Label>
-                {t("map.layer.observationDate", { date: monthAt(safeDateIdx) })} {obs?.missing && <span className="text-orange-600">{t("field.missing")}</span>}
+                {t("map.layer.observationDate", { date: dateAt(safeDateIdx) })} {obs?.missing && <span className="text-orange-600">{t("field.missing")}</span>}
               </Label>
               {/* Slider bounds are derived from the shared date axis (BUG-01).
                   This single slider drives both the field series and the raster
@@ -170,8 +170,8 @@ export default function MapExplorer() {
             </button>
             {showCompare && (
               <div>
-                <Label>{t("map.layer.comparisonDate", { date: monthAt(safeCompareIdx) })}</Label>
-                <input type="range" min={0} max={LAST_IDX} value={safeCompareIdx} onChange={e => setCompareIdx(+e.target.value)} aria-label={t("map.layer.comparisonDate", { date: monthAt(safeCompareIdx) })} className="w-full accent-orange-600" />
+                <Label>{t("map.layer.comparisonDate", { date: dateAt(safeCompareIdx) })}</Label>
+                <input type="range" min={0} max={LAST_IDX} value={safeCompareIdx} onChange={e => setCompareIdx(+e.target.value)} aria-label={t("map.layer.comparisonDate", { date: dateAt(safeCompareIdx) })} className="w-full accent-orange-600" />
               </div>
             )}
           </div>
@@ -259,7 +259,7 @@ export default function MapExplorer() {
       {/* Map */}
       <div className="col-span-12 lg:col-span-6 space-y-4">
         <Panel
-          title={t("map.canvas.title", { date: monthAt(safeDateIdx) })}
+          title={t("map.canvas.title", { date: dateAt(safeDateIdx) })}
           subtitle={t("map.canvas.subtitle", { fields: fmt.integer(FIELDS.length), selected: fmt.integer(selectedFields.length) })}
           pad={false}
           right={<PipelineDataBadge />}
@@ -271,14 +271,14 @@ export default function MapExplorer() {
             <MapView colorMode={colorMode} model={model} indicator={indicator} dateIdx={safeDateIdx} opacity={opacity} showFields={showFields} rasterDate={rasterDate} rasterLayer={rasterLayerActive} rasterOpacity={rasterOpacity} height="520px" />
             <div className="absolute top-3 start-3 z-[500] bg-white/95 dark:bg-slate-900/95 border border-slate-200 dark:border-slate-700 px-3 py-2 text-[11px] shadow-sm">
               <div className="font-semibold">
-                {t(`model.${model}.name`)} · {monthAt(safeDateIdx)}
+                {t(`model.${model}.name`)} · {dateAt(safeDateIdx)}
               </div>
               <div className="text-slate-500">{t("map.canvas.selectionMean", { mean: fmt.number(selectedStats.mean, 3), max: fmt.number(selectedStats.max, 3) })}</div>
             </div>
           </div>
         </Panel>
         {showCompare && (
-          <Panel title={t("map.compare.title")} subtitle={t("map.compare.subtitle", { left: monthAt(safeCompareIdx), right: monthAt(safeDateIdx) })} pad={false}>
+          <Panel title={t("map.compare.title")} subtitle={t("map.compare.subtitle", { left: dateAt(safeCompareIdx), right: dateAt(safeDateIdx) })} pad={false}>
             <div className="grid grid-cols-2 gap-px bg-slate-200 dark:bg-slate-800">
               <div className="h-64">
                 <MapView colorMode={colorMode} model={model} indicator={indicator} dateIdx={safeCompareIdx} opacity={opacity} height="256px" />
@@ -287,7 +287,7 @@ export default function MapExplorer() {
                 <MapView colorMode={colorMode} model={model} indicator={indicator} dateIdx={safeDateIdx} opacity={opacity} height="256px" />
               </div>
             </div>
-            <div className="p-3 text-[11px] text-slate-500">{t("map.compare.caption", { left: monthAt(safeCompareIdx), right: monthAt(safeDateIdx) })}</div>
+            <div className="p-3 text-[11px] text-slate-500">{t("map.compare.caption", { left: dateAt(safeCompareIdx), right: dateAt(safeDateIdx) })}</div>
           </Panel>
         )}
       </div>
@@ -348,13 +348,9 @@ export default function MapExplorer() {
               {t("map.inspector.acquired", { sample: obs.sampleDate, acquired: obs.acquisitionDate })}
             </div>
           )}
-          {obs?.provenance && (
-            <div className="mt-2 flex flex-wrap gap-1">
-              {Object.entries(obs.provenance).map(([ch, st]) => (
-                <ProvenanceChip key={ch} state={st as any} title={`${ch}: ${st}`} />
-              ))}
-            </div>
-          )}
+          {/* Compact grouped provenance (was ten separate chips). Hover a
+              line for the exact channel: state pairs. */}
+          {obs?.provenance && <ProvenanceSummary provenance={obs.provenance as unknown as Record<string, string>} />}
           <div className="mt-3 flex gap-2">
             <button onClick={() => setView("temporal")} className="flex-1 h-8 bg-teal-700 text-white text-[12px]">
               {t("map.inspector.openTemporal")}
@@ -370,7 +366,7 @@ export default function MapExplorer() {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData} margin={{ top: 5, right: 8, left: -18, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 9 }} interval={8} />
+                <XAxis dataKey="date" tick={{ fontSize: 10 }} interval={tickInterval(DATES.length, 6)} />
                 <YAxis domain={[0, 1]} tick={{ fontSize: 9 }} />
                 <Tooltip contentStyle={{ fontSize: 11 }} />
                 <ReferenceLine y={ANOMALY_THRESHOLD} stroke="#ea580c" strokeDasharray="4 3" />

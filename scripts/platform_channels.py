@@ -30,9 +30,10 @@ ProvenanceState = Literal["observed", "modelled", "proxy", "absent"]
 ChannelKind = Literal["spectral", "thermal", "water", "weather"]
 ScoreProvenanceState = Literal["model", "proxy", "absent"]
 
-# Contract version recorded on every exported farm record (v3: per-score
-# provenance + formula ids from checkpoint inference).
-CONTRACT_VERSION = 3
+# Contract version: v4 = compact series payload (shared acquisition-date
+# axis + per-field numeric arrays + RLE provenance) over the full archive;
+# v3 = per-observation objects. Farm records carry the same version number.
+CONTRACT_VERSION = 4
 
 # Formula id recorded on observations whose scores come from the CWSI proxy
 # rule clamp(offset + max(0, cwsi - 0.45) * weight) (see cycle_inputs.proxy_scores).
@@ -52,9 +53,12 @@ class ChannelSpec:
 
 # Order mirrors the platform INDICATORS list.
 CHANNEL_REGISTRY: tuple[ChannelSpec, ...] = (
-    ChannelSpec("ndvi", "index", (0.0, 1.0), "observed", True, "spectral"),
-    ChannelSpec("evi", "index", (0.0, 1.0), "observed", True, "spectral"),  # computed from blue band
-    ChannelSpec("savi", "index", (0.0, 1.0), "observed", True, "spectral"),
+    # Envelopes below are the observed field-median envelope over the full
+    # 2013-2026 archive (measured 2026-11-07) plus a small margin — winter
+    # bare-soil/water mixes legitimately yield slightly negative NDVI/EVI/SAVI.
+    ChannelSpec("ndvi", "index", (-0.5, 1.0), "observed", True, "spectral"),
+    ChannelSpec("evi", "index", (-0.3, 1.0), "observed", True, "spectral"),  # computed from blue band
+    ChannelSpec("savi", "index", (-0.3, 1.0), "observed", True, "spectral"),
     ChannelSpec("ndmi", "index", (-1.0, 1.0), "observed", True, "water"),
     ChannelSpec("tvdi", "index", (0.0, 1.0), "proxy", True, "thermal", "cwsi"),
     ChannelSpec("cwsi", "index", (0.0, 1.0), "observed", True, "thermal"),

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line, ScatterChart, Scatter, Legend } from "recharts";
 import { Panel, Label, Badge, EmptyState } from "../components/ui";
 import { useAnalysis } from "../context/AnalysisContext";
-import { MODELS, INDICATORS, FIELDS, getSeries, getPairs, pearson, mean, quantile, ANOMALY_THRESHOLD, DATES, type ModelId } from "../data/data";
+import { MODELS, INDICATORS, FIELDS, getSeries, getPairs, pearson, mean, quantile, ANOMALY_THRESHOLD, DATES, tickInterval, downsampleForDisplay, type ModelId } from "../data/data";
 import { useLocale, useT } from "../i18n";
 
 export default function ModelComparison() {
@@ -128,14 +128,16 @@ export default function ModelComparison() {
 
   // Pairwise scatter first two models
   const pairScatter = useMemo(() => {
-    if (compareModels.length < 2) return [];
+    if (compareModels.length < 2) return { points: [] as { x: number; y: number }[], total: 0 };
     const [a, b] = compareModels;
-    return FIELDS.flatMap(f =>
+    const all = FIELDS.flatMap(f =>
       getSeries(f.id)
         .map(o => ({ va: o.scores[a], vb: o.scores[b] }))
         .filter((p): p is { va: number; vb: number } => typeof p.va === "number" && typeof p.vb === "number")
         .map(p => ({ x: +p.va.toFixed(3), y: +p.vb.toFixed(3) }))
     );
+    // Statistics above use every pair; the SVG layer shows a stride sample.
+    return downsampleForDisplay(all, 5000);
   }, [compareModels]);
 
   // Field-level means, memoized once per model selection (the inline version
@@ -375,7 +377,7 @@ export default function ModelComparison() {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={temporal} margin={{ top: 5, right: 15, left: -15, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 9 }} interval={5} />
+                <XAxis dataKey="date" tick={{ fontSize: 10 }} interval={tickInterval(DATES.length, 10)} />
                 <YAxis domain={[0, 1]} tick={{ fontSize: 10 }} />
                 <Tooltip contentStyle={{ fontSize: 11 }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -403,11 +405,11 @@ export default function ModelComparison() {
                 <XAxis type="number" dataKey="x" domain={[0, 1]} tick={{ fontSize: 10 }} />
                 <YAxis type="number" dataKey="y" domain={[0, 1]} tick={{ fontSize: 10 }} />
                 <Tooltip cursor={{ strokeDasharray: "3 3" }} contentStyle={{ fontSize: 11 }} />
-                <Scatter data={pairScatter} fill="#0f766e" fillOpacity={0.4} />
+                <Scatter data={pairScatter.points} fill="#0f766e" fillOpacity={0.4} />
               </ScatterChart>
             </ResponsiveContainer>
           </div>
-          <div className="text-[11px] text-slate-500">{t("comparison.scatter.note")}</div>
+          <div className="text-[11px] text-slate-500">{t("comparison.scatter.note")} {t("comparison.scatter.sampled", { shown: fmt.integer(pairScatter.points.length), total: fmt.integer(pairScatter.total) })}</div>
         </Panel>
 
         <Panel title={t("comparison.fieldLevel.title")} subtitle={t("comparison.fieldLevel.subtitle")} className="col-span-12" pad={false}>

@@ -36,3 +36,13 @@
 - [x] 6.1 "Hide field boundaries" hides only the field-polygon layer: `MapView` gains a `showFields` prop and stays mounted; basemap + raster overlay remain visible. Verify: code + tile-scenario screenshot with polygons hidden but raster rendered.
 - [x] 6.2 Remove the 20% opacity floor: fields-layer slider `min` 0.2 → 0 (raster opacity slider already allows 0); at 0 the polygon layer is fully invisible (fill and stroke). Verify: code-level check.
 - [x] 6.3 Single date control: remove the "Landsat raster scene" select; the observation-date slider drives both the field series and the raster overlay (raster date = the observation's real `acquisitionDate` from the payload; no scene for that date → raster off). Update the capture-script tile scenario to drive the date slider. Verify: `tsc --noEmit`, build, and the 5.2 gate with RGB + NDVI tiles following the date slider.
+
+## 7. User-requested follow-ups (2026-11-07, second wave — applied under this change)
+
+- [x] 7.1 Full-archive observation axis (contract v4): every acquisition date 2013-03-30 → 2026-09-10 (538 dates, 263,620 observations; multi-acquisition months kept; sampleDate == acquisitionDate; staleness branch removed). Payload compacted 292 MB → 29.8 MB (shared axis, per-field arrays, RLE provenance, derived formula ids); `?raw` + JSON.parse load; contract v4 in both registries. Verify: contract+bilingual tests 35 passed; gate green both runs.
+- [x] 7.2 RGB tile seams removed: per-scene contrast window (`SceneStretchCache`) replaces per-tile percent stretch. Verify: stitched adjacent tiles continuous.
+- [x] 7.3 Inspector provenance chips compacted to grouped lines (`ProvenanceSummary`); per-channel detail on hover; score chip unchanged.
+- [x] 7.4 Readable x-axes on the 538-point axis: adaptive `tickInterval` (~6–16 ticks per chart) + larger tick fonts on all date-axis charts.
+- [x] 7.5 Scatter displays downsampled to ≤5,000 points (stride sample) — all statistics computed on the full 263,620 pairs; caption states shown/total. Fixes the 60 s main-thread stall on Model Comparison.
+- [x] 7.6 Real envelopes for ndvi/evi/savi ([-0.5,1]/[-0.3,1]/[-0.3,1]) replacing the [0,1] registry ranges that rejected real winter medians.
+- [x] 7.7 `AGENTS.md` (assistant charter) + `todo.md` (backlog: METRIC products, two-CWSI, cycles viz, retraining, validation ladder, ERA5 covariates, …) at repo root.

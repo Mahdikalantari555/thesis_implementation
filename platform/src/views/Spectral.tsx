@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { ScatterChart, Scatter, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Line, ComposedChart, ReferenceLine } from "recharts";
 import { Panel, Label, Select, Stat, EmptyState } from "../components/ui";
 import { useAnalysis } from "../context/AnalysisContext";
-import { MODELS, INDICATORS, FIELDS, getPairs, pearson, spearman, linReg, laggedCorr, DATES, LAST_IDX, FIELDS_WITH_SERIES } from "../data/data";
+import { MODELS, INDICATORS, FIELDS, getPairs, pearson, spearman, linReg, laggedCorr, DATES, LAST_IDX, FIELDS_WITH_SERIES, downsampleForDisplay } from "../data/data";
 import { useLocale, useT } from "../i18n";
 
 export default function Spectral() {
@@ -26,7 +26,9 @@ export default function Spectral() {
   }, [model, indicator, fieldIds, range, season]);
 
   const r = pearson(xs, ys), rho = spearman(xs, ys), reg = linReg(xs, ys);
-  const scatter = xs.map((x, i) => ({ x: +x.toFixed(3), y: +ys[i].toFixed(3), field: meta[i].field, date: meta[i].date.slice(0, 7) }));
+  // Display layer only: stride sample of the full pair set (stats use all pairs).
+  const scatterAll = xs.map((x, i) => ({ x: +x.toFixed(3), y: +ys[i].toFixed(3), field: meta[i].field, date: meta[i].date.slice(0, 7) }));
+  const scatter = downsampleForDisplay(scatterAll, 5000);
   const lineData = Array.from({ length: 20 }, (_, i) => {
     const x = i / 19;
     return { x: +x.toFixed(3), y: +(reg.intercept + reg.slope * x).toFixed(3) };
@@ -130,7 +132,7 @@ export default function Spectral() {
                 <XAxis type="number" dataKey="x" name={t("spectral.scatter.xAxis")} domain={[0, 1]} tick={{ fontSize: 10 }} label={{ value: t("spectral.scatter.xAxis"), position: "insideBottom", offset: -2, fontSize: 10 }} />
                 <YAxis type="number" dataKey="y" name={INDICATORS.find(i => i.id === indicator)?.name} tick={{ fontSize: 10 }} label={{ value: INDICATORS.find(i => i.id === indicator)?.name, angle: -90, position: "insideLeft", fontSize: 10 }} />
                 <Tooltip cursor={{ strokeDasharray: "3 3" }} contentStyle={{ fontSize: 11 }} />
-                <Scatter data={scatter} fill={MODELS.find(m => m.id === model)?.color} fillOpacity={0.55} />
+                <Scatter data={scatter.points} fill={MODELS.find(m => m.id === model)?.color} fillOpacity={0.55} />
                 <Line type="monotone" dataKey="y" data={lineData} stroke="#be123c" strokeWidth={2} dot={false} name={t("spectral.scatter.ols")} />
               </ScatterChart>
             </ResponsiveContainer>

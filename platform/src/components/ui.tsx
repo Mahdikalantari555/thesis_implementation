@@ -145,11 +145,73 @@ export const fmtObs = (v: number | null, d = 3): string => {
   return isNaN(n) ? "—" : n.toFixed(d);
 };
 
+/**
+ * Compact provenance summary for one observation. The previous UI rendered
+ * ten separate chips (one per channel) that dominated the inspector; the same
+ * information is grouped by provenance state into at most three short lines.
+ * Hovering a line titles the exact channel: state pairs, so the per-channel
+ * labelling contract is preserved (platform-real-data spec).
+ */
+const PROV_CHANNEL_ORDER: { key: string; label: string }[] = [
+  { key: "ndvi", label: "NDVI" },
+  { key: "evi", label: "EVI" },
+  { key: "savi", label: "SAVI" },
+  { key: "ndmi", label: "NDMI" },
+  { key: "tvdi", label: "TVDI" },
+  { key: "cwsi", label: "CWSI" },
+  { key: "eta", label: "ETa" },
+  { key: "lst", label: "LST" },
+  { key: "precip", label: "Precip" },
+  { key: "temp", label: "Temp" },
+];
+
+const PROV_STATE_COLORS: Record<string, string> = {
+  observed: "#0f766e",
+  modelled: "#0284c7",
+  model: "#7c3aed",
+  proxy: "#d97706",
+  absent: "#94a3b8",
+  legacy: "#be123c",
+};
+
+export function ProvenanceSummary({ provenance }: { provenance: Record<string, string> }): React.ReactElement {
+  const t = useT();
+  const byState = new Map<string, string[]>();
+  PROV_CHANNEL_ORDER.forEach(({ key, label }) => {
+    const st = provenance[key];
+    if (!st) return;
+    const list = byState.get(st) ?? [];
+    list.push(label);
+    byState.set(st, list);
+  });
+  if (!byState.size) return <></>;
+  return (
+    <div className="mt-2 space-y-1">
+      {[...byState.entries()].map(([state, channels]) => {
+        const color = PROV_STATE_COLORS[state] ?? "#94a3b8";
+        return (
+          <div
+            key={state}
+            className="flex items-center gap-1.5 text-[10px] leading-tight"
+            title={channels.map(ch => `${ch}: ${state}`).join(" · ")}
+          >
+            <span className="w-1.5 h-1.5 shrink-0 rounded-full" style={{ background: color }} aria-hidden="true" />
+            <span className="shrink-0 font-medium" style={{ color }}>
+              {t(`prov.${state}`)}
+            </span>
+            <span className="font-mono text-slate-500 truncate">{channels.join(" · ")}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function LegacyPayloadNotice(): React.ReactElement {
   const t = useT();
   return (
     <div className="mt-2 p-2 border border-amber-400 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 text-[11px] rounded">
-      <bdi>{t("legacy.notice.title") || "Legacy payload"}</bdi>: {t("legacy.notice.body") || "This payload was written before contractVersion 2. Some channels are labelled legacy/absent and may not match the current UI."}
+      <bdi>{t("legacy.notice.title") || "Legacy payload"}</bdi>: {t("legacy.notice.body") || "This payload was written by an older data contract. Some channels are labelled legacy/absent and may not match the current UI."}
     </div>
   );
 }

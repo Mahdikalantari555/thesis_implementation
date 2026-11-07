@@ -146,6 +146,63 @@ class BandCache:
                 self._close(evicted)
 
 
+class StretchStats:
+    """Per-scene RGB percent stretch (lo/hi per band), shared by all tiles.
+
+    Computing the 2-98% stretch per tile made neighbouring tiles normalise
+    independently — visible brightness seams at every tile boundary. The
+    stretch is now derived once per scene from a decimated full-scene read
+    and reused for every tile of that scene (wire-platform-to-real-data
+    follow-up: consistent RGB mosaic).
+    """
+
+    __slots__ = ("lo", "hi")
+
+    def __init__(self, lo: dict[str, float], hi: dict[str, float]):
+        self.lo = lo
+        self.hi = hi
+
+
+class SceneStretchCache:
+    """Small thread-safe LRU of per-scene stretch statistics (8 scenes)."""
+
+    def __init__(self, maxsize: int = 8):
+        self.maxsize = maxsize
+        self._entries: collections.OrderedDict[str, StretchStats] = collections.OrderedDict()
+        self._lock = threading.Lock()
+
+    def get(self, scene_dir: Path, band_cache: "BandCache") -> StretchStats:
+        key = str(scene_dir)
+        with self._lock:
+            hit = self._entries.get(key)
+            if hit is not None:
+                self._entries.move_to_end(key)
+                return hit
+        stats = self._compute(scene_dir, band_cache)
+        with self._lock:
+            self._entries[key] = stats
+            while len(self._entries) > self.maxsize:
+                self._entries.popitem(last=False)
+        return stats
+
+    @staticmethod
+    def _compute(scene_dir: Path, band_cache: "BandCache") -> StretchStats:
+        # One decimated read of the whole warped scene per band: statistically
+        # sufficient for a 2-98% stretch and computed once per scene.
+        lo, hi = {}, {}
+        for band in ("red", "green", "blue"):
+            warped = band_cache.get(scene_dir, band)
+            with warped.lock:
+                sample = warped.vrt.read(1, out_shape=(512, 512), resampling=Resampling.bilinear, masked=True)
+            arr = np.ma.filled(sample.astype("float64"), np.nan)
+            vals = arr[np.isfinite(arr) & (arr > 0)]
+            if vals.size:
+                lo[band], hi[band] = (float(v) for v in np.percentile(vals, [2.0, 98.0]))
+            else:
+                lo[band], hi[band] = 0.0, 1.0
+        return StretchStats(lo, hi)
+
+
 def read_vrt_window(vrt, xmin: float, ymin: float, xmax: float, ymax: float) -> np.ndarray:
     """Read a 256x256 tile from a WarpedVRT as float64 with NaN outside.
 
@@ -191,8 +248,14 @@ def _apply_colormap(values: np.ndarray, valid: np.ndarray) -> np.ndarray:
     return rgb
 
 
-def render_rgb(bands: dict[str, np.ndarray]) -> np.ndarray:
-    """256x256x4 RGBA uint8 from red/green/blue reflectance (percent stretch)."""
+def render_rgb(bands: dict[str, np.ndarray], stretch: StretchStats | None = None) -> np.ndarray:
+    """256x256x4 RGBA uint8 from red/green/blue reflectance.
+
+    With ``stretch`` (the per-scene statistics from SceneStretchCache) every
+    tile of a scene shares one contrast window — no seams between neighbouring
+    tiles. Without it, the stretch falls back to per-tile percentiles (only
+    used by tests).
+    """
     valid = np.ones((TILE_SIZE, TILE_SIZE), dtype=bool)
     for name in ("red", "green", "blue"):
         arr = bands[name]
@@ -200,8 +263,11 @@ def render_rgb(bands: dict[str, np.ndarray]) -> np.ndarray:
     rgb = np.zeros((TILE_SIZE, TILE_SIZE, 4), dtype="uint8")
     if valid.any():
         for i, name in enumerate(("red", "green", "blue")):
-            arr = bands[name][valid]
-            lo, hi = np.percentile(arr, [2.0, 98.0])
+            if stretch is not None:
+                lo, hi = stretch.lo[name], stretch.hi[name]
+            else:
+                arr_v = bands[name][valid]
+                lo, hi = (float(v) for v in np.percentile(arr_v, [2.0, 98.0]))
             scaled = np.clip((bands[name] - lo) / max(hi - lo, 1e-9), 0.0, 1.0)
             rgb[..., i] = np.where(valid, (scaled * 255).astype("uint8"), 0)
     rgb[..., 3] = np.where(valid, 255, 0)
@@ -243,6 +309,7 @@ class TileRequestHandler(BaseHTTPRequestHandler):
     scenes_by_date: dict[str, list[dict]] = {}
     scenes_dir: Path | None = None
     cache: BandCache | None = None
+    stretch_cache: SceneStretchCache | None = None
     index_payload: bytes = b""
 
     def _send(self, status: int, body: bytes, content_type: str, cacheable: bool = False) -> None:
@@ -319,7 +386,12 @@ class TileRequestHandler(BaseHTTPRequestHandler):
             # reads on one shared WarpedVRT crash the process (0xC0000005).
             with warped.lock:
                 bands[band] = read_vrt_window(warped.vrt, xmin, ymin, xmax, ymax)
-        rgba = render_rgb(bands) if layer == "rgb" else render_ndvi(bands)
+        if layer == "rgb":
+            # Scene-shared contrast window: neighbouring tiles must agree.
+            stretch = self.stretch_cache.get(scene_dir, self.cache)  # type: ignore[union-attr]
+            rgba = render_rgb(bands, stretch)
+        else:
+            rgba = render_ndvi(bands)
         return encode_png(rgba)
 
     def log_message(self, fmt: str, *args) -> None:
@@ -355,6 +427,7 @@ def serve(host: str, port: int, scenes_dir: Path, cache_size: int, index_path: P
     TileRequestHandler.scenes_by_date = dict(by_date)
     TileRequestHandler.scenes_dir = scenes_dir
     TileRequestHandler.cache = BandCache(cache_size)
+    TileRequestHandler.stretch_cache = SceneStretchCache()
     TileRequestHandler.index_payload = json.dumps({"scenes": [{k: v for k, v in s.items() if k != "dir"} for s in scenes]}).encode("utf-8")
 
     server = ThreadingHTTPServer((host, port), TileRequestHandler)

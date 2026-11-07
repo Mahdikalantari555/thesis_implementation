@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { ComposedChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Brush, Legend, Area } from "recharts";
 import { Panel, Label, Select, Badge, EmptyState } from "../components/ui";
 import { useAnalysis } from "../context/AnalysisContext";
-import { FIELDS, MODELS, INDICATORS, getSeries, DATES, LAST_IDX, ANOMALY_THRESHOLD, type ModelId, type IndicatorId } from "../data/data";
+import { FIELDS, MODELS, INDICATORS, getSeries, DATES, LAST_IDX, ANOMALY_THRESHOLD, tickInterval, type ModelId, type IndicatorId } from "../data/data";
 import { useLocale, useT } from "../i18n";
 
 const VAR_COLORS: Record<string, string> = { ndvi: "#16a34a", evi: "#65a30d", savi: "#059669", ndmi: "#0891b2", tvdi: "#ea580c", cwsi: "#dc2626", eta: "#0284c7", lst: "#9333ea", precip: "#64748b", temp: "#b45309" };
@@ -145,7 +145,7 @@ export default function Temporal() {
                 {/* Recharts must stay LTR even under dir="rtl" or axes mirror (spec: charts render under RTL). */}
                 <ComposedChart data={data} margin={{ top: 10, right: 50, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10 }} interval={3} />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={tickInterval(DATES.length, 16)} />
                   <YAxis yAxisId="left" domain={[0, 1]} tick={{ fontSize: 10 }} label={{ value: t("temporal.chart.anomalyScore"), angle: -90, position: "insideLeft", fontSize: 10 }} />
                   <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} hide={normalize} />
                   <Tooltip content={
@@ -217,7 +217,7 @@ export default function Temporal() {
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={d} margin={{ top: 5, right: 30, left: -15, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                        <XAxis dataKey="date" tick={{ fontSize: 9 }} interval={8} />
+                        <XAxis dataKey="date" tick={{ fontSize: 10 }} interval={tickInterval(series.length, 8)} />
                         <YAxis yAxisId="l" domain={[0, 1]} tick={{ fontSize: 9 }} />
                         <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 9 }} />
                         <Tooltip contentStyle={{ fontSize: 11 }} />

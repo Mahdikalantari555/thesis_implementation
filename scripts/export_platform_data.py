@@ -30,12 +30,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 log = logging.getLogger("export_platform_data")
 
 sys.path.insert(0, str(SCRIPT_DIR))
-from platform_channels import CONTRACT_VERSION, PROXY_SCORE_FORMULA_ID, SCORE_NAMES, by_name  # type: ignore
+from platform_channels import CONTRACT_VERSION, PROXY_SCORE_FORMULA_ID, SCORE_CHECKPOINTS, SCORE_NAMES, by_name  # type: ignore
 from load_model_checkpoints import load_model_checkpoints, squash_bin_error  # type: ignore
 from cycle_inputs import build_field_cycles, resolve_observation_scores  # type: ignore
 
-REVISIT_DAYS = 9.3
-MAX_OFFSET_DAYS = REVISIT_DAYS + REVISIT_DAYS / 2.0  # ~13.95 days
+REVISIT_DAYS = 9.3  # informational: Landsat revisit cadence (kept for docs)
 
 
 class ContractViolation(ValueError):
@@ -51,14 +50,6 @@ def validate_observation(field_id: int, sample_date: str, channel: str, value: f
         raise ContractViolation(
             f"field {field_id} sample {sample_date} channel {channel}: {value} outside [{lo}, {hi}]"
         )
-
-
-def nearest_acquisition(sample_date: pd.Timestamp, dates: pd.DatetimeIndex, max_offset: float) -> tuple[int, pd.Timestamp] | None:
-    diffs = np.abs((dates - sample_date).total_seconds()) / 86400.0
-    best_i = int(np.argmin(diffs))
-    if float(diffs[best_i]) <= max_offset:
-        return best_i, pd.Timestamp(dates[best_i])
-    return None
 
 
 def clamp(x: float, lo: float, hi: float) -> float:
@@ -79,6 +70,57 @@ def parse_args() -> argparse.Namespace:
         help="Directory holding the <model>_490.pt checkpoints (default: checkpoints/)",
     )
     return p.parse_args()
+
+
+def to_contract_v4(series_by_field: dict[str, list[dict]]) -> dict:
+    """Compact the per-observation maps into the v4 wire format.
+
+    v3 stored a full object per observation; with the observation axis widened
+    to every acquisition date (490 x 538) that cost ~1.1 kB/obs (292 MB) —
+    dominated by strings repeated thousands of times. v4 keeps every v3 value
+    but stores each series once:
+
+      - ``axis``: the shared acquisition-date list (first row -> last row);
+      - ``fields.<id>.channels`` / ``.scores``: numeric arrays indexed by the
+        axis (null = absent);
+      - ``channelProvenance`` / ``scoreProvenance``: run-length encoded
+        ``[state, count]`` pairs per series;
+      - everything else is derived on load (``sampleDate``/``acquisitionDate``
+        = the axis date, ``scoreFormulaId`` from the provenance state, ``idx``
+        from position, ``missing`` = NDVI null, ``stalenessReason`` =
+        "invalid acquisition" when missing, ``scoreCollinearity`` shared).
+
+    The runtime decoder (``platform/src/data/data.ts``) reconstructs the exact
+    v3-shaped observation objects, so the views are unchanged.
+    """
+
+    def rle(values: list) -> list:
+        runs: list[list] = []
+        for v in values:
+            if runs and runs[-1][0] == v:
+                runs[-1][1] += 1
+            else:
+                runs.append([v, 1])
+        return runs
+
+    axis = [o["date"] for o in next(iter(series_by_field.values()))]
+    channels = ["ndvi", "evi", "savi", "ndmi", "tvdi", "cwsi", "eta", "lst", "precip", "temp"]
+    fields_out: dict[str, dict] = {}
+    for fid, obs_list in series_by_field.items():
+        fields_out[fid] = {
+            "channels": {c: [o[c] for o in obs_list] for c in channels},
+            "scores": {k: [o["scores"][k] for o in obs_list] for k in SCORE_NAMES},
+            "channelProvenance": {c: rle([o["provenance"][c] for o in obs_list]) for c in channels},
+            "scoreProvenance": {k: rle([o["scoreProvenance"][k] for o in obs_list]) for k in SCORE_NAMES},
+        }
+    return {
+        "contractVersion": 4,
+        "axis": axis,
+        "collinearity": next(iter(series_by_field.values()))[0]["scoreCollinearity"],
+        "checkpoints": dict(SCORE_CHECKPOINTS),
+        "proxyFormulaId": PROXY_SCORE_FORMULA_ID,
+        "fields": fields_out,
+    }
 
 
 def main() -> None:
@@ -141,10 +183,18 @@ def main() -> None:
     dates = reader.dates
     cube = reader.get_stat("median")
 
-    sample_dates = []
-    for y in range(2021, 2025):
-        for m in range(1, 13):
-            sample_dates.append(pd.Timestamp(f"{y}-{m:02d}-15"))
+    # Observation axis: EVERY acquisition date in the cube, first row to last
+    # row — no synthetic mid-month sampling. Each observation *is* a real
+    # Landsat acquisition, so sampleDate == acquisitionDate, months with two
+    # acquisitions appear twice, and the staleness guard ("no acquisition
+    # within window") becomes structurally impossible. A date can still be
+    # invalid per field (low valid_frac / out-of-range LST) — that stays the
+    # honest "missing" state.
+    sample_dates = [pd.Timestamp(d) for d in dates]
+    log.info(
+        "Observation axis: %d acquisition dates %s → %s (all cube dates, no monthly resampling)",
+        len(sample_dates), sample_dates[0].date(), sample_dates[-1].date(),
+    )
 
     # Per-field-cycle tensors (36 phase bins x 8 channels) built exactly like the
     # training NPZ (scripts/segment_and_export_cycles_490.py), then scored by each
@@ -186,7 +236,6 @@ def main() -> None:
     log.info("Building farm records...")
     farm_records = []
     series_by_field: dict[str, list[dict]] = {}
-    rejected = 0
     total_samples = 0
     weather_matched = 0
     weather_dated = 0
@@ -228,38 +277,10 @@ def main() -> None:
 
         for step_i, sd in enumerate(sample_dates):
             total_samples += 1
-            acq = nearest_acquisition(sd, dates, MAX_OFFSET_DAYS)
-            if acq is None:
-                rejected += 1
-                obs = {
-                    "date": sd.strftime("%Y-%m-%d"),
-                    "sampleDate": sd.strftime("%Y-%m-%d"),
-                    "idx": step_i,
-                    "acquisitionDate": None,
-                    "missing": True,
-                    "stalenessReason": "no acquisition within window",
-                    "ndvi": None,
-                    "evi": None,
-                    "savi": None,
-                    "ndmi": None,
-                    "tvdi": None,
-                    "cwsi": None,
-                    "eta": None,
-                    "lst": None,
-                    "precip": None,
-                    "temp": None,
-                    # Per-key maps stay aligned with the provenance maps: every
-                    # score is null and labelled "absent" (no acquisition).
-                    "scores": {k: None for k in SCORE_NAMES},
-                    "scoreProvenance": {k: "absent" for k in SCORE_NAMES},
-                    "scoreFormulaId": {k: None for k in SCORE_NAMES},
-                    "provenance": {c: "absent" for c in ["ndvi", "evi", "savi", "ndmi", "tvdi", "cwsi", "eta", "lst", "precip", "temp"]},
-                    "scoreCollinearity": "cwsi",
-                }
-                farm_obs.append(obs)
-                continue
-
-            ai, acq_date = acq
+            # Every sample date IS an acquisition (axis = cube dates), so the
+            # observation index is the cube time index directly.
+            ai = step_i
+            acq_date = sd
             acq_key = acq_date.strftime("%Y-%m-%d")
             weather_dated += 1
             wrec = weather_by_date.get(acq_key)
@@ -437,9 +458,13 @@ def main() -> None:
     log.info("Saved %d Khuzestan farm definitions to %s", len(farm_records), farms_json_path)
 
     series_json_path = PLATFORM_DATA_DIR / "series_khuzestan.json"
-    atomic_dump(series_json_path, series_by_field)
-    log.info("Saved series for %d farms to %s", len(series_by_field), series_json_path)
-    log.info("Staleness guard rejected %d of %d samples (max offset %.2f days)", rejected, total_samples, MAX_OFFSET_DAYS)
+    atomic_dump(series_json_path, to_contract_v4(series_by_field))
+    log.info("Saved series for %d farms to %s (contract v4 compact)", len(series_by_field), series_json_path)
+    n_missing = sum(1 for obs_list in series_by_field.values() for o in obs_list if o["missing"])
+    log.info(
+        "Observations: %d (%d fields x %d acquisition dates); %d invalid acquisitions rendered as missing",
+        total_samples, len(series_by_field), len(next(iter(series_by_field.values()))), n_missing,
+    )
     if weather_dated:
         frac = weather_matched / weather_dated
         log.info(
@@ -447,7 +472,7 @@ def main() -> None:
             weather_matched, weather_dated, 100.0 * frac, frac, frac,
         )
     else:
-        log.warning("Weather join coverage: no dated observations to match (all samples rejected by the staleness guard)")
+        log.warning("Weather join coverage: no observations to match against")
 
 
 if __name__ == "__main__":

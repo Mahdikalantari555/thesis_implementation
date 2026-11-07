@@ -120,10 +120,23 @@ async function connect(webSocketDebuggerUrl) {
       list.forEach(fn => fn(msg.params));
     }
   };
-  const send = (method, params = {}) =>
+  const send = (method, params = {}, timeoutMs = 60000) =>
     new Promise((resolve, reject) => {
       const msgId = ++id;
-      pending.set(msgId, { resolve, reject });
+      const timer = setTimeout(() => {
+        pending.delete(msgId);
+        reject(new Error(`CDP timeout after ${timeoutMs} ms: ${method}`));
+      }, timeoutMs);
+      pending.set(msgId, {
+        resolve: v => {
+          clearTimeout(timer);
+          resolve(v);
+        },
+        reject: e => {
+          clearTimeout(timer);
+          reject(e);
+        },
+      });
       ws.send(JSON.stringify({ id: msgId, method, params }));
     });
   const once = method =>
@@ -517,6 +530,15 @@ async function screenshot(send) {
 }
 
 async function main() {
+  // Hard ceiling: a wedged CDP command now rejects (see send timeout), but the
+  // watchdog guarantees the run can never hang silently forever.
+  const watchdog = setTimeout(
+    () => {
+      console.error("[capture] watchdog: run exceeded 12 min — aborting");
+      process.exit(1);
+    },
+    12 * 60 * 1000,
+  );
   if (!fs.existsSync(DIST)) {
     console.error(`[capture] missing build: ${DIST}\n          run:  cd platform && npm run build`);
     process.exit(1);
@@ -616,7 +638,7 @@ async function main() {
       });
 
     let state = await probe();
-    for (let i = 0; i < 120 && !(state.nav >= PAGES.length && state.dir === (args.locale === "fa" ? "rtl" : "ltr")); i++) {
+    for (let i = 0; i < 480 && !(state.nav >= PAGES.length && state.dir === (args.locale === "fa" ? "rtl" : "ltr")); i++) {
       await sleep(250);
       state = await probe();
     }

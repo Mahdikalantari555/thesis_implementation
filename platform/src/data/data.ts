@@ -6,9 +6,13 @@
 // synthetic values with a seeded RNG instead). It is now the single data source.
 // (Renamed from mock.ts: this is the typed loader for real pipeline output,
 // not mock data — wire-platform-to-real-data task 4.3.)
+// The series payload covers every acquisition date of the archive (~538 obs
+// per field, ~86 MB): imported `?raw` and parsed once at startup — JSON.parse
+// of a string literal is far faster for the browser than an 86 MB object
+// literal, and keeps the single-file offline build intact.
 import farmsKhuzestanData from './farms_khuzestan.json';
-import khuSeries from './series_khuzestan.json';
-import { CHANNELS, SCORES, type ChannelSpec, type ScoreProvenanceState } from './channels';
+import khuSeriesRaw from './series_khuzestan.json?raw';
+import { CHANNELS, CHANNEL_NAMES, type ChannelSpec, type ScoreProvenanceState } from './channels';
 
 export type ModelId =
   | 'b0_calendar'
@@ -153,7 +157,7 @@ export const hasFields = FIELDS.length > 0;
 /** True when any field was loaded without contractVersion >= 3 (legacy payload). */
 export const isLegacyPayload = !FIELDS.length
   ? false
-  : (farmsKhuzestanData as any[]).some(f => (f?.contractVersion ?? 0) < 3);
+  : (farmsKhuzestanData as any[]).some(f => (f?.contractVersion ?? 0) < 4);
 
 const PLACEHOLDER_FIELD: Field = {
   id: '', code: '—', name: '—', farm: '—', municipality: '—', block: null, areaHa: null,
@@ -170,20 +174,70 @@ export const fieldById = (id: string): Field => FIELDS.find(f => f.id === id) ??
 
 
 // ── Time axis: single source of truth ────────────────────────────────────────
-// Dates come from the exported series (scripts/export_platform_data.py emits 48
-// monthly samples per field: 2021-01-15 … 2024-12-15). Previously these were
-// hard-coded here *and* the exported `series_khuzestan.json` was never imported,
-// so sliders (`max={47}`) and "48 obs" labels could drift from the data. Now the
-// axis is derived from the payload and every control reads `DATES.length`.
-const SERIES = khuSeries as Record<string, unknown[]>;
+// The axis is EVERY acquisition date of the archive (contract v4 payload,
+// first row -> last row); every slider, chart and label derives from it.
+const KHU_SERIES_V4 = JSON.parse(khuSeriesRaw) as V4Payload;
 
-function deriveDates(series: Record<string, unknown[]>): string[] {
-  const first = Object.values(series)[0];
-  if (!Array.isArray(first) || first.length === 0) return [];
-  return first.map(o => String((o as { date?: string }).date ?? ""));
+
+function decodeFieldV4(payload: V4Payload, fid: string): Obs[] {
+  const f = payload.fields[fid];
+  if (!f) return [];
+  const n = payload.axis.length;
+  const channelOrder = CHANNEL_NAMES;
+  {
+    const chanProv: Record<string, string[]> = {};
+    for (const c of channelOrder) chanProv[c] = expandRle(f.channelProvenance[c], n);
+    const scoreProv: Record<string, string[]> = {};
+    for (const k of SCORE_KEYS) scoreProv[k] = expandRle(f.scoreProvenance[k], n);
+    const ndviArr = f.channels.ndvi;
+    const obs: Obs[] = [];
+    for (let i = 0; i < n; i++) {
+      const date = payload.axis[i];
+      const missing = ndviArr[i] == null;
+      const scores = {} as Record<ModelId, number | null>;
+      const scoreProvMap = {} as Record<ModelId, ScoreProvenanceState>;
+      const scoreFormula = {} as Record<ModelId, string | null>;
+      for (const k of SCORE_KEYS) {
+        scores[k] = f.scores[k][i];
+        const st = scoreProv[k][i];
+        scoreProvMap[k] = (st === "model" || st === "proxy" || st === "absent" ? st : "proxy") as ScoreProvenanceState;
+        // Derived from provenance exactly as the exporter records it (v3 rule):
+        // model -> "<model>_490:bin_mse_1mexp", proxy -> cwsi_affine_v1, absent -> null.
+        scoreFormula[k] = st === "model" ? `${payload.checkpoints[k] ?? k}:bin_mse_1mexp` : st === "proxy" ? payload.proxyFormulaId : null;
+      }
+      const channels = {} as Record<string, number | null>;
+      for (const c of channelOrder) channels[c] = f.channels[c][i];
+      const provenance = {} as ObsProvenance;
+      for (const c of channelOrder) (provenance as unknown as Record<string, string>)[c] = chanProv[c][i];
+      obs.push({
+        date,
+        sampleDate: date,
+        idx: i,
+        acquisitionDate: date,
+        missing,
+        stalenessReason: missing ? "invalid acquisition" : null,
+        ndvi: channels.ndvi,
+        evi: channels.evi,
+        savi: channels.savi,
+        ndmi: channels.ndmi,
+        tvdi: channels.tvdi,
+        cwsi: channels.cwsi,
+        eta: channels.eta,
+        lst: channels.lst,
+        precip: channels.precip,
+        temp: channels.temp,
+        scores,
+        scoreProvenance: scoreProvMap,
+        scoreFormulaId: scoreFormula,
+        provenance,
+        scoreCollinearity: payload.collinearity,
+      });
+    }
+    return obs;
+  }
 }
 
-export const DATES: string[] = deriveDates(SERIES);
+export const DATES: string[] = KHU_SERIES_V4.axis;
 export const N = DATES.length;
 /** Last valid index for the shared date axis (0 when empty — never `NaN`). */
 export const LAST_IDX = Math.max(0, N - 1);
@@ -195,18 +249,14 @@ export const clampIdx = (i: number) => Math.max(0, Math.min(LAST_IDX, Math.round
 export const dateAt = (i: number) => DATES[clampIdx(i)] ?? "";
 
 // ── Data provenance ──────────────────────────────────────────────────────────
-// `series_khuzestan.json` is produced by sampling Landsat/METRIC index cubes at
-// monthly dates. Since contract v3 its anomaly scores carry a per-score
-// provenance map: STS-Net / Tiny-CNN-Mamba / Time2Agri come from trained
-// checkpoints when available, everything else from the CWSI proxy rule (see
-// scripts/load_model_checkpoints.py and BUG-23). `scoresAreProxy` is derived
-// from the payload so the pipeline-output labelling stays honest.
-const payloadHasModelScores = Object.values(SERIES).some(arr =>
-  Array.isArray(arr) &&
-  arr.some(o => {
-    const sp = (o as { scoreProvenance?: Record<string, unknown> })?.scoreProvenance;
-    return sp != null && Object.values(sp).includes("model");
-  }),
+// `series_khuzestan.json` (contract v4) samples EVERY Landsat/METRIC
+// acquisition date. STS-Net / Tiny-CNN-Mamba / Time2Agri scores come from
+// trained checkpoints where a cycle bin exists, everything else from the CWSI
+// proxy rule (see scripts/load_model_checkpoints.py and BUG-23).
+// `scoresAreProxy` is derived from the payload so the pipeline-output
+// labelling stays honest.
+const payloadHasModelScores = Object.values(KHU_SERIES_V4.fields).some(f =>
+  Object.values(f.scoreProvenance).some(runs => runs.some(([state]) => state === "model")),
 );
 export const DATA_PROVENANCE = {
   /** Series actually rendered by the views. */
@@ -215,8 +265,8 @@ export const DATA_PROVENANCE = {
   /** True while anomaly scores are proxy formulas rather than model inference. */
   scoresAreProxy: !payloadHasModelScores,
   /** Number of fields that carry a time series. */
-  fieldCount: Object.keys(SERIES).length,
-  /** Months represented by the shared axis. */
+  fieldCount: Object.keys(KHU_SERIES_V4.fields).length,
+  /** Observation dates represented by the shared axis. */
   months: N,
   /** First and last date on the axis (ISO). */
   firstDate: DATES[0] ?? "",
@@ -265,7 +315,40 @@ export interface Obs {
 }
 
 const SCORE_KEYS = MODELS.map(m => m.id);
-const CHANNEL_KEYS: (keyof ObsProvenance)[] = ['ndvi', 'evi', 'savi', 'ndmi', 'tvdi', 'cwsi', 'eta', 'lst', 'precip', 'temp'];
+
+/**
+ * Contract v4 payload: a shared acquisition-date axis plus per-field numeric
+ * arrays and run-length-encoded provenance. Decoding reconstructs the exact
+ * per-observation objects the views consume (the v3 `Obs` shape) without any
+ * of the string redundancy that made the full-archive payload ~292 MB.
+ */
+interface V4Payload {
+  contractVersion: number;
+  axis: string[];
+  collinearity: string;
+  checkpoints: Record<string, string>;
+  proxyFormulaId: string;
+  fields: Record<string, {
+    channels: Record<string, (number | null)[]>;
+    scores: Record<string, (number | null)[]>;
+    channelProvenance: Record<string, [string, number][]>;
+    scoreProvenance: Record<string, [string, number][]>;
+  }>;
+}
+
+/** Expand `[state, count]` runs into a per-index state array. */
+function expandRle(runs: [string, number][], length: number): string[] {
+  const out: string[] = [];
+  for (const [state, count] of runs) {
+    for (let i = 0; i < count; i++) out.push(state);
+  }
+  if (out.length !== length) {
+    // A malformed payload must fail loudly, not silently mislabel observations.
+    throw new Error(`RLE length ${out.length} != axis length ${length}`);
+  }
+  return out;
+}
+
 
 /**
  * Normalise one exported observation. Exported payloads are read with
@@ -285,80 +368,13 @@ export function value(obs: Obs | undefined | null, channel: keyof ObsProvenance)
   return typeof v === 'number' && Number.isFinite(v) ? v : NaN;
 }
 
-function normaliseObs(raw: unknown, idx: number): Obs {
-  const o = (raw ?? {}) as Record<string, unknown>;
-  const rawScores = o.scores as Record<string, unknown> | null | undefined;
-  const nums = {} as Record<ModelId, number | null>;
-  SCORE_KEYS.forEach(k => {
-    const v = rawScores?.[k];
-    nums[k] = typeof v === "number" && Number.isFinite(v) ? v : null;
-  });
-  const num = (key: string): number | null => {
-    const v = o[key];
-    return typeof v === "number" && Number.isFinite(v) ? v : null;
-  };
-  const prov = (o.provenance ?? {}) as Partial<ObsProvenance>;
-  const provenance: ObsProvenance = {
-    ndvi: 'absent', evi: 'absent', savi: 'absent', ndmi: 'absent', tvdi: 'absent',
-    cwsi: 'absent', eta: 'absent', lst: 'absent', precip: 'absent', temp: 'absent',
-  };
-  for (const k of CHANNEL_KEYS) {
-    const pv = prov[k];
-    if (pv) provenance[k] = pv;
-  }
-  // A null channel is "absent" no matter what the payload (or channel registry
-  // default) claims — a "Modelled" chip next to a "—" value misrepresents the
-  // data (spec: null is never labelled modelled/measured).
-  for (const k of CHANNEL_KEYS) {
-    const v = num(k);
-    if (v == null) provenance[k] = 'absent';
-  }
-  // Score provenance (contract v3) — defaults come from the score registry so
-  // pre-v3 payloads keep an honest labelling of their proxy scores.
-  const rawScoreProv = (o.scoreProvenance ?? null) as Partial<Record<ModelId, unknown>> | null;
-  const rawFormula = (o.scoreFormulaId ?? null) as Partial<Record<ModelId, unknown>> | null;
-  const scoreProv = {} as Record<ModelId, ScoreProvenanceState>;
-  const scoreFormula = {} as Record<ModelId, string | null>;
-  for (const k of SCORE_KEYS) {
-    const spec = SCORES.find(s => s.name === k);
-    const spv = rawScoreProv?.[k];
-    scoreProv[k] = spv === "model" || spv === "proxy" || spv === "absent"
-      ? spv
-      : (spec?.provenanceDefault ?? "proxy");
-    const fv = rawFormula?.[k];
-    scoreFormula[k] = typeof fv === "string" ? fv : null;
-  }
-  const missing = Boolean(o.missing);
-  return {
-    date: String(o.date ?? dateAt(idx)),
-    sampleDate: String(o.sampleDate ?? o.date ?? dateAt(idx)),
-    idx: typeof o.idx === "number" ? o.idx : idx,
-    acquisitionDate: typeof o.acquisitionDate === 'string' ? o.acquisitionDate : null,
-    missing,
-    stalenessReason: typeof o.stalenessReason === 'string' ? o.stalenessReason : null,
-    ndvi: num("ndvi"),
-    evi: num("evi"),
-    savi: num("savi"),
-    ndmi: num("ndmi"),
-    tvdi: num("tvdi"),
-    cwsi: num("cwsi"),
-    eta: num("eta"),
-    lst: num("lst"),
-    precip: num("precip"),
-    temp: num("temp"),
-    scores: nums,
-    scoreProvenance: scoreProv,
-    scoreFormulaId: scoreFormula,
-    provenance,
-    scoreCollinearity: typeof o.scoreCollinearity === "string" ? o.scoreCollinearity : null,
-  };
-}
 
 const fieldCache = new Map<string, Obs[]>();
 
 /** Fields that actually carry a time series — data-driven replacement for "48 fields" labels. */
-export const FIELDS_WITH_SERIES: Field[] = FIELDS.filter(f => getSeries(f.id).length > 0);
-const EMPTY_SERIES: Obs[] = [];
+// A field carries a series iff the payload contains it — checked on the raw
+// v4 payload so startup does no per-field decoding at all.
+export const FIELDS_WITH_SERIES: Field[] = FIELDS.filter(f => KHU_SERIES_V4.fields[f.id] !== undefined);
 
 /**
  * Time series for a field, read from the exported `series_khuzestan.json`.
@@ -368,8 +384,9 @@ const EMPTY_SERIES: Obs[] = [];
 export function getSeries(fieldId: string): Obs[] {
   const cached = fieldCache.get(fieldId);
   if (cached) return cached;
-  const raw = SERIES[fieldId];
-  const obs = Array.isArray(raw) ? raw.map((o, i) => normaliseObs(o, i)) : EMPTY_SERIES;
+  // Lazy per-field decode of the compact v4 payload: a field costs ~1 ms, so
+  // startup only parses the JSON (no 263k-object construction).
+  const obs = decodeFieldV4(KHU_SERIES_V4, fieldId);
   fieldCache.set(fieldId, obs);
   return obs;
 }
@@ -547,6 +564,27 @@ export function downloadCSV(filename: string, rows: (string | number)[][]) {
   a.remove();
   // Revoking synchronously can cancel the download in Chromium; defer one tick.
   setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+/**
+ * Recharts x-axis `interval` for ~`target` labelled ticks over `n` points.
+ * The full-archive axis has 538 dates — fixed intervals tuned for 48 points
+ * produced 60–180 cramped, unreadable ticks.
+ */
+export const tickInterval = (n: number, target = 12) => (n <= target ? 0 : Math.ceil(n / target) - 1);
+
+/**
+ * Deterministic stride downsample for *displaying* scatter points. Statistics
+ * (r, rho, regression, event tables) are always computed on the FULL series —
+ * only the SVG layer is thinned, because Recharts renders one node per point
+ * and 263k circles stall the page. `total` lets captions state what was shown.
+ */
+export function downsampleForDisplay<T>(points: T[], max = 5000): { points: T[]; total: number } {
+  if (points.length <= max) return { points, total: points.length };
+  const stride = Math.ceil(points.length / max);
+  const out: T[] = [];
+  for (let i = 0; i < points.length; i += stride) out.push(points[i]);
+  return { points: out, total: points.length };
 }
 
 /** ISO month (`YYYY-MM`) used by every chart axis in both locales. */

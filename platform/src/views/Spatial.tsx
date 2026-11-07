@@ -3,7 +3,7 @@ import { XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, L
 import MapView from "../components/MapView";
 import { Panel, Label, Select, Stat, Badge, EmptyState, fmtObs } from "../components/ui";
 import { useAnalysis, DEFAULT_DATE_IDX } from "../context/AnalysisContext";
-import { FIELDS, MODELS, INDICATORS, getSeries, moransI, pearson, mean, DATES, LAST_IDX, fieldById, clampIdx, monthAt } from "../data/data";
+import { FIELDS, MODELS, INDICATORS, getSeries, moransI, pearson, mean, DATES, LAST_IDX, fieldById, clampIdx, monthAt, tickInterval } from "../data/data";
 import { useLocale, useT } from "../i18n";
 
 export default function Spatial() {
@@ -208,7 +208,7 @@ export default function Spatial() {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={moranTrend} margin={{ top: 5, right: 15, left: -15, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 9 }} interval={4} />
+                <XAxis dataKey="date" tick={{ fontSize: 10 }} interval={tickInterval(DATES.length, 10)} />
                 <YAxis domain={[-0.5, 1]} tick={{ fontSize: 10 }} />
                 <Tooltip contentStyle={{ fontSize: 11 }} />
                 <Line type="monotone" dataKey="moran" stroke="#7c3aed" strokeWidth={2} dot={false} name={t("spatial.trend.seriesName")} />

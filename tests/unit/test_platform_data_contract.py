@@ -27,22 +27,81 @@ DATA_DIR = ROOT / "platform" / "src" / "data"
 FARMS_PATH = DATA_DIR / "farms_khuzestan.json"
 SERIES_PATH = DATA_DIR / "series_khuzestan.json"
 
+# ── Contract v4 reader ────────────────────────────────────────────────────────
+# The v4 payload stores a shared axis + per-field arrays + RLE provenance;
+# these helpers reconstruct the v3-shaped per-observation dicts so the semantic
+# checks below stay written against observations. Mirrors the decoder in
+# platform/src/data/data.ts exactly.
+
+
+def _expand_rle(runs: list, n: int) -> list:
+    out: list = []
+    for state, count in runs:
+        out.extend([state] * count)
+    assert len(out) == n, f"RLE length {len(out)} != axis length {n}"
+    return out
+
+
+def load_series_v3view() -> dict[str, list[dict]]:
+    raw = json.loads(SERIES_PATH.read_text(encoding="utf-8"))
+    assert raw["contractVersion"] == 4, f"expected contract v4 payload, got {raw.get('contractVersion')}"
+    axis = raw["axis"]
+    n = len(axis)
+    checkpoints = raw["checkpoints"]
+    proxy_id = raw["proxyFormulaId"]
+    out: dict[str, list[dict]] = {}
+    for fid, f in raw["fields"].items():
+        chan_prov = {c: _expand_rle(r, n) for c, r in f["channelProvenance"].items()}
+        score_prov = {k: _expand_rle(r, n) for k, r in f["scoreProvenance"].items()}
+        obs_list: list[dict] = []
+        for i, date in enumerate(axis):
+            missing = f["channels"]["ndvi"][i] is None
+            obs_list.append({
+                "date": date,
+                "sampleDate": date,
+                "idx": i,
+                "acquisitionDate": date,
+                "missing": missing,
+                "stalenessReason": "invalid acquisition" if missing else None,
+                **{c: f["channels"][c][i] for c in f["channels"]},
+                "scores": {k: f["scores"][k][i] for k in f["scores"]},
+                "scoreProvenance": {k: score_prov[k][i] for k in score_prov},
+                "scoreFormulaId": {
+                    k: (f"{checkpoints.get(k, k)}:bin_mse_1mexp" if score_prov[k][i] == "model"
+                        else proxy_id if score_prov[k][i] == "proxy" else None)
+                    for k in score_prov
+                },
+                "provenance": {c: chan_prov[c][i] for c in chan_prov},
+                "scoreCollinearity": raw["collinearity"],
+            })
+        out[fid] = obs_list
+    return out
+
+
+def _series() -> dict[str, list[dict]]:
+    return load_series_v3view()
+
+
+def _farms() -> list[dict]:
+    return json.loads(FARMS_PATH.read_text(encoding="utf-8"))
+
+
 
 def test_farms_contract_version():
-    farms = json.loads(FARMS_PATH.read_text(encoding="utf-8"))
+    farms = _farms()
     assert len(farms) == 490
     for f in farms:
-        assert f["contractVersion"] == 3
+        assert f["contractVersion"] == 4
         assert f["planted"] is None
         assert f["harvest"] is None
 
 
-def test_contract_version_is_v3():
-    assert CONTRACT_VERSION == 3
+def test_contract_version_is_v4():
+    assert CONTRACT_VERSION == 4
 
 
 def test_series_has_contract_v3_fields():
-    series = json.loads(SERIES_PATH.read_text(encoding="utf-8"))
+    series = _series()
     obs = next(iter(series.values()))[0]
     expected = {
         "date", "sampleDate", "idx", "acquisitionDate", "missing",
@@ -55,7 +114,7 @@ def test_series_has_contract_v3_fields():
 
 
 def test_provenance_matches_registry():
-    series = json.loads(SERIES_PATH.read_text(encoding="utf-8"))
+    series = _series()
     obs = next(iter(series.values()))[0]
     prov = obs["provenance"]
     for ch in ["ndvi", "evi", "savi", "ndmi", "tvdi", "cwsi", "eta", "lst", "precip", "temp"]:
@@ -64,7 +123,7 @@ def test_provenance_matches_registry():
 
 
 def test_channel_range_validation():
-    series = json.loads(SERIES_PATH.read_text(encoding="utf-8"))
+    series = _series()
     for fid, obs_list in series.items():
         for obs in obs_list:
             for ch in ["ndvi", "evi", "savi", "ndmi", "tvdi", "cwsi", "eta", "lst"]:
@@ -81,7 +140,7 @@ def test_channel_range_validation():
 
 
 def test_staleness_guard():
-    series = json.loads(SERIES_PATH.read_text(encoding="utf-8"))
+    series = _series()
     obs_list = next(iter(series.values()))
     missing = [o for o in obs_list if o["missing"]]
     assert len(missing) > 0
@@ -90,7 +149,7 @@ def test_staleness_guard():
 
 
 def test_neighbors_ranked():
-    farms = json.loads(FARMS_PATH.read_text(encoding="utf-8"))
+    farms = _farms()
     for f in farms:
         assert len(f["neighbors"]) <= 4
         assert all(n != f["id"] for n in f["neighbors"])
@@ -124,11 +183,16 @@ def test_score_registry_parity():
             assert spec.provenance_default == "model"
         else:
             assert spec.provenance_default == "proxy"
+    # v4 payload self-description mirrors the registry
+    raw = json.loads(SERIES_PATH.read_text(encoding="utf-8"))
+    assert raw["checkpoints"] == SCORE_CHECKPOINTS
+    assert raw["axis"][0] == "2013-03-30" and raw["axis"][-1] == "2026-09-10"
+    assert len(set(raw["axis"])) == len(raw["axis"])
 
 
 def test_score_provenance_values_in_series():
     """Every observation restricts score provenance to model|proxy|absent."""
-    series = json.loads(SERIES_PATH.read_text(encoding="utf-8"))
+    series = _series()
     for fid, obs_list in series.items():
         for obs in obs_list:
             prov = obs["scoreProvenance"]
@@ -141,7 +205,7 @@ def test_score_provenance_values_in_series():
 
 def test_score_formula_ids_in_series():
     """Formula ids match provenance: model -> checkpoint id, proxy -> cwsi_affine_v1, absent -> None."""
-    series = json.loads(SERIES_PATH.read_text(encoding="utf-8"))
+    series = _series()
     for fid, obs_list in series.items():
         for obs in obs_list:
             prov = obs.get("scoreProvenance")
@@ -168,7 +232,7 @@ def test_score_formula_ids_in_series():
 
 def test_weather_channels_carry_real_values():
     """Task 2.1: precip/temp non-null fraction > 0 over dated observations (target ≥ 90%)."""
-    series = json.loads(SERIES_PATH.read_text(encoding="utf-8"))
+    series = _series()
     dated = [
         (o["precip"], o["temp"])
         for obs_list in series.values()
@@ -186,7 +250,7 @@ def test_weather_channels_carry_real_values():
 def test_null_channel_is_never_labelled_modelled_or_measured():
     """Spec: a null value's provenance is absent/legacy — never modelled/measured —
     and a present value is never labelled absent."""
-    series = json.loads(SERIES_PATH.read_text(encoding="utf-8"))
+    series = _series()
     channels = ["ndvi", "evi", "savi", "ndmi", "tvdi", "cwsi", "eta", "lst", "precip", "temp"]
     for fid, obs_list in series.items():
         for obs in obs_list:
@@ -207,7 +271,7 @@ def test_no_synthesized_farm_strings():
 
 
 def test_no_dead_stress_event_field():
-    farms = json.loads(FARMS_PATH.read_text(encoding="utf-8"))
+    farms = _farms()
     assert all("stressEvent" not in f for f in farms), "stressEvent must not ship in the payload"
 
 
