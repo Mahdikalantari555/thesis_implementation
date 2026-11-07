@@ -28,8 +28,8 @@
 
 - [x] 5.1 Extend `scripts/capture_platform_screenshots.mjs`: per-view console messages, page errors, failed network requests; Map Explorer tile scenario (server up: select date + RGB, assert tile URLs 200 + on-map render, repeat NDVI; server stopped: graceful degradation). Verify: script runs green end-to-end over the production build.
 - [x] 5.2 Run the full gate: all 8 views → zero console errors / zero page errors / screenshots saved (normal operation); RGB and NDVI tile evidence screenshots; server-down run shows no crash. Archive evidence under `reports/` (gitignored figures dir or docs path consistent with repo convention).
-- [ ] 5.3 Update `docs/platform_bug_audit.md`: record the serve_tiles thread-race finding + fix, weather/meta wiring, copy cleanup; note BUG-24/25 final state (real registry wiring / null-with-no-source). Verify: doc references match shipped behavior.
-- [ ] 5.4 Commit all changes on the current branch.
+- [x] 5.3 Update `docs/platform_bug_audit.md`: record the serve_tiles thread-race finding + fix, weather/meta wiring, copy cleanup; note BUG-24/25 final state (real registry wiring / null-with-no-source). Verify: doc references match shipped behavior.
+- [x] 5.4 Commit all changes on the current branch.
 
 ## 6. Map Explorer UX (user-requested during apply, 2026-11-07)
 
