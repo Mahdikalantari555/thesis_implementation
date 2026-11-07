@@ -106,18 +106,22 @@ export function anomalyColor(v: number | null | undefined): string {
   return "#0f766e";
 }
 
-export function ProvenanceChip({ state, title }: { state: 'observed' | 'modelled' | 'proxy' | 'absent' | 'legacy'; title?: string }): React.ReactElement {
+export type ProvenanceChipState = 'observed' | 'modelled' | 'proxy' | 'absent' | 'legacy' | 'model';
+
+export function ProvenanceChip({ state, title }: { state: ProvenanceChipState; title?: string }): React.ReactElement {
   const t = useT();
-  const labels: Record<'observed' | 'modelled' | 'proxy' | 'absent' | 'legacy', string> = {
+  const labels: Record<ProvenanceChipState, string> = {
     observed: t("prov.observed"),
     modelled: t("prov.modelled"),
+    model: t("prov.model"),
     proxy: t("prov.proxy"),
     absent: t("prov.absent"),
     legacy: t("prov.legacy"),
   };
-  const colors: Record<'observed' | 'modelled' | 'proxy' | 'absent' | 'legacy', string> = {
+  const colors: Record<ProvenanceChipState, string> = {
     observed: "#0f766e",
     modelled: "#0284c7",
+    model: "#7c3aed",
     proxy: "#d97706",
     absent: "#94a3b8",
     legacy: "#be123c",

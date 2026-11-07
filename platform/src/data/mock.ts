@@ -6,7 +6,7 @@
 // synthetic values with a seeded RNG instead). It is now the single data source.
 import farmsKhuzestanData from './farms_khuzestan.json';
 import khuSeries from './series_khuzestan.json';
-import { CHANNELS, type ChannelSpec } from './channels';
+import { CHANNELS, SCORES, type ChannelSpec, type ScoreProvenanceState } from './channels';
 
 export type ModelId =
   | 'b0_calendar'
@@ -113,6 +113,7 @@ export interface Field {
   contractVersion?: number;
 }
 
+
 type RawFarm = {
   id?: string; code?: string; name?: string; farm?: string; municipality?: string; block?: string;
   areaHa?: number; variety?: string; planted?: string | null; harvest?: string | null;
@@ -132,7 +133,7 @@ export const FIELDS: Field[] = ((farmsKhuzestanData ?? []) as unknown as RawFarm
   areaHa: typeof f.areaHa === 'number' ? f.areaHa : 25,
   variety: f.variety || 'CP69-1062',
   planted: f.planted ?? null,
-  contractVersion: f.contractVersion ?? 2,
+  contractVersion: f.contractVersion ?? 3,
   harvest: f.harvest ?? null,
   centroid: f.centroid ?? KHUZESTAN_CENTROID,
   polygon: f.polygon ?? [],
@@ -143,10 +144,10 @@ export const FIELDS: Field[] = ((farmsKhuzestanData ?? []) as unknown as RawFarm
 
 export const hasFields = FIELDS.length > 0;
 
-/** True when any field was loaded without contractVersion >= 2 (legacy payload). */
+/** True when any field was loaded without contractVersion >= 3 (legacy payload). */
 export const isLegacyPayload = !FIELDS.length
   ? false
-  : (farmsKhuzestanData as any[]).some(f => (f?.contractVersion ?? 0) < 2);
+  : (farmsKhuzestanData as any[]).some(f => (f?.contractVersion ?? 0) < 3);
 
 const PLACEHOLDER_FIELD: Field = {
   id: '', code: '—', name: '—', farm: '—', municipality: '—', block: '—', areaHa: 0,
@@ -189,17 +190,24 @@ export const dateAt = (i: number) => DATES[clampIdx(i)] ?? "";
 
 // ── Data provenance ──────────────────────────────────────────────────────────
 // `series_khuzestan.json` is produced by sampling Landsat/METRIC index cubes at
-// monthly dates, but its anomaly scores are *rule-based proxies* (see
-// scripts/export_platform_data.py: clip(offset + stress_sig * weight)), not
-// frozen model inference. The platform therefore labels every view that renders
-// these numbers as "Demonstration data" instead of claiming research results.
-// Decision recorded in docs/platform_bug_audit.md (BUG-06).
+// monthly dates. Since contract v3 its anomaly scores carry a per-score
+// provenance map: STS-Net / Tiny-CNN-Mamba / Time2Agri come from trained
+// checkpoints when available, everything else from the CWSI proxy rule (see
+// scripts/load_model_checkpoints.py and BUG-23). `scoresAreProxy` is derived
+// from the payload so the "Demonstration data" labelling stays honest.
+const payloadHasModelScores = Object.values(SERIES).some(arr =>
+  Array.isArray(arr) &&
+  arr.some(o => {
+    const sp = (o as { scoreProvenance?: Record<string, unknown> })?.scoreProvenance;
+    return sp != null && Object.values(sp).includes("model");
+  }),
+);
 export const DATA_PROVENANCE = {
   /** Series actually rendered by the views. */
   source: "series_khuzestan.json",
   exporter: "scripts/export_platform_data.py",
   /** True while anomaly scores are proxy formulas rather than model inference. */
-  scoresAreProxy: true,
+  scoresAreProxy: !payloadHasModelScores,
   /** Number of fields that carry a time series. */
   fieldCount: Object.keys(SERIES).length,
   /** Months represented by the shared axis. */
@@ -240,6 +248,10 @@ export interface Obs {
   precip: number | null;
   temp: number | null;
   scores: Record<ModelId, number>;
+  /** Per-score provenance (contract v3): "model" | "proxy" | "absent". */
+  scoreProvenance: Record<ModelId, ScoreProvenanceState> | null;
+  /** Per-score formula id: checkpoint id for "model", "cwsi_affine_v1" for proxy. */
+  scoreFormulaId: Record<ModelId, string | null> | null;
   provenance: ObsProvenance | null;
   scoreCollinearity: string | null;
 }
@@ -287,6 +299,21 @@ function normaliseObs(raw: unknown, idx: number): Obs {
     const pv = prov[k];
     if (pv) defaultProv[k] = pv;
   }
+  // Score provenance (contract v3) — defaults come from the score registry so
+  // pre-v3 payloads keep an honest labelling of their proxy scores.
+  const rawScoreProv = (o.scoreProvenance ?? null) as Partial<Record<ModelId, unknown>> | null;
+  const rawFormula = (o.scoreFormulaId ?? null) as Partial<Record<ModelId, unknown>> | null;
+  const scoreProv = {} as Record<ModelId, ScoreProvenanceState>;
+  const scoreFormula = {} as Record<ModelId, string | null>;
+  for (const k of SCORE_KEYS) {
+    const spec = SCORES.find(s => s.name === k);
+    const spv = rawScoreProv?.[k];
+    scoreProv[k] = spv === "model" || spv === "proxy" || spv === "absent"
+      ? spv
+      : (spec?.provenanceDefault ?? "proxy");
+    const fv = rawFormula?.[k];
+    scoreFormula[k] = typeof fv === "string" ? fv : null;
+  }
   const missing = Boolean(o.missing);
   return {
     date: String(o.date ?? dateAt(idx)),
@@ -306,6 +333,8 @@ function normaliseObs(raw: unknown, idx: number): Obs {
     precip: num("precip"),
     temp: num("temp"),
     scores: nums,
+    scoreProvenance: scoreProv,
+    scoreFormulaId: scoreFormula,
     provenance: defaultProv,
     scoreCollinearity: typeof o.scoreCollinearity === "string" ? o.scoreCollinearity : null,
   };

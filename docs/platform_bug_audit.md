@@ -45,7 +45,7 @@ pipeline work outside the platform · **Won't fix** = intentional.
 | BUG-20 | Fonts | Google-Fonts `@import` failed offline → platform silently fell back to system fonts | P1 | **Fixed** |
 | BUG-21 | Data layer | Seeded experiment list shipped as fake “saved” research state | P1 | **Fixed** |
 | BUG-22 | Validation | Event-agreement “agreement rate” was labelled `kappaNum` (not a κ) | P2 | **Fixed** |
-| BUG-23 | Pipeline | Anomaly scores in `series_khuzestan.json` are proxy formulas, not model inference | P0 | **Deferred** |
+| BUG-23 | Pipeline | Anomaly scores in `series_khuzestan.json` are proxy formulas, not model inference | P0 | **Fixed** |
 | BUG-24 | Pipeline | Farm metadata repeats one block for all 490 fields (`name`/`farm`/`municipality` identical) | P1 | **Deferred** |
 | BUG-25 | Pipeline | `planted`/`harvest` hard-coded to `2021/03` / `2024/11` for every field | P2 | **Deferred** |
 | BUG-26 | Data layer | 7.7 MB JSON inflates the single-file build to ~8.7 MB | P2 | **Won't fix** |
@@ -271,7 +271,7 @@ have.
 **Fix:** renamed to `agreementRate` and the caption states it is agreement, not κ.
 A real Cohen's κ is a follow-up (needs marginal probabilities exposed).
 
-### BUG-23 — Proxy scores presented as model output (P0, Deferred)
+### BUG-23 — Proxy scores presented as model output (P0, Fixed)
 
 `export_platform_data.py` derives anomaly scores from a rule:
 
@@ -289,6 +289,23 @@ therefore cannot be used to compare detector behaviour, yet the UI lists
 driver, the demo badge on every page, and the banner text says “literature SSL model
 anomaly scores” rather than claiming live inference. **This is the single largest
 remaining honesty gap and should be the next change's P0.**
+
+**Resolution (change `integrate-real-model-outputs`, contract v3):** the exporter now
+loads the trained checkpoints (`checkpoints/sts_net_490.pt`, `tiny_cnn_mamba_490.pt`,
+`time2agri_490.pt`) via `scripts/load_model_checkpoints.py`, rebuilds per-field cycle
+tensors `(36 phase bins × 8 channels)` with the exact training pipeline
+(`scripts/cycle_inputs.py` reusing `ssl_anomaly.phenology.segment_cycles`), and scores
+each observation from the leave-one-time-bin-out reconstruction error of the cycle bin
+containing its acquisition date, squashed monotonically to (0, 1) via `1 - exp(-err)`.
+Every observation carries `scoreProvenance` (`model` | `proxy` | `absent`) and
+`scoreFormulaId` (checkpoint id or `cwsi_affine_v1`), mirrored in
+`platform/src/data/channels.ts::SCORES` and surfaced as a provenance badge on the
+inspector score card. Fallbacks are honest and per-cause: no artifact for a score key
+(b0/b1 baselines, masked_transformer — whose Lightning `.ckpt`s use the main-pipeline
+tokenizer, not cycle inputs) → proxy formula labelled `proxy`; artifact fails to load →
+`absent` with a null score (never a faked number); no acquisition → `absent`;
+`--no-models` forces the all-proxy path for deterministic tests. `DATA_PROVENANCE.
+scoresAreProxy` is now derived from the payload instead of hard-coded.
 
 ### BUG-24 — Farm metadata collapse (P1, Deferred)
 

@@ -36,3 +36,39 @@ export const channelByName = (name: string): ChannelSpec | undefined =>
 export const CHANNEL_NAMES = CHANNELS.map(c => c.name);
 
 export type ChannelId = (typeof CHANNELS)[number]['name'];
+
+// ── Score registry (contract v3) ─────────────────────────────────────────────
+// Provenance of an anomaly score for one observation: "model" when computed by
+// a loaded checkpoint, "proxy" when it fell back to the CWSI rule (formula id
+// recorded), "absent" when no score exists (stale sample or failed checkpoint).
+export type ScoreProvenanceState = 'model' | 'proxy' | 'absent';
+
+/** Formula id recorded on observations scored by the CWSI proxy rule. */
+export const PROXY_SCORE_FORMULA_ID = 'cwsi_affine_v1';
+
+/** Contract version recorded on every exported farm record (v3: score provenance). */
+export const CONTRACT_VERSION = 3;
+
+export interface ScoreSpec {
+  name: string;
+  provenanceDefault: ScoreProvenanceState;
+  /** Checkpoint stem under checkpoints/ when the score is model-backed. */
+  checkpoint?: string;
+}
+
+// Order mirrors the platform MODELS list (mock.ts); mirror of
+// scripts/platform_channels.py::SCORE_REGISTRY.
+export const SCORES: ScoreSpec[] = [
+  { name: 'b0_calendar', provenanceDefault: 'proxy' },
+  { name: 'b1_dsh', provenanceDefault: 'proxy' },
+  { name: 'b1_cusum', provenanceDefault: 'proxy' },
+  { name: 'masked_transformer', provenanceDefault: 'proxy' },
+  { name: 'sts_net', provenanceDefault: 'model', checkpoint: 'sts_net_490' },
+  { name: 'tiny_cnn_mamba', provenanceDefault: 'model', checkpoint: 'tiny_cnn_mamba_490' },
+  { name: 'time2agri', provenanceDefault: 'model', checkpoint: 'time2agri_490' },
+];
+
+export const scoreByName = (name: string): ScoreSpec | undefined =>
+  SCORES.find(s => s.name === name);
+
+export const SCORE_NAMES = SCORES.map(s => s.name);

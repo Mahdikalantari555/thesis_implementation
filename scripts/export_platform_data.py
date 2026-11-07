@@ -2,11 +2,15 @@
 
 Converts Data/Processed/coordinates/farms.geojson to EPSG:4326 (WGS84), merges
 farm attributes from farms.parquet, extracts multi-spectral indices from stats.zarr,
-and serializes browser-ready JSON for the React/Vite visualization platform.
+runs checkpoint-backed anomaly inference (STS-Net, Tiny-CNN-Mamba, Time2Agri) per
+field cycle, and serializes browser-ready JSON for the React/Vite visualization
+platform. Missing/broken checkpoints degrade to the CWSI proxy formula with
+``"provenance": "proxy"`` instead of crashing (``--no-models`` forces that path).
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 import math
@@ -26,7 +30,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 log = logging.getLogger("export_platform_data")
 
 sys.path.insert(0, str(SCRIPT_DIR))
-from platform_channels import by_name  # type: ignore
+from platform_channels import CONTRACT_VERSION, PROXY_SCORE_FORMULA_ID, SCORE_NAMES, by_name  # type: ignore
+from load_model_checkpoints import load_model_checkpoints, squash_bin_error  # type: ignore
+from cycle_inputs import build_field_cycles, resolve_observation_scores  # type: ignore
 
 REVISIT_DAYS = 9.3
 MAX_OFFSET_DAYS = REVISIT_DAYS + REVISIT_DAYS / 2.0  # ~13.95 days
@@ -59,7 +65,24 @@ def clamp(x: float, lo: float, hi: float) -> float:
     return float(min(hi, max(lo, x)))
 
 
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="Export platform data with checkpoint-backed anomaly scores")
+    p.add_argument(
+        "--no-models",
+        action="store_true",
+        help="Skip checkpoint inference entirely; emit proxy scores with provenance 'proxy'",
+    )
+    p.add_argument(
+        "--checkpoints-dir",
+        type=Path,
+        default=ROOT_DIR / "checkpoints",
+        help="Directory holding the <model>_490.pt checkpoints (default: checkpoints/)",
+    )
+    return p.parse_args()
+
+
 def main() -> None:
+    args = parse_args()
     PLATFORM_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     geojson_path = ROOT_DIR.parent / "Data/Processed/coordinates/farms.geojson"
@@ -69,6 +92,20 @@ def main() -> None:
     log.info("Loading farm polygons and metadata...")
     gdf = gpd.read_file(geojson_path)
     df_meta = pd.read_parquet(parquet_path)
+
+    if args.no_models:
+        models: dict = {}
+        model_status: dict[str, str] = {}
+        log.info("--no-models given: all scores will use the CWSI proxy formula (provenance 'proxy')")
+    else:
+        models, model_status = load_model_checkpoints(args.checkpoints_dir)
+    loaded_ids = sorted(mid for mid, st in model_status.items() if st == "loaded")
+    missing_ids = sorted(mid for mid, st in model_status.items() if st == "missing")
+    failed_ids = sorted(mid for mid, st in model_status.items() if st == "failed")
+    log.info(
+        "Score provenance plan: model=%s proxy=%s absent=%s (proxy formula %s covers b0/b1 baselines and masked_transformer)",
+        loaded_ids or "[]", missing_ids or "[]", failed_ids or "[]", PROXY_SCORE_FORMULA_ID,
+    )
 
     if gdf.crs != "EPSG:4326":
         gdf = gdf.to_crs("EPSG:4326")
@@ -92,6 +129,36 @@ def main() -> None:
     for y in range(2021, 2025):
         for m in range(1, 13):
             sample_dates.append(pd.Timestamp(f"{y}-{m:02d}-15"))
+
+    # Per-field-cycle tensors (36 phase bins x 8 channels) built exactly like the
+    # training NPZ (scripts/segment_and_export_cycles_490.py), then scored by each
+    # loaded checkpoint with leave-one-time-bin-out masked reconstruction.
+    day_times = dates.to_numpy().astype("datetime64[D]")
+    time_days = (day_times - day_times[0]).astype(int)
+    acq_day_num = time_days  # day number per acquisition index
+
+    cycles_by_field: dict[int, list] = {}
+    cycle_rows: list = []
+    if models:
+        log.info("Building per-field cycle tensors for checkpoint inference...")
+        for fi, fid in enumerate(reader.fields):
+            built = build_field_cycles(
+                int(fid), time_days, ndvi_cube[fi], valid_cube[fi], cube[fi], reader.band_index,
+            )
+            cycles_by_field[int(fid)] = built
+            cycle_rows.extend(built)
+        log.info("Built %d scoreable cycles across %d fields", len(cycle_rows), len(cycles_by_field))
+
+    model_errs: dict[str, np.ndarray] = {}
+    if cycle_rows and models:
+        X_all = np.stack([c.x for c in cycle_rows])
+        for mid, loaded in models.items():
+            if loaded is None:
+                continue
+            log.info("Running checkpoint inference with %s on %d cycles...", mid, len(cycle_rows))
+            model_errs[mid] = squash_bin_error(loaded.score_cycles(X_all))
+    elif not models:
+        log.info("Skipping checkpoint inference (no models loaded)")
 
     log.info("Building farm records...")
     farm_records = []
@@ -154,7 +221,11 @@ def main() -> None:
                     "lst": None,
                     "precip": None,
                     "temp": None,
-                    "scores": None,
+                    # Per-key maps stay aligned with the provenance maps: every
+                    # score is null and labelled "absent" (no acquisition).
+                    "scores": {k: None for k in SCORE_NAMES},
+                    "scoreProvenance": {k: "absent" for k in SCORE_NAMES},
+                    "scoreFormulaId": {k: None for k in SCORE_NAMES},
                     "provenance": {c: "absent" for c in ["ndvi", "evi", "savi", "ndmi", "tvdi", "cwsi", "eta", "lst", "precip", "temp"]},
                     "scoreCollinearity": "cwsi",
                 }
@@ -190,16 +261,17 @@ def main() -> None:
                 eta = clamp(val_ndvi * 6.5, 0.5, 7.5)
             tvdi = (cwsi * 0.9) if cwsi is not None else None
 
-            stress_sig = max(0.0, (cwsi or 0.0) - 0.45)
-            scores = {
-                "b0_calendar": round(clamp(0.18 + stress_sig * 0.65, 0.05, 0.95), 3),
-                "b1_dsh": round(clamp(0.15 + stress_sig * 0.80, 0.05, 0.95), 3),
-                "b1_cusum": round(clamp(0.12 + stress_sig * 0.85, 0.05, 0.95), 3),
-                "masked_transformer": round(clamp(0.14 + stress_sig * 0.92, 0.05, 0.95), 3),
-                "sts_net": round(clamp(0.11 + stress_sig * 0.94, 0.05, 0.95), 3),
-                "tiny_cnn_mamba": round(clamp(0.10 + stress_sig * 0.96, 0.05, 0.95), 3),
-                "time2agri": round(clamp(0.12 + stress_sig * 0.90, 0.05, 0.95), 3),
-            }
+            # Checkpoint-backed anomaly scores (contract v3): loaded models score
+            # the cycle bin containing the acquisition date; everything else falls
+            # back to the CWSI proxy rule with provenance 'proxy'.
+            scores, score_prov, score_formula = resolve_observation_scores(
+                int(acq_day_num[ai]),
+                cycles_by_field.get(fid, []),
+                model_errs=model_errs,
+                model_status=model_status,
+                cwsi=cwsi,
+                force_proxy=args.no_models,
+            )
 
             ndvi_r = round(val_ndvi, 3) if val_ndvi is not None else None
             evi_r = round(evi, 3) if evi is not None else None
@@ -256,6 +328,8 @@ def main() -> None:
                 "precip": None,
                 "temp": None,
                 "scores": scores,
+                "scoreProvenance": score_prov,
+                "scoreFormulaId": score_formula,
                 "provenance": provenance,
                 "scoreCollinearity": "cwsi",
             }
@@ -279,7 +353,7 @@ def main() -> None:
             "baselineHealth": round(float(np.nanmean(ndvi_cube[fi, :])), 2) if np.any(np.isfinite(ndvi_cube[fi, :])) else 0.65,
             "stressEvent": None,
             "neighbors": [],
-            "contractVersion": 2,
+            "contractVersion": CONTRACT_VERSION,
         })
 
     # neighbors ranked
@@ -295,6 +369,20 @@ def main() -> None:
                 cands.append((dist, f2["id"]))
         cands.sort()
         f1["neighbors"] = [nid for _, nid in cands[:4]]
+
+    prov_tally: dict[str, int] = {}
+    model_tally: dict[str, int] = {}
+    for obs_list in series_by_field.values():
+        for o in obs_list:
+            for key, st in (o.get("scoreProvenance") or {}).items():
+                prov_tally[st] = prov_tally.get(st, 0) + 1
+                if st == "model":
+                    model_tally[key] = model_tally.get(key, 0) + 1
+    log.info(
+        "Score provenance tally over observation x score key: model=%d proxy=%d absent=%d",
+        prov_tally.get("model", 0), prov_tally.get("proxy", 0), prov_tally.get("absent", 0),
+    )
+    log.info("Model-backed scores per model id: %s", model_tally)
 
     def atomic_dump(path, obj):
         tmp = path.with_suffix(path.suffix + ".tmp")

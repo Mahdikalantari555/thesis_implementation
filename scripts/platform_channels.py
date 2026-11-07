@@ -1,11 +1,11 @@
-"""Declarative registry of platform data channels.
+"""Declarative registry of platform data channels and anomaly scores.
 
 Single source of truth (Python side) for the channel contract between
 ``scripts/export_platform_data.py`` and the platform web app. The TypeScript
 mirror lives at ``platform/src/data/channels.ts``; parity is enforced by
-``tests/unit/test_platform_data_contract.py::test_channel_registry_parity``.
+``tests/unit/test_platform_data_contract.py::test_registry_parity_ts``.
 
-Each entry declares:
+Each channel entry declares:
   - ``name``: channel id (matches the platform ``IndicatorId``)
   - ``unit``: display unit
   - ``physical_range``: (min, max) inclusive physical envelope
@@ -13,6 +13,12 @@ Each entry declares:
   - ``required``: whether every observation must carry the channel
   - ``kind``: spectral | thermal | water | weather
   - ``derived_from``: optional source channel when this is a documented proxy
+
+Each score entry declares (contract v3):
+  - ``name``: score key (matches the platform ``ModelId``)
+  - ``provenance_default``: ``model`` | ``proxy`` | ``absent`` — ``model`` when
+    a trained checkpoint backs the score, ``proxy`` when it is the CWSI formula
+  - ``checkpoint``: checkpoint stem under ``checkpoints/`` when applicable
 """
 
 from __future__ import annotations
@@ -22,6 +28,15 @@ from typing import Literal, Optional, Tuple
 
 ProvenanceState = Literal["observed", "modelled", "proxy", "absent"]
 ChannelKind = Literal["spectral", "thermal", "water", "weather"]
+ScoreProvenanceState = Literal["model", "proxy", "absent"]
+
+# Contract version recorded on every exported farm record (v3: per-score
+# provenance + formula ids from checkpoint inference).
+CONTRACT_VERSION = 3
+
+# Formula id recorded on observations whose scores come from the CWSI proxy
+# rule clamp(offset + max(0, cwsi - 0.45) * weight) (see cycle_inputs.proxy_scores).
+PROXY_SCORE_FORMULA_ID = "cwsi_affine_v1"
 
 
 @dataclass(frozen=True)
@@ -52,10 +67,39 @@ CHANNEL_REGISTRY: tuple[ChannelSpec, ...] = (
 CHANNEL_NAMES: tuple[str, ...] = tuple(c.name for c in CHANNEL_REGISTRY)
 
 
+@dataclass(frozen=True)
+class ScoreSpec:
+    name: str
+    provenance_default: ScoreProvenanceState = "proxy"
+    checkpoint: Optional[str] = None  # checkpoints/<stem>.pt when model-backed
+
+
+# Order mirrors the platform MODELS list (mock.ts).
+SCORE_REGISTRY: tuple[ScoreSpec, ...] = (
+    ScoreSpec("b0_calendar", "proxy"),
+    ScoreSpec("b1_dsh", "proxy"),
+    ScoreSpec("b1_cusum", "proxy"),
+    ScoreSpec("masked_transformer", "proxy"),  # no faithful cycle-scoring artifact (see BUG-23)
+    ScoreSpec("sts_net", "model", "sts_net_490"),
+    ScoreSpec("tiny_cnn_mamba", "model", "tiny_cnn_mamba_490"),
+    ScoreSpec("time2agri", "model", "time2agri_490"),
+)
+
+SCORE_NAMES: tuple[str, ...] = tuple(s.name for s in SCORE_REGISTRY)
+SCORE_CHECKPOINTS: dict[str, str] = {s.name: s.checkpoint for s in SCORE_REGISTRY if s.checkpoint}
+
+
 def by_name(name: str) -> Optional[ChannelSpec]:
     for c in CHANNEL_REGISTRY:
         if c.name == name:
             return c
+    return None
+
+
+def score_by_name(name: str) -> Optional[ScoreSpec]:
+    for s in SCORE_REGISTRY:
+        if s.name == name:
+            return s
     return None
 
 
@@ -76,4 +120,22 @@ def as_dict() -> list[dict]:
     return out
 
 
-__all__ = ["ChannelSpec", "CHANNEL_REGISTRY", "CHANNEL_NAMES", "by_name", "as_dict"]
+def scores_as_dict() -> list[dict]:
+    out = []
+    for s in SCORE_REGISTRY:
+        out.append(
+            {
+                "name": s.name,
+                "provenance_default": s.provenance_default,
+                "checkpoint": s.checkpoint,
+            }
+        )
+    return out
+
+
+__all__ = [
+    "ChannelSpec", "ScoreSpec", "CHANNEL_REGISTRY", "SCORE_REGISTRY",
+    "CHANNEL_NAMES", "SCORE_NAMES", "SCORE_CHECKPOINTS", "CONTRACT_VERSION",
+    "PROXY_SCORE_FORMULA_ID", "by_name", "score_by_name", "as_dict",
+    "scores_as_dict",
+]
