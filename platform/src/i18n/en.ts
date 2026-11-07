@@ -24,10 +24,10 @@ export const en = {
   "app.demoBannerBody":
     "This dashboard renders the real processing-pipeline output for 490 field polygons — Landsat/METRIC multi-spectral indices (NDVI, CWSI, ETa, LST), ERA5 weather, and anomaly scores (B0 DOY, B1 DSH, B1 CUSUM, SSL Transformer, STS-Net, Tiny-CNN-Mamba, Time2Agri). Scores labelled Proxy are formula-based baselines, not checkpoint inference.",
   "app.dismissBanner": "Dismiss notification",
-  "app.sidebarFooterRole": "PhD Research Platform",
+  "app.sidebarFooterRole": "MSc Research Platform",
   "app.sidebarFooterData": "Khuzestan Sugarcane Agro-Industry",
   "app.sidebarFooterYears": "Landsat & METRIC (2013–2026 archive)",
-  "app.footer.title": "AgriAnomaly Lab — PhD Research on Self-Supervised Anomaly Detection in Sugarcane",
+  "app.footer.title": "AgriAnomaly Lab — MSc Thesis Research on Self-Supervised Anomaly Detection in Sugarcane",
   "app.footer.coverage": "Khuzestan Agro-Industry · {fields} Fields · Landsat Level-2 & METRIC · {first}–{last}",
   "app.footer.models": "STS-Net · Tiny-CNN-Mamba · Time2Agri · B1-DSH Baseline",
 

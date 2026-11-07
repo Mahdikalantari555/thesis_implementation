@@ -1,5 +1,5 @@
 {
-  "startedAt": "2026-11-07T07:34:22.828Z",
+  "startedAt": "2026-11-07T09:49:43.766Z",
   "locale": "en",
   "tileServerExpectedUp": true,
   "views": {
@@ -69,15 +69,7 @@
         "status": 200
       },
       {
-        "url": "http://127.0.0.1:8765/tiles/2021-07-18/rgb/12/2595/1676.png",
-        "status": 200
-      },
-      {
-        "url": "http://127.0.0.1:8765/tiles/2021-07-18/rgb/12/2595/1675.png",
-        "status": 200
-      },
-      {
-        "url": "http://127.0.0.1:8765/tiles/2021-07-18/rgb/12/2595/1677.png",
+        "url": "http://127.0.0.1:8765/tiles/2021-07-18/rgb/12/2597/1677.png",
         "status": 200
       },
       {
@@ -89,11 +81,11 @@
         "status": 200
       },
       {
-        "url": "http://127.0.0.1:8765/tiles/2021-07-18/rgb/12/2597/1677.png",
+        "url": "http://127.0.0.1:8765/tiles/2021-07-18/rgb/12/2595/1676.png",
         "status": 200
       },
       {
-        "url": "http://127.0.0.1:8765/tiles/2021-07-18/rgb/12/2598/1675.png",
+        "url": "http://127.0.0.1:8765/tiles/2021-07-18/rgb/12/2595/1677.png",
         "status": 200
       },
       {
@@ -101,7 +93,19 @@
         "status": 200
       },
       {
+        "url": "http://127.0.0.1:8765/tiles/2021-07-18/rgb/12/2595/1675.png",
+        "status": 200
+      },
+      {
         "url": "http://127.0.0.1:8765/tiles/2021-07-18/rgb/12/2598/1677.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2021-07-18/rgb/12/2598/1675.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2021-07-18/rgb/12/2599/1675.png",
         "status": 200
       },
       {
@@ -113,7 +117,7 @@
         "status": 200
       },
       {
-        "url": "http://127.0.0.1:8765/tiles/2021-07-18/rgb/12/2599/1675.png",
+        "url": "http://127.0.0.1:8765/tiles/2021-07-18/rgb/12/2596/1674.png",
         "status": 200
       },
       {
@@ -129,15 +133,7 @@
         "status": 200
       },
       {
-        "url": "http://127.0.0.1:8765/tiles/2021-07-18/rgb/12/2596/1674.png",
-        "status": 200
-      },
-      {
         "url": "http://127.0.0.1:8765/tiles/2021-07-18/ndvi/12/2597/1676.png",
-        "status": 200
-      },
-      {
-        "url": "http://127.0.0.1:8765/tiles/2021-07-18/ndvi/12/2597/1675.png",
         "status": 200
       },
       {
@@ -145,11 +141,7 @@
         "status": 200
       },
       {
-        "url": "http://127.0.0.1:8765/tiles/2021-07-18/ndvi/12/2596/1676.png",
-        "status": 200
-      },
-      {
-        "url": "http://127.0.0.1:8765/tiles/2021-07-18/ndvi/12/2597/1677.png",
+        "url": "http://127.0.0.1:8765/tiles/2021-07-18/ndvi/12/2597/1675.png",
         "status": 200
       },
       {
@@ -157,7 +149,11 @@
         "status": 200
       },
       {
-        "url": "http://127.0.0.1:8765/tiles/2021-07-18/ndvi/12/2598/1675.png",
+        "url": "http://127.0.0.1:8765/tiles/2021-07-18/ndvi/12/2597/1677.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2021-07-18/ndvi/12/2596/1676.png",
         "status": 200
       },
       {
@@ -167,11 +163,15 @@
       {
         "url": "http://127.0.0.1:8765/tiles/2021-07-18/ndvi/12/2596/1677.png",
         "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2021-07-18/ndvi/12/2598/1675.png",
+        "status": 200
       }
     ],
     "tileFailures": [],
     "opacityAfterRgb": 0.7,
-    "opacityAfterNdvi": 0.7,
+    "opacityAfterNdvi": 0.69,
     "pans": 2,
     "ok": true,
     "drivenByDateSlider": true,
@@ -186,5 +186,5 @@
     "hideFieldsOk": true
   },
   "pass": true,
-  "finishedAt": "2026-11-07T07:35:07.645Z"
+  "finishedAt": "2026-11-07T09:50:43.316Z"
 }

@@ -30,10 +30,10 @@ export const fa = {
   "app.demoBannerBody":
     "این داشبورد خروجی واقعی خط تولید را برای ۴۹۰ قطعه زمین نشان می‌دهد — شاخص‌های چندطیفی Landsat/METRIC (NDVI، CWSI، ETa، LST)، هواشناسی ERA5 و امتیازهای ناهنجاری (B0 DOY، B1 DSH، B1 CUSUM، SSL Transformer، STS-Net، Tiny-CNN-Mamba، Time2Agri). امتیازهای برچسب‌خورده «جانشین» فرمول پایه هستند، نه استنتاج چک‌پوینت.",
   "app.dismissBanner": "بستن اعلان",
-  "app.sidebarFooterRole": "سکوی پژوهشی دکتری",
+  "app.sidebarFooterRole": "سکوی پژوهشی کارشناسی ارشد",
   "app.sidebarFooterData": "صنعت نیشکر خوزستان",
   "app.sidebarFooterYears": "Landsat و METRIC (آرشیو ۲۰۱۳–۲۰۲۶)",
-  "app.footer.title": "آزمایشگاه اگری‌آنومالی — پژوهش دکتری درباره تشخیص ناهنجاری خودنظارتی در نیشکر",
+  "app.footer.title": "آزمایشگاه اگری‌آنومالی — پژوهش پایان‌نامه کارشناسی ارشد درباره تشخیص ناهنجاری خودنظارتی در نیشکر",
   "app.footer.coverage": "صنعت نیشکر خوزستان · {fields} قطعه · Landsat سطح-۲ و METRIC · {first}–{last}",
   "app.footer.models": "STS-Net · Tiny-CNN-Mamba · Time2Agri · خط پایه B1-DSH",
 
