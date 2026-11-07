@@ -12,6 +12,12 @@ interface Props {
   indicator: IndicatorId;
   dateIdx: number;
   opacity: number;
+  /** Acquisition date of the scene to overlay, or null for no raster overlay. */
+  rasterDate?: string | null;
+  /** Which tile product to overlay (scripts/serve_tiles.py endpoint). */
+  rasterLayer?: "rgb" | "ndvi" | null;
+  /** Raster overlay opacity (0–1), independent of the polygon fill opacity. */
+  rasterOpacity?: number;
   height?: string;
 }
 
@@ -19,11 +25,18 @@ const TILE_DARK = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png
 const TILE_LIGHT = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 const ATTRIBUTION = "© OpenStreetMap © CARTO";
 
-export default function MapView({ colorMode, model, indicator, dateIdx, opacity, height = "100%" }: Props) {
+// Local on-the-fly tile server (scripts/serve_tiles.py, add-rgb-ndvi-tile-layer).
+// It is intentionally optional: when it is not running every tile request
+// errors and Leaflet renders nothing for the layer, leaving the field
+// polygons and basemap untouched (graceful degradation).
+const TILE_SERVER_BASE = "http://127.0.0.1:8765";
+
+export default function MapView({ colorMode, model, indicator, dateIdx, opacity, rasterDate = null, rasterLayer = null, rasterOpacity = 1, height = "100%" }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
   const tileRef = useRef<L.TileLayer | null>(null);
+  const rasterRef = useRef<L.TileLayer | null>(null);
   const { selectedField, toggleField, dark } = useAnalysis();
   const t = useT();
 
@@ -58,6 +71,34 @@ export default function MapView({ colorMode, model, indicator, dateIdx, opacity,
     }
     tileRef.current = L.tileLayer(dark ? TILE_DARK : TILE_LIGHT, { attribution: ATTRIBUTION }).addTo(map);
   }, [dark]);
+
+  /** Raster overlay (RGB/NDVI tiles) — swapped when scene/layer changes, never on theme. */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (rasterRef.current) {
+      map.removeLayer(rasterRef.current);
+      rasterRef.current = null;
+    }
+    if (!rasterDate || !rasterLayer) return;
+    // The server clamps zoom to 8–14; outside that range it 404s, so Leaflet
+    // scales the nearest native tile (minNativeZoom/maxNativeZoom). Tiles sit
+    // in the tilePane, below the vector pane, so polygons stay on top.
+    rasterRef.current = L.tileLayer(`${TILE_SERVER_BASE}/tiles/${rasterDate}/${rasterLayer}/{z}/{x}/{y}.png`, {
+      minNativeZoom: 8,
+      maxNativeZoom: 14,
+      maxZoom: 18,
+      // Degradation is silent: failed tiles render as empty (no broken image),
+      // and a dead server leaves the basemap + polygons exactly as before.
+      errorTileUrl: "",
+      attribution: "Landsat Collection-2 Level-2",
+    }).addTo(map);
+  }, [rasterDate, rasterLayer]);
+
+  /** Overlay opacity — updated in place (no layer re-creation on slider drag). */
+  useEffect(() => {
+    rasterRef.current?.setOpacity(rasterOpacity);
+  }, [rasterOpacity]);
 
   /** Field polygons — redrawn when a control changes, never when the theme does. */
   useEffect(() => {

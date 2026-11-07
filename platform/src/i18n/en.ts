@@ -197,6 +197,13 @@ export const en = {
   "map.layer.compare": "Compare two dates",
   "map.layer.hideCompare": "Hide date comparison",
   "map.layer.comparisonDate": "Comparison date — {date}",
+  "map.layer.rasterScene": "Landsat raster scene",
+  "map.layer.rasterOff": "None (no raster overlay)",
+  "map.layer.rasterLayer": "Raster layer",
+  "map.layer.rasterRgb": "RGB composite",
+  "map.layer.rasterNdvi": "NDVI",
+  "map.layer.rasterOpacity": "Raster opacity — {value}",
+  "map.layer.rasterNote": "Raster tiles are served locally by scripts/serve_tiles.py on port 8765; without it the map shows field polygons only.",
   "map.legend.title": "Legend",
   "map.legend.indicatorNote":
     "Colour encodes {indicator} at the selected date. Green = favourable / low stress, red = high stress (direction depends on indicator — check the Temporal view).",
@@ -492,6 +499,7 @@ export const en = {
   // ── Data provenance / staleness ────────────────────────────────────────────
   "prov.observed": "Observed",
   "prov.modelled": "Modelled",
+  "prov.model": "Model",
   "prov.proxy": "Proxy",
   "prov.absent": "Not measured",
   "prov.legacy": "Legacy payload",

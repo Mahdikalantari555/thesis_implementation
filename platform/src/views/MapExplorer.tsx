@@ -5,7 +5,22 @@ import { Panel, Badge, Label, Select, DemoDataBadge, EmptyState, anomalyColor, f
 import { useAnalysis, DEFAULT_DATE_IDX } from "../context/AnalysisContext";
 import { FIELDS, MODELS, INDICATORS, getSeries, fieldById, DATES, LAST_IDX, ANOMALY_THRESHOLD, mean, COVERAGE, monthAt, clampIdx, isLegacyPayload } from "../data/mock";
 import { useLocale, useT } from "../i18n";
+import scenesIndexData from "../data/scenes_index.json";
 import { Eye, EyeOff, Search, GitCompareArrows } from "lucide-react";
+
+// Scene manifest produced by scripts/build_tile_index.py (add-rgb-ndvi-tile-layer).
+// Dates drive the local tile server URL; entries without rgb/ndvi bands are
+// simply absent from the raster controls below.
+interface SceneEntry {
+  date: string;
+  path: string;
+  bounds: number[];
+  bands: string[];
+  has_rgb: boolean;
+  has_ndvi: boolean;
+}
+
+const SCENES = (scenesIndexData as { scenes: SceneEntry[] }).scenes;
 
 export default function MapExplorer() {
   const { selectedField, selectedFields, toggleField, model, setModel, indicator, setIndicator, range, setView } = useAnalysis();
@@ -19,12 +34,27 @@ export default function MapExplorer() {
   const [query, setQuery] = useState("");
   const [compareIdx, setCompareIdx] = useState(clampIdx(DEFAULT_DATE_IDX - 12 >= 0 ? DEFAULT_DATE_IDX - 12 : 0));
   const [showCompare, setShowCompare] = useState(false);
+  const [rasterScene, setRasterScene] = useState("");
+  const [rasterLayer, setRasterLayer] = useState<"rgb" | "ndvi">("rgb");
+  const [rasterOpacity, setRasterOpacity] = useState(0.7);
 
   const field = fieldById(selectedField);
   const series = getSeries(selectedField);
   const safeDateIdx = clampIdx(dateIdx);
   const safeCompareIdx = clampIdx(compareIdx);
   const obs = series[safeDateIdx];
+
+  // Raster overlay state — active only when a scene is picked and it actually
+  // carries the bands for the chosen layer (the tile server 404s otherwise).
+  const rasterSceneEntry = useMemo(() => SCENES.find(s => s.date === rasterScene), [rasterScene]);
+  const rasterLayerActive = useMemo<"rgb" | "ndvi" | null>(() => {
+    if (!rasterSceneEntry) return null;
+    if (rasterLayer === "rgb" && rasterSceneEntry.has_rgb) return "rgb";
+    if (rasterLayer === "ndvi" && rasterSceneEntry.has_ndvi) return "ndvi";
+    if (rasterSceneEntry.has_rgb) return "rgb";
+    if (rasterSceneEntry.has_ndvi) return "ndvi";
+    return null;
+  }, [rasterSceneEntry, rasterLayer]);
 
   const chartData = series.map(o => ({
     date: o.date.slice(0, 7),
@@ -79,6 +109,33 @@ export default function MapExplorer() {
                 ))}
               </Select>
             </div>
+            <div>
+              <Label>{t("map.layer.rasterScene")}</Label>
+              <Select value={rasterScene} onChange={setRasterScene} className="w-full">
+                <option value="">{t("map.layer.rasterOff")}</option>
+                {SCENES.map(s => (
+                  <option key={s.date} value={s.date}>
+                    {s.date}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            {rasterSceneEntry && (
+              <>
+                <div>
+                  <Label>{t("map.layer.rasterLayer")}</Label>
+                  <Select value={rasterLayerActive ?? rasterLayer} onChange={v => setRasterLayer(v as "rgb" | "ndvi")} className="w-full">
+                    {rasterSceneEntry.has_rgb && <option value="rgb">{t("map.layer.rasterRgb")}</option>}
+                    {rasterSceneEntry.has_ndvi && <option value="ndvi">{t("map.layer.rasterNdvi")}</option>}
+                  </Select>
+                </div>
+                <div>
+                  <Label>{t("map.layer.rasterOpacity", { value: fmt.number(rasterOpacity, 2) })}</Label>
+                  <input type="range" min={0} max={1} step={0.05} value={rasterOpacity} onChange={e => setRasterOpacity(+e.target.value)} aria-label={t("map.layer.rasterOpacity", { value: fmt.number(rasterOpacity, 2) })} className="w-full accent-teal-700" />
+                </div>
+              </>
+            )}
+            <div className="text-[10px] text-slate-400">{t("map.layer.rasterNote")}</div>
             <div>
               <Label>
                 {t("map.layer.observationDate", { date: monthAt(safeDateIdx) })} {obs?.missing && <span className="text-orange-600">{t("field.missing")}</span>}
@@ -203,7 +260,7 @@ export default function MapExplorer() {
         >
           <div className="h-[520px] relative">
             {showFields ? (
-              <MapView colorMode={colorMode} model={model} indicator={indicator} dateIdx={safeDateIdx} opacity={opacity} height="520px" />
+              <MapView colorMode={colorMode} model={model} indicator={indicator} dateIdx={safeDateIdx} opacity={opacity} rasterDate={rasterLayerActive ? rasterScene : null} rasterLayer={rasterLayerActive} rasterOpacity={rasterOpacity} height="520px" />
             ) : (
               <div className="h-full flex items-center justify-center text-[12px] text-slate-500">{t("map.canvas.hidden")}</div>
             )}
@@ -256,6 +313,14 @@ export default function MapExplorer() {
               <div className="text-[13px] font-semibold" style={{ color: obs ? anomalyColor(obs.scores[model]) : "#64748b" }}>
                 {obs ? <bdi>{fmt.number(obs.scores[model], 3)}</bdi> : "—"}
               </div>
+              {obs?.scoreProvenance && (
+                <div className="mt-0.5 flex justify-center">
+                  <ProvenanceChip
+                    state={obs.scoreProvenance[model]}
+                    title={`${model}: ${obs.scoreProvenance[model]}${obs.scoreFormulaId?.[model] ? ` · ${obs.scoreFormulaId[model]}` : ""}`}
+                  />
+                </div>
+              )}
             </div>
             <div className="bg-white dark:bg-slate-900 p-2">
               <div className="text-[9px] uppercase text-slate-400">NDVI</div>

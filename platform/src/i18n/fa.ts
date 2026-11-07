@@ -203,6 +203,13 @@ export const fa = {
   "map.layer.compare": "مقایسه دو تاریخ",
   "map.layer.hideCompare": "بستن مقایسه تاریخ",
   "map.layer.comparisonDate": "تاریخ مقایسه — {date}",
+  "map.layer.rasterScene": "صحنه رستری لندست",
+  "map.layer.rasterOff": "بدون لایه رستری",
+  "map.layer.rasterLayer": "لایه رستری",
+  "map.layer.rasterRgb": "ترکیب RGB",
+  "map.layer.rasterNdvi": "NDVI",
+  "map.layer.rasterOpacity": "شفافیت لایه رستری — {value}",
+  "map.layer.rasterNote": "کاشی‌های رستری توسط scripts/serve_tiles.py روی درگاه 8765 سرو می‌شوند؛ بدون آن نقشه فقط مرزهای قطعات را نشان می‌دهد.",
   "map.legend.title": "راهنما",
   "map.legend.indicatorNote":
     "رنگ نشان‌دهنده {indicator} در تاریخ انتخابی است. سبز = مطلوب / تنش کم، قرمز = تنش زیاد (جهت به شاخص بستگی دارد — نمای زمانی را بررسی کنید).",
@@ -498,6 +505,7 @@ export const fa = {
   // ── Data provenance / staleness ────────────────────────────────────────────
   "prov.observed": "مشاهدات‌شده",
   "prov.modelled": "مدل‌سازی‌شده",
+  "prov.model": "مدل",
   "prov.proxy": "پروکسی",
   "prov.absent": "Medida نشده است",
   "prov.legacy": "بار قدیمی",

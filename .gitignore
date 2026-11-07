@@ -69,3 +69,8 @@ platform/.pnpm-store/
 .agents
 .memdb
 .opencode
+
+# Data artifacts
+data/.tmp*
+.tmp-esbuild/
+/data/
