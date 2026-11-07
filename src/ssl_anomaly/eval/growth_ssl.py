@@ -5,9 +5,15 @@ masks the scored time bin, but uses other bins from the full cycle (non-causal).
 """
 from __future__ import annotations
 import importlib.util
+import sys
 from pathlib import Path
 import numpy as np
 import torch
+
+# Make src/ importable when this module is loaded by path (e.g. in tests).
+_SRC = Path(__file__).resolve().parents[2]
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
 
 
 def _model_class(filename, name):
@@ -19,7 +25,7 @@ def _model_class(filename, name):
 
 class MaskedSSL:
     def __init__(self, architecture, *, epochs=15, seed=42, mask_fraction=.25, batch_size=32, causal=False, train_enabled=True):
-        valid_archs = ('gru_ae', 'masked_transformer', 'sts_net', 'tiny_cnn_mamba', 'time2agri')
+        valid_archs = ('gru_ae', 'masked_transformer', 'sts_net', 'tiny_cnn_mamba', 'time2agri', 'jepa')
         if architecture not in valid_archs:
             raise ValueError(f'unsupported architecture {architecture}; expected {valid_archs}')
         if epochs < 1 or batch_size < 1 or not 0 < mask_fraction <= 1:
@@ -69,6 +75,9 @@ class MaskedSSL:
             cls = _model_class('pretexts.py', 'PretextTransformer')
             self.model = cls(d_in=d_in, n_bands=self.n_bands, d_model=32, n_heads=4, n_layers=2,
                              d_ff=64, dropout=.1, max_len=max(128, self.shape[0]), arm='masked_recon')
+        elif self.architecture == 'jepa':
+            from ssl_anomaly.models.jepa import JEPAModel
+            self.model = JEPAModel(d_in=d_in, d_model=32, n_heads=4, n_layers=2, d_ff=64, max_len=max(128, self.shape[0]))
         else:
             cls = _model_class('masked_tf.py', 'MaskedTransformer')
             self.model = cls(d_in=d_in, d_model=32, n_heads=4, n_layers=2,
@@ -104,7 +113,7 @@ class MaskedSSL:
                 inputs[:, :, :2*self.n_bands][masks] = 0
                 if self.causal:
                     inputs[future] = 0
-                if self.architecture == 'masked_transformer':
+                if self.architecture in ('masked_transformer', 'jepa'):
                     recon, _ = self.model(inputs, mask=masks, key_padding_mask=pad)
                 elif self.architecture in ('sts_net', 'tiny_cnn_mamba'):
                     recon, _ = self.model(inputs)
@@ -115,6 +124,9 @@ class MaskedSSL:
                     recon, _ = self.model(inputs, lengths=lengths)
                 target_mask = observed & masks.unsqueeze(-1)
                 loss = ((recon[:, :, :self.n_bands] - original[:, :, :self.n_bands])**2)[target_mask].mean()
+                if self.architecture == 'jepa':
+                    # Latent prediction against the EMA target encoder (JEPA objective).
+                    loss = loss + self.model.latent_prediction_loss(inputs, masks, pad, target=original)
                 opt.zero_grad(); loss.backward(); opt.step()
         self.model.eval()
         return self
@@ -141,7 +153,7 @@ class MaskedSSL:
                     future = torch.arange(k)[None, :] >= lengths[:, None]
                     inputs[future] = 0
                     pad = pad | future
-                if self.architecture == 'masked_transformer':
+                if self.architecture in ('masked_transformer', 'jepa'):
                     recon, _ = self.model(inputs, mask=mask, key_padding_mask=pad)
                 elif self.architecture in ('sts_net', 'tiny_cnn_mamba'):
                     recon, _ = self.model(inputs)

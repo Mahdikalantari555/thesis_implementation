@@ -1,9 +1,10 @@
-"""Self-supervised models: GRU-AE, Masked Transformer, STS-Net, Tiny-CNN-Mamba, Time2Agri."""
+"""Self-supervised models: GRU-AE, Masked Transformer, STS-Net, Tiny-CNN-Mamba, Time2Agri, JEPA."""
 
 from __future__ import annotations
 
 from .cnn_mamba import BidirectionalMambaBlock, SelectiveSSM, TinyCNNMamba
 from .gru_ae import GRUAutoencoder
+from .jepa import JEPAModel
 from .masked_tf import MaskedTransformer
 from .pretexts import (
     PRETEXT_ARMS,
@@ -22,6 +23,7 @@ __all__ = [
     "BidirectionalMambaBlock",
     "CycleTokenizer",
     "GRUAutoencoder",
+    "JEPAModel",
     "MaskedTransformer",
     "PretextTransformer",
     "STSNetAutoencoder",

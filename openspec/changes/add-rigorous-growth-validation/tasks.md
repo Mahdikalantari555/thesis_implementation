@@ -11,7 +11,7 @@
 - [ ] Obtain independently time-stamped anchors and audit data arrival times for the real archive.
 - [x] Connect freshly trained GRU/Transformer SSL models on matched inputs; report runtime and parameter counts.
 - [x] Add feature subset, trained-vs-random SSL, and retrospective-vs-causal GRU/Transformer ablation options.
-- [ ] Implement and test future JEPA/Mamba architectures before claiming their ablations.
+- [x] Implement and test future JEPA/Mamba architectures before claiming their ablations. (jepa.py + MaskedSSL arch + tests/test_jepa.py + validate_growth registry; tiny_cnn_mamba already supported)
 - [x] Add projected-centroid geographic blocks and distance buffers, and descriptive external weather/neighbor evidence tooling.
 - [ ] Obtain real geometry and independent weather/agronomic evidence; perform blind expert review.
 - [x] Add field-cluster event-recall intervals, overlap-based event precision, runtime and multi-seed runs.
