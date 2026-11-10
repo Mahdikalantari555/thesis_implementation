@@ -97,3 +97,77 @@ machine. The rules below are binding.
   validation ladder rung.
 - When a task reveals a design issue, pause and surface it — never silently
   simplify specified behavior.
+
+## 6. Long-running jobs (training, full evaluation, exports)
+
+- **The agent never launches a long job itself.** Anything expected to run
+  longer than ~2 minutes (full training, multi-seed sweeps, full RQ suite,
+  full exporter runs) is handed to the user as an **exact terminal command**
+  (conda env, working directory, arguments, expected wall time, output paths).
+- Before handing over a command the agent MUST: run the unit tests that cover
+  the touched code, run the script's `--smoke` mode end to end, and read the
+  smoke output (metrics present, no NaN, shapes and counts as expected). If
+  anything is off, fix it first; never hand over "should work" commands.
+- Every training/evaluation script MUST show progress while it runs: a
+  progress bar (tqdm) with epoch/step, current losses, and ETA; a
+  machine-readable `progress.jsonl`; a final summary line with wall time and
+  output paths. Long jobs MUST support `--resume`.
+- Scripts auto-select the device (`cuda` when available, else `cpu`) so the
+  same command runs on the laptop, the lab GPU, or Colab. Laptop budget for
+  development runs: ≤ 15 min per seed, ≤ 500 k parameters.
+- When the user reports results, the agent reads the produced files (not only
+  the console summary) and reviews them with §7 before proposing the next step.
+
+## 7. Critical ML/AI review checklist (apply to every method, script and result)
+
+Act as a senior ML researcher reviewing a paper. Before building on a result,
+and whenever code or reports are touched, check the items below and **warn the
+user explicitly** (file:line, why it matters, what would fix it). A silent pass
+is a defect.
+
+**Data and splits**
+- Leakage: test/dev data used for training, normalization statistics, early
+  stopping, threshold calibration, feature selection or model choice.
+- Temporal leakage: train periods overlapping the test period; future
+  observations used for a past decision in a "causal"/early-warning claim.
+- Spatial leakage: neighbouring fields split across train/test (shared weather,
+  irrigation, management); hash-based "blocks" are not spatial blocks.
+- Duplicates or near-duplicates (same field-cycle in two splits, overlapping
+  cycles).
+- Missing data: NaN silently filled with 0/mean and treated as observed; masks
+  dropped; invalid acquisitions counted as valid.
+- Band/index mistakes: wrong band index (e.g. swir2 used as LST), unit errors
+  (K vs °C, scale factors), values outside physical ranges.
+
+**Targets and evaluation**
+- Synthetic or derived targets presented as real (targets built from model
+  inputs plus noise, placeholder labels, `absent → zeros`).
+- Circularity: the validation proxy is computed from the model's own inputs
+  (e.g. CWSI from LST when the model sees LST) or the model was tuned on the
+  proxy it is later validated against.
+- Train/test perturbation overlap: the same injected anomaly type used as a
+  pretext and as the evaluation target.
+- Proxy labels named as validated ground truth; "anomaly" named "stress"
+  before L4.
+- Metric fit to question: AUC-ROC on heavy class imbalance (use AUC-PR), a
+  metric that cannot rank methods (saturated at 1.0), threshold-dependent
+  metrics without the threshold rule.
+
+**Statistics and reporting**
+- Small n, single seed, too few epochs; no seed spread or confidence interval;
+  CI including zero reported as an effect.
+- Missing baselines: every model result needs the simple reference (B0, B1)
+  and, for SSL, a random-init encoder of the same architecture.
+- Comparisons at unequal compute or parameter counts.
+- Stale reports: report JSON disagrees with the findings text, n, dates, or
+  current code; numbers quoted without `data_source`, n, date range, seeds,
+  git SHA.
+- Every claim states its validation-ladder rung (L1–L5) and nothing more.
+
+**Code hygiene that changes results**
+- `rng` / seeds not fixed or not recorded; non-determinism ignored.
+- Silent fallbacks (simulator, proxy formula, default values) when real data
+  or a checkpoint is missing — must fail or be labelled `absent`.
+- Exceptions swallowed so a script reports success on partial work.
+- Platform/OS issues that change results (e.g. Windows joblib
+  PermissionError leading to an n = 1 run).
