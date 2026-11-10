@@ -54,7 +54,7 @@
     "first_acquisition_date": "2013-03-30",
     "last_acquisition_date": "2026-09-10",
     "cycle_file_sha256": "cef2b94c1960d8f39ba2d113a26863258b74e9f4a8b21d0522839d581c1f2e35",
-    "git_sha": "04121213",
+    "git_sha": "581f7ece",
     "seeds": [
       42
     ],

@@ -7,7 +7,7 @@
     "first_acquisition_date": "2013-03-30",
     "last_acquisition_date": "2026-09-10",
     "cycle_file_sha256": "cef2b94c1960d8f39ba2d113a26863258b74e9f4a8b21d0522839d581c1f2e35",
-    "git_sha": "04121213",
+    "git_sha": "581f7ece",
     "seeds": [
       42
     ],
@@ -29,7 +29,7 @@
   "arms": {
     "masked_recon": {
       "n_parameters": 110024,
-      "mean_train_seconds": 10.547118900110945,
+      "mean_train_seconds": 5.314995400141925,
       "auc_pr": 0.6013032983506726,
       "auc_pr_ci_95": [
         0.6013032983506726,
@@ -53,7 +53,7 @@
     },
     "traj_contrastive": {
       "n_parameters": 111584,
-      "mean_train_seconds": 10.802563400007784,
+      "mean_train_seconds": 6.565233499975875,
       "auc_pr": 0.4635460312880297,
       "auc_pr_ci_95": [
         0.4635460312880297,
@@ -77,7 +77,7 @@
     },
     "anomaly_degradation": {
       "n_parameters": 109569,
-      "mean_train_seconds": 5.716674800030887,
+      "mean_train_seconds": 3.854066099971533,
       "auc_pr": 0.7641367905267767,
       "auc_pr_ci_95": [
         0.7641367905267767,
@@ -101,7 +101,7 @@
     },
     "time2agri": {
       "n_parameters": 111584,
-      "mean_train_seconds": 10.742977899964899,
+      "mean_train_seconds": 6.749696899903938,
       "auc_pr": 0.6399916359960155,
       "auc_pr_ci_95": [
         0.6399916359960155,
