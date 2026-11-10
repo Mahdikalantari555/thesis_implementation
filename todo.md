@@ -47,7 +47,8 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
    - Export cycle spans per field (`t_start/t_end/harvest_day` → real dates) into the payload
    - Temporal view: shaded cycle bands + harvest markers + the 36×15-day phase-binned series (DSH axis) beside the DOY axis
    - Plain-language doc section (what a "cycle" is and why models score per phase) — expand `docs/platform_score_methods.md` §4.1
-4. **`retrain-and-improve-models`** — ▶ NEXT (2026-11-10: model-first, validation after plateau; plan in `consideration.md` §1):
+3b. **`data-and-phenology-readiness`** — ▶ FIRST (literature review on phenology extraction / time axis / sugarcane stress signatures, cycle audit, data quality; gates training)
+4. **`retrain-and-improve-models`** → openspec change `train-and-finalize-main-architecture` — ▶ NEXT (2026-11-10: model-first, causal monitoring, locked test; validation after plateau):
    - Current checkpoints are deliberately small (`d_model=32`, ≤ ~10⁵ params, 15 epochs, single-shot, trained 2026-11-04)
    - More epochs/parameters/time once data wiring is final; re-train on the final cycle export; keep formula-id/versioning so the payload records *which* checkpoint scored it
    - Include masked_transformer (needs a cycle-compatible artifact) and JEPA scoring
@@ -69,6 +70,7 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
 3. For the full-archive axis: keep the completeness stat semantics (invalid acquisitions count as missing) as-is?
 4. `rust/` crate was added by coding-agent commits, not by the user; its `32.7×` claim is unreproduced. Keep (and verify) or remove?
 5. Date count: METRIC 539 scenes vs `stats.zarr` 538 dates — which date is missing and why?
+6. **For the advisor (Dr. Hamzeh):** which stress signatures and magnitudes are realistic for Amirkabir sugarcane in Landsat time series (water deficit, salinity, waterlogging, pests/disease, early ripening, lodging)? Decides the final perturbation set of `train-and-finalize-main-architecture` (design D6; interim set used until then). Literature review task 0.3 runs in parallel.
 
 ## Thesis-level reminders
 

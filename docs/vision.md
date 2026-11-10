@@ -30,6 +30,8 @@ An observation is not compared to a calendar date (DOY). It is compared to **the
 4. **Intra-field**: patch-level 3D models and intra-field zoning when field-mean is insufficient.
 5. **Edge / drone (Frugal AI)**: benchmark ONNX/quantized models for drone/edge inference after the FP32 model is accepted.
 6. **Incremental / transferable learning**: update models with new seasons/fields without full retraining; transfer across farms and crops.
+7. **Active learning from farmers (2026-11-10)**: the self-supervised monitoring output (per-acquisition suspected-stress flag) becomes the input of an active-learning loop. Farmers report where and when stress actually happened, and those reports become real labels. Planting/harvest records, when available, are used for validation of cycle segmentation only and must not block development.
+8. **Crop-agnostic product (2026-11-10)**: the long-term product is crop-independent. For now this stays a vision item only. The code keeps the sugarcane implementation (harvest segmentation, DSH bins), and no abstraction work is required until a second crop is added. The literature review in `data-and-phenology-readiness` records which phenology/time-axis methods would generalise.
 
 ## Key requirements
 
