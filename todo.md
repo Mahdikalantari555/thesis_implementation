@@ -47,7 +47,7 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
    - Export cycle spans per field (`t_start/t_end/harvest_day` → real dates) into the payload
    - Temporal view: shaded cycle bands + harvest markers + the 36×15-day phase-binned series (DSH axis) beside the DOY axis
    - Plain-language doc section (what a "cycle" is and why models score per phase) — expand `docs/platform_score_methods.md` §4.1
-4. **`retrain-and-improve-models`** — after the pipeline settles:
+4. **`retrain-and-improve-models`** — ▶ NEXT (2026-11-10: model-first, validation after plateau; plan in `consideration.md` §1):
    - Current checkpoints are deliberately small (`d_model=32`, ≤ ~10⁵ params, 15 epochs, single-shot, trained 2026-11-04)
    - More epochs/parameters/time once data wiring is final; re-train on the final cycle export; keep formula-id/versioning so the payload records *which* checkpoint scored it
    - Include masked_transformer (needs a cycle-compatible artifact) and JEPA scoring
