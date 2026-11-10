@@ -12,22 +12,33 @@
 | `DS4` | **Few-shot** (۱٪ / ۵٪ / ۱۰٪ برچسب روی embedding فریز با LogisticRegression) | افت شدید با برچسب کم → دادهٔ برچسب‌دار کم است |
 | `DS5` | **واریانس seed و foldهای LOYO** | ناپایداری بالا = داده کم |
 
-اجرا: `python scripts/run_data_scarcity.py` → خروجی `reports/data_scarcity.{json,csv}` و شکل‌ها در `reports/figures/data_scarcity_*.png`
+اجرای پیش‌فرض روی آرشیو real490: `python scripts/run_data_scarcity.py --source real490` → خروجی `reports/data_scarcity.{json,csv}` و شکل‌ها در `reports/figures/data_scarcity_*.png`
+
+---
+
+## ۰. شفافیت داده (Data Source Transparency)
+
+- **آرشیو real490 (پیش‌فرض، `--source real490`):** `Data/Processed/satellite/stats.zarr` (490 fields × 538 dates × 7 bands) + `data/processed/cycles_490.parquet` + `data/interim/growth_cycles_490.npz`. 799 cycle غیرسانسور، ۳۷۰ مزرعه با ≥۱ cycle. **برچسب تنش Verify شده غیرفعال است** (`y_stress_proxy = weak_proxy_top20pct_mean_cwsi_not_validated_stress`، `eta_deficit/cwsi = absent`). نتایج DS1–DS5 روی real490 فقط闻いて می‌توانند compute شوند (بر اساس X و bands) اما اعداد stress-labeling (AUC-PR روی برچسب تنش) غیرفعال است.
+- **آرشیو ۳۲ مزرعه واقعی (`--source real32`):** `Data/Processed/fields.zarr` در این workspace **موجود نیست**؛ مسیر real32 ناموفق است.
+- **آرشیو شبیه‌سازی‌شدهٔ ۴۹۰ مزرعه (`--source simulated`):** `simulate_490_field_archive()` — فقط sanity check مقیاس است، نه اندازه‌گیری واقعی ۴۹۰ مزرعه. خروجی‌ها زیر `reports/simulated/` نوشته می‌شوند و `data_source="simulated"` ثبت می‌گردد.
 
 ---
 
 ## ۱. دادهٔ استفاده‌شده و برچسب‌ها
 
-- **منبع:** `data/processed/fields.zarr` — ۳۲ مزرعهٔ واقعی خوزستان، **۵۳۹ تاریخ** (2013-03-30 تا 2026-09-10). پس از segmentation و حذف cycleهای censored: **۳۵ cycle از ۲۰ مزرعه** (۲۹ cycle آموزش، ۶ مزرعهٔ validation).
+- **منبع (ارزیابی اصلی):** `data/processed/fields.zarr` — ۳۲ مزرعهٔ واقعی خوزستان، **۵۳۹ تاریخ** (2013-03-30 تا 2026-09-10). پس از segmentation و حذف cycleهای censored: **۳۵ cycle از ۲۰ مزرعه** (۲۹ cycle آموزش، ۶ مزرعهٔ validation).
+- **منبع real490 (پیش‌فرض):** `stats.zarr` + `cycles_490.parquet` + `growth_cycles_490.npz` — ۷۹۹ cycle غیرسانسور، ۳۷۰ مزرعه. **بدون برچسب تنش Verify شده.**
 - **برچسب‌های DS4:** weak proxy (Top-20٪ میانگین CWSI چرخه = مثبت) — صریحاً با نام `weak_proxy_top20pct_mean_cwsi_not_validated_stress`؛ **نه** «شاخص تنش تأییدشده» (دروازهٔ `Anomaly ≠ Stress` همچنان لازم‌الاجرا است).
 - **pool ارزیابی DS1/DS5:** ۳۵ cycle پاک + ۴×۳۵ cycle perturbed (همان ۴ نوع RQ2) با AUC-PR.
 
-## ۲. نتایج روی آرشیو واقعی (۲ arm × ۳ seed × ۳۰ epoch)
+---
+
+## ۲. نتایج روی آرشیو واقعی ۳۲ مزرعه (۲ arm × ۳ seed × ۳۰ epoch)
 
 ### DS1 — Learning curve (AUC-PR)
 
 | کسر دادهٔ آموزش | `anomaly_degradation` | `masked_recon` |
-|---:|---:|---:|
+|---|---:|---:|
 | 20% | 0.9146 [0.875, 0.951] | 0.9073 [0.890, 0.919] |
 | 40% | 0.9274 [0.915, 0.947] | 0.9295 [0.921, 0.938] |
 | 60% | 0.9070 [0.890, 0.939] | 0.9309 [0.906, 0.948] |
@@ -35,7 +46,7 @@
 | 100% | 0.9662 [0.920, 1.000] | **0.9585** [0.956, 0.962] |
 | slope (80→100٪) | −0.011 (صعودی نیست) | +0.007 (صعودی نیست) |
 
-**تفسیر:** منحنی از حدود ۲۰٪ به بعد تقريباً تخت (فلات) است؛ حتی با ۲۰٪ داده (حدود ۶ cycle) هم AUC-PR بالای ۰.۹۰ است. → **نشانهٔ کلاسیک کمبود داده در کار downstream دیده نمی‌شود.**
+**تفسیر:** منحنی از حدود ۲۰٪ به بعد تقریباً تخت (فلات) است؛ حتی با ۲۰٪ داده (حدود ۶ cycle) هم AUC-PR بالای ۰.۹۰ است. → **نشانهٔ کلاسیک کمبود داده در کار downstream دیده نمی‌شود.**
 
 ### DS2 — Train/Val gap
 
@@ -58,7 +69,7 @@
 ### DS4 — Few-shot (AUC-ROC روی برچسب weak-proxy)
 
 | کسر برچسب | `anomaly_degradation` | `masked_recon` |
-|---:|---:|---:|
+|---|---:|---:|
 | 1% (حدود ۲ برچسب) | 0.666 | 0.833 |
 | 5% (حدود ۲ برچسب) | 0.644 | 0.770 |
 | 10% (حدود ۴ برچسب) | 0.691 | **0.867** |
@@ -70,9 +81,13 @@
 - LOYO (سال‌های 2014 / 2018 / 2020 / 2024): AUC-PR = 0.935 ± **0.019** برای `anomaly_degradation` و 0.961 ± **0.033** برای `masked_recon` → **پایدار از نظر زمانی**.
 - انحراف معیار بین seedها در ۱۰۰٪ داده: ۰.۰۰۳ تا ۰.۰۳۴ → **پایدار**.
 
+---
+
 ## ۳. بررسی مقیاس با آرشیو شبیه‌سازی‌شدهٔ ۴۹۰ مزرعه
 
-اجرای سبک (`reports/data_scarcity_sim490.json`؛ arm = anomaly_degradation، seed = 42، ۱۲ epoch) روی آرشیو کالیبره‌شدهٔ ۴۹۰ مزرعه × ۱۳.۵ سال (**۴۸۷۹ cycle**):
+**Superseded — synthetic** (منبع: `simulate_490_field_archive`، ۴۸۷۹ cycle):
+
+اج 실행 سبک (`reports/data_scarcity_sim490.json`؛ arm = anomaly_degradation، seed = 42، ۱۲ epoch) روی آرشیو کالیبره‌شدهٔ ۴۹۰ مزرعه × ۱۳.۵ سال (**۴۸۷۹ cycle**):
 
 - **DS1:** AUC-PR = 0.946 (۲۰٪) → 0.964 (۵۰٪) → 0.963 (۱۰۰٪)؛ slope ≈ −0.0007 → منحنی تخت است.
 - **DS2:** gap نهایی ≈ −0.001، overfitting نیست.
@@ -81,6 +96,8 @@
 - **DS5:** LOYO (2013/2019/2025): 0.968 ± **0.0015** → بسیار پایدار.
 
 این اجرا فقط sanity check مقیاس است (شبیه‌ساز کالیبره‌شده)، نه اندازه‌گیری واقعی ۴۹۰ مزرعه.
+
+---
 
 ## ۴. Verdict — آیا داده کم است؟
 
@@ -92,7 +109,9 @@
 | افت شدید few-shot با ۱٪ برچسب؟ | خیر (افت < ۰.۰۵) | ❌ |
 | واریانس بالا بین seed یا LOYO؟ | خیر (std < ۰.۰۳۵) | ❌ |
 
-**نتیجه‌گیری:** با ۵۳۹ تاریخ و ۳۵ cycle استخراج‌شده، **مدل در کار downstream (تشخیص آنومالی) از کمبود داده رنج نمی‌برد** — منحنی یادگیری تخت است، overfitting دیده نمی‌شود، و LOYO پایدار است. اما **بازنمایی arm `anomaly_degradation` collapse کرده** (cos ≈ ۰.۹۶۵) که در ادبیات SSL نشانهٔ ضعف یادگیری بازنمایی است؛ برای کارهای مبتنی بر embedding (probing، kNN) باید از `masked_recon` یا `traj_contrastive` استفاده کرد یا regularization قوی‌تری گذاشت. برای claimهای مربوط به ۴۹۰ مزرعه باید آرشیو کامل mount شود (شبیه‌ساز فقط sanity check است).
+**نتیجه‌گیری:** با ۵۳۹ تاریخ و ۳۵ cycle استخراج‌شده، **مدل در کار downstream (تشخیص آنومالی) از کمbodod داده رنج نمی-BrD** — منحنی یادگیری تخت است، overfitting دیده نمی‌شود، و LOYO پایدار است. اما **بازنمایی arm `anomaly_degradation` collapse کرده** (cos ≈ ۰.۹۶۵) که در ادبیات SSL نشانهٔ ضعف یادگیری بازنمایی است؛ برای کارهای مبتنی بر embedding (probing، kNN) باید از `masked_recon` یا `traj_contrastive` استفاده کرد یا regularization قوی‌تری گذاشت. برای claimهای مربوط به ۴۹۰ مزرعه باید آرشیو کامل mount شود (شبیه‌ساز فقط sanity check است).
+
+---
 
 ## ۵. تطابق با چک‌لیست استاد
 
@@ -104,3 +123,11 @@
 - Few-shot ✅ (DS4).
 - LOYO + مقایسه با baseline ساده ✅ (RQ1).
 - پروتکل اجباری برای مدل‌های آینده: `docs/eval_protocol_future_models.md`.
+
+### نحوهٔ اجرای بنچمارک با دادهٔ واقعی ۴۹۰:
+
+```bash
+python scripts/run_data_scarcity.py --source real490 --arms anomaly_degradation --seeds 42 --epochs 10
+```
+
+(scanner X/bands از real490 بارگذاری می‌شود اما اعداد stress-labeling غیرفعالند تا زمان Verify شدن برچسب تنش.)

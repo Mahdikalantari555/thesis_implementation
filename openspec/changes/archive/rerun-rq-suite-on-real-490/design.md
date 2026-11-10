@@ -2,10 +2,10 @@
 
 ## Context
 
-- Real archive: `Data/Processed/satellite/stats.zarr` — 490 fields × 538 dates × 7 bands (SR_B2..B7 + ST_B10), 8 distribution stats + `valid_frac`; read via `ssl_anomaly.io.stats_zarr.load_stats_zarr`.
-- Real cycles: `scripts/segment_and_export_cycles_490.py` → `data/processed/cycles_490.parquet` and `data/interim/growth_cycles_490.npz` (36 × 15-day bins, ≤540 days, channel 0 = NDVI + 7 bands). `scripts/cycle_inputs.py` reproduces the same tensors for scoring.
+- Real archive: `Data/Processed/satellite/stats.zarr` — 490 fields × 538 dates × 7 bands (SR_B2..B7 + ST_B10), 8 distribution stats + `valid_frac`; read via `ssl_anomaly.io.stats_zarr.load_stats_zarr` (date range 2013-03-30 → 2026-09-10).
+- Real cycles: `scripts/segment_and_export_cycles_490.py` → `data/processed/cycles_490.parquet` and `data/interim/growth_cycles_490.npz` (36 × 15-day bins, ≤540 days, channel 0 = NDVI + 7 bands). `scripts/cycle_inputs.py` reproduces the same tensors for scoring. Verified (task 1.2, 2026-11-10): 1755 total cycles, 956 censored, 799 non-censored; 370 fields with ≥1 non-censored cycle, 223 with ≥2.
 - `data/processed/fields.zarr` is the 32-farm R11 subset (539 dates) and is the only file holding `cwsi_et`.
-- The user's archive count is 539 processed METRIC scenes; `stats.zarr` has 538 dates. One date is missing between the two — to be explained (task 1.1), not assumed.
+- **Date count reconciliation (task 1.1):** `stats.zarr` contains 538 acquisition dates (2013-03-30–2026-09-10) while the 32-farm `fields.zarr` and the stated METRIC processed-scene count are 539. The specific missing acquisition was not identified from available manifests in this pass; `stats.zarr` is treated as the canonical 490-field archive for this change and the one-date difference is recorded here rather than assumed. All provenance reports the actual `n_dates=538` from `stats.zarr`.
 
 ## Goals / Non-Goals
 

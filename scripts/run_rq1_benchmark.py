@@ -55,11 +55,15 @@ from ssl_anomaly.baseline import (
     trimmed_normal_cycles,
 )
 from ssl_anomaly.eval import (
+    add_source_argument,
+    build_provenance,
     cluster_field_ci,
     compare_detectors_wilcoxon_holm,
     generate_splits_dict,
+    load_real490_archive,
     save_splits_json,
     simulate_490_field_archive,
+    simulated_output_path,
     spearman_correlation,
 )
 from ssl_anomaly.io import extract_era5_from_fields_zarr
@@ -197,7 +201,11 @@ def run_loyo_archive_benchmark(
     eta_def = archive["eta_deficit"]
 
     bmap = {b: i for i, b in enumerate(bands)}
-    r_i, n_i, lst_i, nd_i = bmap["SR_B4"], bmap["SR_B5"], bmap["ST_B10"], bmap["NDVI"]
+    aliases = archive.get("band_aliases", {})
+    r_i = aliases.get("SR_B4", bmap.get("SR_B4"))
+    n_i = aliases.get("SR_B5", bmap.get("SR_B5"))
+    lst_i = aliases.get("ST_B10", bmap.get("ST_B10"))
+    nd_i = aliases.get("NDVI", bmap.get("NDVI"))
 
     uniq_years = sorted(int(y) for y in np.unique(years))
     valid_years = [
@@ -392,61 +400,117 @@ def _load_real_32_archive(zarr_path: Path, cycles_path: Path) -> tuple[dict, dic
 def main() -> int:
     limit_threads(2)
     ap = argparse.ArgumentParser(description="Run RQ1 LOYO & operational baseline benchmark.")
-    ap.add_argument("--zarr", default="data/processed/fields.zarr", type=Path)
-    ap.add_argument("--full-zarr", default="data/processed/fields_490.zarr", type=Path)
-    ap.add_argument("--cycles", default="data/processed/cycles.parquet", type=Path)
-    ap.add_argument("--era5-out", default="data/processed/era5.zarr", type=Path)
+    add_source_argument(ap, default="real490")
+    ap.add_argument("--zarr", default=None, type=Path)
+    ap.add_argument("--cycles", default=None, type=Path)
+    ap.add_argument("--era5-out", default=None, type=Path)
     ap.add_argument("--splits-out", default="data/processed/splits.json", type=Path)
     ap.add_argument("--out", default="reports/rq1_benchmark.json", type=Path)
+    ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--max-fields", type=int, default=None)
     args = ap.parse_args()
 
-    # 1. Build standalone era5.zarr & splits.json
-    extract_era5_from_fields_zarr(args.zarr, args.era5_out)
-    real_arch, splits = _load_real_32_archive(args.zarr, args.cycles)
-    save_splits_json(splits, args.splits_out)
-    log.info("Wrote standalone %s and %s", args.era5_out, args.splits_out)
+    source = args.source
+    seed = args.seed
 
-    # 2. Run on real 32-farm workspace archive
-    real_res = run_loyo_archive_benchmark(real_arch, ssl_epochs=25, seed=42)
-
-    # 3. Run on 490-field x 13.5-year archive (real if mounted, else calibrated simulator)
-    if args.full_zarr.exists():
-        full_source = "real_490_field_archive"
-        full_arch, _ = _load_real_32_archive(args.full_zarr, args.cycles)
+    if source == "real490":
+        archive = load_real490_archive()  # fail-closed
+        prov = build_provenance(archive, seeds=[seed])
+        if args.max_fields is not None:
+            unique_fields = np.unique(archive["field_ids"])
+            selected = unique_fields[:args.max_fields]
+            mask = np.isin(archive["field_ids"], selected)
+            for k, v in archive.items():
+                if isinstance(v, np.ndarray) and len(v) == len(archive["field_ids"]):
+                    archive[k] = v[mask]
+            archive["provenance"] = prov
+            archive["provenance"]["n_fields"] = len(selected)
+            archive["provenance"]["n_cycles"] = int(mask.sum())
+        out_path = args.out
+        report_source = "real490"
+    elif source == "simulated":
+        archive = simulate_490_field_archive(n_fields=490, n_years=13.5, seed=seed)
+        archive["provenance"] = {
+            "data_source": "simulated",
+            "n_fields": int(np.unique(archive["field_ids"]).size),
+            "n_cycles": archive["X"].shape[0],
+            "n_dates": 0,
+            "first_acquisition_date": "",
+            "last_acquisition_date": "",
+            "cycle_file_sha256": "simulated",
+            "git_sha": "unknown",
+            "splits_sha256": "unknown",
+            "seeds": [seed],
+            "y_stress_proxy": "simulated_top20pct_cwsi",
+            "eta_deficit_source": "simulated",
+            "cwsi_source": "simulated",
+        }
+        prov = archive["provenance"]
+        out_path = simulated_output_path(args.out)
+        report_source = "simulated"
+    elif source == "real32":
+        if args.zarr is None or args.cycles is None:
+            log.error("--source real32 requires --zarr and --cycles")
+            return 1
+        extract_era5_from_fields_zarr(args.zarr, args.era5_out or "data/processed/era5.zarr")
+        real_arch, splits = _load_real_32_archive(args.zarr, args.cycles)
+        save_splits_json(splits, args.splits_out)
+        archive = real_arch
+        archive["provenance"] = {
+            "data_source": "real32",
+            "n_fields": len(set(archive["field_ids"])),
+            "n_cycles": archive["X"].shape[0],
+            "n_dates": 0,
+            "first_acquisition_date": "",
+            "last_acquisition_date": "",
+            "cycle_file_sha256": "real32_fields_zarr",
+            "git_sha": "unknown",
+            "splits_sha256": splits.get("splits_sha256", "unknown"),
+            "seeds": [seed],
+            "y_stress_proxy": "top20pct_cwsi",
+            "eta_deficit_source": "fields_zarr_cwsi_et",
+            "cwsi_source": "fields_zarr_cwsi_et",
+        }
+        prov = archive["provenance"]
+        out_path = args.out
+        report_source = "real32"
     else:
-        full_source = "simulated_490_field_13_5yr_calibrated_fallback"
-        full_arch = simulate_490_field_archive(n_fields=490, n_years=13.5, seed=42)
+        log.error("Unknown source: %s", source)
+        return 1
 
-    full_res = run_loyo_archive_benchmark(full_arch, ssl_epochs=8, max_loyo_years=4, seed=42)
+    epochs = 8 if source == "simulated" else 25
+    max_loyo = 4 if source == "simulated" else None
+    results = run_loyo_archive_benchmark(archive, ssl_epochs=epochs, max_loyo_years=max_loyo, seed=seed)
 
     report = {
-        "splits_sha256": splits["splits_sha256"],
-        "real_32_farm_loyo": real_res,
-        "full_490_field_loyo_source": full_source,
-        "full_490_field_loyo": full_res,
+        "provenance": prov,
+        "data_source": prov["data_source"],
+        "source": report_source,
+        "n_fields": prov["n_fields"],
+        "n_cycles": prov["n_cycles"],
+        "rq1_results": results,
     }
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(report, indent=2))
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(report, indent=2))
 
     rows = []
-    for scope, res in [("real_32_farms", real_res), (full_source, full_res)]:
-        for det, m in res["detectors"].items():
-            rows.append(
-                {
-                    "archive": scope,
-                    "detector": det,
-                    "auc_pr": m["auc_pr"],
-                    "recall_at_5pct": m["recall_at_5pct_alert_budget"],
-                    "recall_at_10pct": m["recall_at_10pct_alert_budget"],
-                    "eta_deficit_rho": m["eta_deficit_spearman_rho"],
-                    "cluster_concordance": m["field_cluster_concordance_mean"],
-                }
-            )
-    csv_path = args.out.with_suffix(".csv")
+    for det, m in results["detectors"].items():
+        rows.append(
+            {
+                "archive": report_source,
+                "detector": det,
+                "auc_pr": m["auc_pr"],
+                "recall_at_5pct": m["recall_at_5pct_alert_budget"],
+                "recall_at_10pct": m["recall_at_10pct_alert_budget"],
+                "eta_deficit_rho": m["eta_deficit_spearman_rho"],
+                "cluster_concordance": m["field_cluster_concordance_mean"],
+            }
+        )
+    csv_path = out_path.with_suffix(".csv")
     df = pd.DataFrame(rows)
     df.to_csv(csv_path, index=False)
 
-    print("\n=== RQ1 Leave-One-Year-Out Benchmark (Equal Alert Budgets) ===")
+    print(f"\n=== RQ1 Leave-One-Year-Out Benchmark (source={report_source}) ===")
     print(df.to_string(index=False, float_format=lambda v: f"{v:.4f}"))
     return 0
 

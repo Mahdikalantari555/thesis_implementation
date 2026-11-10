@@ -14,8 +14,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
+from ssl_anomaly.eval import (
+    add_source_argument,
+    build_provenance,
+    load_real490_archive,
+    require_real_archive,
+    simulated_output_path,
+)
 from ssl_anomaly.utils.throttle import limit_threads
 
 limit_threads(2)
@@ -42,18 +50,55 @@ from ssl_anomaly.xai import (
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Run RQ6 physiology-validated temporal XAI suite.")
+    add_source_argument(ap, default="real490")
     ap.add_argument("--n-eval", default=28, type=int)
     ap.add_argument("--out", default="reports/rq6_xai.json", type=Path)
     args = ap.parse_args()
 
-    arch = simulate_490_field_archive(n_fields=55, n_years=10.0, stress_prevalence=0.18, seed=42)
-    X = arch["X"]
-    y = arch["y_stress"]
-    band_names = arch["bands"]
+    source = args.source
+    out_path = args.out
+
+    if source == "real490":
+        archive = load_real490_archive()  # fail-closed
+        prov = build_provenance(archive, seeds=[42])
+        X = archive["X"]
+        band_names = archive["bands"]
+        y = archive.get("y_stress", np.zeros(len(X)))
+    elif source == "simulated":
+        arch = simulate_490_field_archive(n_fields=55, n_years=10.0, stress_prevalence=0.18, seed=42)
+        X = arch["X"]
+        y = arch["y_stress"]
+        band_names = arch["bands"]
+        arch["provenance"] = {
+            "data_source": "simulated",
+            "n_fields": int(np.unique(arch.get("field_ids", np.zeros(len(X)))).size),
+            "n_cycles": X.shape[0],
+            "n_dates": 0,
+            "first_acquisition_date": "",
+            "last_acquisition_date": "",
+            "cycle_file_sha256": "simulated",
+            "git_sha": "unknown",
+            "splits_sha256": "unknown",
+            "seeds": [42],
+            "y_stress_proxy": "simulated_top20pct_cwsi",
+            "eta_deficit_source": "simulated",
+            "cwsi_source": "simulated",
+        }
+        prov = arch["provenance"]
+        out_path = simulated_output_path(args.out)
+    elif source == "real32":
+        print("real32 source not available: fields.zarr/cycles.parquet missing at workspace root.", file=sys.stderr)
+        return 1
+    else:
+        print(f"Unknown source: {source}", file=sys.stderr)
+        return 1
+
     n_bands = len(band_names)
     K = X.shape[1]
 
     X_clean = X[y == 0]
+    if len(X_clean) == 0:
+        X_clean = X[: min(200, len(X))]
     med = np.nanmedian(X_clean, axis=0)  # (K, B) phase-specific normal baseline!
     mad = np.maximum(np.nanmedian(np.abs(X_clean - med[None, :, :]), axis=0) * 1.4826, 1e-3)
 
@@ -74,7 +119,13 @@ def main() -> int:
         "anomaly_degradation", train_toks, n_bands=n_bands, epochs=22, batch_size=32, seed=42
     )
 
-    stress_indices = np.where(y == 1)[0][: args.n_eval]
+    # Select stress cycles if available; otherwise use normal cycles for attribution
+    stress_indices = np.where(y == 1)[0]
+    if len(stress_indices) == 0:
+        # No validated stress labels in real archive: attribute on clean cycles
+        stress_indices = np.where(y == 0)[0]
+    stress_indices = stress_indices[: args.n_eval]
+
     methods = {
         "Integrated_Gradients": lambda m, x, b: integrated_gradients_attribution(m, x, b, steps=24)[0],
         "Temporal_GradCAM": lambda m, x, b: temporal_grad_cam_attribution(m, x, b),
@@ -148,6 +199,11 @@ def main() -> int:
 
     df = pd.DataFrame(rows)
     report = {
+        "provenance": prov,
+        "data_source": prov["data_source"],
+        "source": source,
+        "n_fields": prov["n_fields"],
+        "n_cycles": prov["n_cycles"],
         "n_stressed_cycles_evaluated": int(len(stress_indices)),
         "band_names": band_names,
         "methods": rows,
@@ -155,12 +211,15 @@ def main() -> int:
             m: {k: float(np.mean(v)) for k, v in stg_d.items()}
             for m, stg_d in stage_profiles.items()
         },
+        "physiology_reference": "real" if source == "real490" else "simulated",
+        "note": "Real490 archive has no validated stress labels (y_stress proxy absent); attribution run on normal cycles.",
     }
+    args.out = out_path
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2))
-    df.to_csv(args.out.with_suffix(".csv"), index=False)
+    df.to_csv(out_path.with_suffix(".csv"), index=False)
 
-    print("\n=== RQ6 Physiology-Validated Temporal XAI Benchmark ===")
+    print(f"\n=== RQ6 Physiology-Validated Temporal XAI Benchmark (source={prov['data_source']}) ===")
     print(df.to_string(index=False, float_format=lambda v: f"{v:.4f}"))
     return 0
 

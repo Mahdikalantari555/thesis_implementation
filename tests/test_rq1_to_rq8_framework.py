@@ -24,12 +24,16 @@ from ssl_anomaly.cli import cli
 from ssl_anomaly.eval import (
     analyze_false_alarm_confounders,
     build_expert_event_review_packet,
+    build_provenance,
     cluster_field_ci,
     compare_detectors_wilcoxon_holm,
     evaluate_e_align_three_metrics,
     evaluate_e_norm_trimming_stability,
     evaluate_stress_validation_gate,
     generate_splits_dict,
+    get_archive_provenance,
+    load_real490_archive,
+    require_real_archive,
     run_cloud_completeness_benchmark,
     run_contamination_sweep,
     run_loyo_early_detection,
@@ -38,6 +42,7 @@ from ssl_anomaly.eval import (
     simulate_490_field_archive,
     simulate_progressive_onset_archive,
     subsample_cloud_completeness,
+    simulated_output_path,
 )
 from ssl_anomaly.io.era5 import compute_dynamic_gdd_from_era5, load_era5_zarr, write_era5_zarr
 from ssl_anomaly.models import (
@@ -291,3 +296,46 @@ def test_mlflow_sqlite_tracking_cli_and_hydra_configs(tmp_path: Path) -> None:
     res = runner.invoke(cli, ["--help"])
     assert res.exit_code == 0
     assert "research" in res.output
+
+
+def test_real_archive_provenance_fields_complete() -> None:
+    """R3: All provenance fields present and non-empty on real490 archive."""
+    archive = load_real490_archive()
+    prov = get_archive_provenance(archive)
+    required = [
+        "data_source", "n_fields", "n_cycles", "n_dates",
+        "first_acquisition_date", "last_acquisition_date",
+        "cycle_file_sha256", "git_sha", "splits_sha256",
+        "seeds", "y_stress_proxy", "eta_deficit_source", "cwsi_source",
+    ]
+    for key in required:
+        assert key in prov, f"Missing provenance field: {key}"
+        assert prov[key] not in (None, ""), f"Empty provenance field: {key}"
+    assert prov["data_source"] == "real490"
+    assert prov["n_fields"] == 490
+    assert prov["n_cycles"] == 799
+    assert prov["n_dates"] == 538
+
+
+def test_require_real_archive_fail_closed() -> None:
+    """R1: Missing archive → SystemExit(1), no report written."""
+    with pytest.raises(SystemExit) as excinfo:
+        require_real_archive(stats_zarr_path=Path("/nonexistent/stats.zarr"))
+    assert excinfo.value.code == 1
+
+
+def test_real490_no_32farm_cwsi_et_borrow() -> None:
+    """R4: No 32-farm cwsi_et reaches a 490 report; proxies absent."""
+    archive = load_real490_archive()
+    assert archive["eta_deficit_source"] == "absent"
+    assert archive["cwsi_source"] == "absent"
+    assert archive["y_stress_proxy"] == "weak_proxy_top20pct_mean_cwsi_not_validated_stress"
+    assert np.all(np.isnan(archive["eta_deficit"]))
+    assert np.all(np.isnan(archive["cwsi"]))
+
+
+def test_simulated_output_path_routes_to_reports_simulated() -> None:
+    """R2: Simulated outputs route under reports/simulated/."""
+    out = simulated_output_path(Path("reports/rq1_benchmark.json"))
+    assert "simulated" in str(out)
+    assert out.name == "rq1_benchmark.json"

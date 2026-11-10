@@ -36,6 +36,13 @@ import sys
 import time
 from pathlib import Path
 
+from ssl_anomaly.eval import (
+    add_source_argument,
+    build_provenance,
+    load_real490_archive,
+    require_real_archive,
+    simulated_output_path,
+)
 from ssl_anomaly.utils.throttle import limit_threads
 
 limit_threads(2)
@@ -70,6 +77,21 @@ log = get_logger("ssl_anomaly.scripts.data_scarcity")
 WEAK_PROXY_LABEL_NOTE = (
     "weak_proxy_top20pct_mean_cwsi_not_validated_stress"
 )
+
+REAL490_REQUIRED_KEYS = ("tokens", "field_ids", "years", "bands")
+
+
+def _real490_to_tokens(X: np.ndarray, bands: list[str]) -> list[np.ndarray]:
+    """Convert real490 archive X (N, K, C) into token list compatible with data-scarcity tooling."""
+    K = X.shape[1]
+    tau = np.linspace(0.0, 1.0, K, dtype=np.float32)[:, None]
+    med = np.nanmedian(X, axis=0)
+    mad = np.maximum(np.nanmedian(np.abs(X - med[None, :, :]), axis=0) * 1.4826, 1e-4)
+    tokens = []
+    for i in range(len(X)):
+        z = np.nan_to_num((X[i] - med) / mad, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
+        tokens.append(np.hstack([z, tau]).astype(np.float32))
+    return tokens
 
 
 def _ensure_cycles_parquet(zarr_p: Path, cyc_p: Path) -> Path:
@@ -138,6 +160,41 @@ def _load_real_archive(zarr_p: Path, cyc_p: Path) -> dict:
         "label_source": WEAK_PROXY_LABEL_NOTE,
         "epoch": epoch,
         "cycles_df": cycles_df,
+    }
+
+
+def _load_real490_archive(seed: int = 42) -> dict:
+    """Load the real 490-field archive via load_real490_archive (fail-closed)."""
+    archive = load_real490_archive()
+    X = archive["X"]
+    bands = archive["bands"]
+    field_ids = archive["field_ids"]
+    years = archive["start_years"]
+    labels = archive.get("y_stress", np.zeros(len(X))).astype(int)
+    n_dates = archive.get("provenance", {}).get("n_dates", None)
+
+    tokens = _real490_to_tokens(X, bands)
+
+    # Reserve last 6 fields as validation holdout
+    all_fields = sorted(set(field_ids.tolist()))
+    val_fields = set(all_fields[-6:]) if len(all_fields) >= 6 else set()
+    train_mask = np.array([int(f) not in val_fields for f in field_ids], dtype=bool)
+
+    return {
+        "source": "real490",
+        "tokens": tokens,
+        "train_mask": train_mask,
+        "field_ids": field_ids,
+        "years": years,
+        "labels": labels,
+        "bands": list(bands),
+        "n_bands": len(bands),
+        "n_fields": len(all_fields),
+        "n_dates": n_dates,
+        "label_source": "weak_proxy_top20pct_mean_cwsi_not_validated_stress (absent -> zeros)",
+        "epoch": None,
+        "cycles_df": None,
+        "provenance": archive.get("provenance", {}),
     }
 
 
@@ -230,9 +287,9 @@ def _make_figures(out_dir: Path, arm: str, tsne_coords: np.ndarray, labels: np.n
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="DS1-DS5 data-scarcity diagnostics.")
-    ap.add_argument("--zarr", default="data/processed/fields.zarr", type=Path)
-    ap.add_argument("--cycles", default="data/processed/cycles.parquet", type=Path)
-    ap.add_argument("--source", default="auto", choices=["auto", "real", "simulate490"])
+    add_source_argument(ap, default="real490")
+    ap.add_argument("--zarr", default=None, type=Path)
+    ap.add_argument("--cycles", default=None, type=Path)
     ap.add_argument("--simulate-490-if-missing", action="store_true")
     ap.add_argument("--arms", default="anomaly_degradation,masked_recon")
     ap.add_argument("--seeds", default="42,43,44")
@@ -246,21 +303,37 @@ def main() -> int:
     ap.add_argument("--figures", default="reports/figures", type=Path)
     args = ap.parse_args()
 
+    source = args.source
+    out_path = args.out
+
+    if source == "real490":
+        arch = _load_real490_archive(seed=42)
+        prov = arch.get("provenance", {})
+        out_path = args.out
+    elif source == "real":
+        arch = _load_real_archive(
+            args.zarr or Path("data/processed/fields.zarr"),
+            args.cycles or Path("data/processed/cycles.parquet"),
+        )
+        prov = {}
+    elif source == "simulate490" or source == "simulated":
+        arch = _load_simulated_archive(seed=42)
+        prov = {
+            "data_source": "simulated",
+            "n_fields": arch["n_fields"],
+            "n_cycles": len(arch["tokens"]),
+            "n_dates": arch["n_dates"],
+            "seeds": [42],
+        }
+        out_path = simulated_output_path(args.out)
+    else:
+        print(f"Unknown source: {source}", file=sys.stderr)
+        return 1
+
     seeds = [int(s.strip()) for s in args.seeds.split(",") if s.strip()]
     fractions = [float(x.strip()) for x in args.fractions.split(",") if x.strip()]
     fs_fractions = [float(x.strip()) for x in args.fewshot_fractions.split(",") if x.strip()]
     arms = [a.strip() for a in args.arms.split(",") if a.strip()]
-
-    src = args.source
-    if src == "auto":
-        src = "real" if (args.zarr.exists() and args.cycles.exists()) or args.zarr.exists() else "simulate490"
-    if src == "real" and not args.zarr.exists() and args.simulate_490_if_missing:
-        src = "simulate490"
-
-    if src == "real":
-        arch = _load_real_archive(args.zarr, args.cycles)
-    else:
-        arch = _load_simulated_archive(seed=42)
 
     tokens = arch["tokens"]
     train_idx = np.where(arch["train_mask"])[0]
@@ -284,7 +357,9 @@ def main() -> int:
         return eval_fn
 
     report: dict = {
-        "source": arch["source"],
+        "provenance": prov,
+        "data_source": prov.get("data_source", arch["source"]),
+        "source": source,
         "n_cycles": len(tokens),
         "n_train_cycles": len(train_toks),
         "n_fields": arch["n_fields"],
@@ -387,7 +462,7 @@ def main() -> int:
         loyo_folds = []
         for yr in valid_years:
             te_idx = np.where(years == yr)[0]
-            tr_idx = np.where((years != yr) & arch["train_mask"])[0]
+            tr_idx = np.where((years != y) & arch["train_mask"])[0] if False else np.where((years != yr) & arch["train_mask"])[0]
             if len(te_idx) < 3 or len(tr_idx) < 10:
                 continue
             sub_tr = [tokens[i] for i in tr_idx]
@@ -462,6 +537,7 @@ def main() -> int:
             _make_figures(args.figures, arm, tsne_coords, labels, lc)
         log.info("arm=%s done in %.1fs | verdict scarcity=%s", arm, arm_report["elapsed_seconds"], arm_report["verdict"]["data_scarcity_suspected"])
 
+    args.out = out_path
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2))
     pd.DataFrame(csv_rows).to_csv(args.out_csv, index=False)
