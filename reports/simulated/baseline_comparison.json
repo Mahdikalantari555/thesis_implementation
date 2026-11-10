@@ -160,5 +160,6 @@
       ],
       "mean_cycle_burden": NaN
     }
-  }
+  },
+  "data_source": "simulated"
 }

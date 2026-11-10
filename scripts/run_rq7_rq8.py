@@ -211,22 +211,61 @@ def main() -> int:
     review_df.to_csv(review_path, index=False)
 
     # --- RQ8: Contamination Sweep (0%-30%) & Natural False-Alarm Confounder Breakdown ---
-    n_te_c = min(140, len(X_clean) // 3)
-    n_te_s = min(35, max(1, len(X_stress) // 2)) if len(X_stress) > 0 else 0
-    X_test = np.concatenate([X_clean[-n_te_c:], X_stress[-n_te_s:]], axis=0) if n_te_s > 0 else X_clean[-n_te_c:]
-    y_test = np.array([0] * n_te_c + [1] * n_te_s, dtype=int) if n_te_s > 0 else np.zeros(n_te_c, dtype=int)
-    contam_rows = run_contamination_sweep(
-        X_clean[:-n_te_c],
-        X_stress[:-n_te_s] if n_te_s > 0 else X_clean[:max(1, len(X_clean) - n_te_c)],
-        X_test,
-        y_test,
-        train_size=220,
-        epochs=18,
-        seed=42,
-    )
-    confounder_report = analyze_false_alarm_confounders(
-        X_clean, X_stress if len(X_stress) > 0 else X_clean, band_names=band_names, seed=42
-    )
+    # Guard: both RQ8 analyses are AUC-PR computations, which are undefined on a
+    # single-class target. On the real 490-field archive y_stress is an all-zero
+    # placeholder until CWSI/ETa zonal extraction is wired (todo item 1), so the
+    # sweep would emit meaningless 0.0000 rows. Report not_run instead.
+    n_pos_all = int(np.sum(y == 1))
+    n_neg_all = int(np.sum(y == 0))
+    rq8_degenerate = n_pos_all == 0 or n_neg_all == 0
+
+    if rq8_degenerate:
+        rq8_note = (
+            f"RQ8 contamination sweep and false-alarm confounder decomposition not run: "
+            f"y_stress has a single class (n_pos={n_pos_all}, n_neg={n_neg_all}), so AUC-PR "
+            f"and recall@10pct are undefined. On the real 490-field archive stress labels are "
+            f"pending CWSI/ETa zonal extraction; re-run with --source simulated for the "
+            f"synthetic sweep."
+        )
+        n_te_c = min(140, len(X_clean) // 3)
+        contam_rows = [
+            {
+                "contamination_rate": rate,
+                "ssl_untrimmed_auc_pr": float("nan"),
+                "ssl_trimmed_q25_auc_pr": float("nan"),
+                "ssl_trimming_gain": float("nan"),
+                "b1_untrimmed_mean_sd_auc_pr": float("nan"),
+                "b1_trimmed_mad_auc_pr": float("nan"),
+                "ssl_trimmed_recall_10pct": float("nan"),
+                "ssl_untrimmed_recall_10pct": float("nan"),
+                "status": "not_run",
+            }
+            for rate in (0.0, 0.05, 0.10, 0.15, 0.20, 0.30)
+        ]
+        confounder_report = {
+            "status": "not_run",
+            "note": rq8_note,
+            "raw_ssl_stress_vs_confounders_auc_pr": float("nan"),
+            "physics_filtered_stress_vs_confounders_auc_pr": float("nan"),
+        }
+    else:
+        rq8_note = None
+        n_te_c = min(140, len(X_clean) // 3)
+        n_te_s = min(35, max(1, len(X_stress) // 2))
+        X_test = np.concatenate([X_clean[-n_te_c:], X_stress[-n_te_s:]], axis=0)
+        y_test = np.array([0] * n_te_c + [1] * n_te_s, dtype=int)
+        contam_rows = run_contamination_sweep(
+            X_clean[:-n_te_c],
+            X_stress[:-n_te_s],
+            X_test,
+            y_test,
+            train_size=220,
+            epochs=18,
+            seed=42,
+        )
+        confounder_report = analyze_false_alarm_confounders(
+            X_clean, X_stress, band_names=band_names, seed=42
+        )
 
     report = {
         "provenance": prov,
@@ -261,12 +300,18 @@ def main() -> int:
     print("\n=== RQ7 Frozen-Feature Environmental Probing (R^2 / AUC) ===")
     print(pd.DataFrame(rq7_rows).to_string(index=False, float_format=lambda v: f"{v:.4f}"))
     print("\n=== RQ8 Training Contamination Sweep (0% -> 30%) ===")
-    print(pd.DataFrame(contam_rows).to_string(index=False, float_format=lambda v: f"{v:.4f}"))
+    if rq8_note:
+        print(f"NOT RUN: {rq8_note}")
+    else:
+        print(pd.DataFrame(contam_rows).to_string(index=False, float_format=lambda v: f"{v:.4f}"))
     print("\n=== RQ8 False-Alarm Confounder Decomposition ===")
-    print(
-        f"Stress vs Confounders AUC-PR: raw SSL = {confounder_report['raw_ssl_stress_vs_confounders_auc_pr']:.4f} "
-        f"-> physics-filtered SSL = {confounder_report['physics_filtered_stress_vs_confounders_auc_pr']:.4f}"
-    )
+    if rq8_note:
+        print("NOT RUN: see the note above (single-class y_stress).")
+    else:
+        print(
+            f"Stress vs Confounders AUC-PR: raw SSL = {confounder_report['raw_ssl_stress_vs_confounders_auc_pr']:.4f} "
+            f"-> physics-filtered SSL = {confounder_report['physics_filtered_stress_vs_confounders_auc_pr']:.4f}"
+        )
     return 0
 
 

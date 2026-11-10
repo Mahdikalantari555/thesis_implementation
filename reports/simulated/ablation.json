@@ -2613,5 +2613,6 @@
       "ssl_cwsi_spearman_delta_ci_low": 0.04280112044817928,
       "ssl_cwsi_spearman_delta_ci_high": 0.09786834733893553
     }
-  ]
+  ],
+  "data_source": "simulated"
 }

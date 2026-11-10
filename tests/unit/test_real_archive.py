@@ -57,7 +57,7 @@ class TestRealArchiveLoader:
         assert prov["first_acquisition_date"] == "2013-03-30"
         assert prov["last_acquisition_date"] == "2026-09-10"
         assert prov["n_cycles"] == arch["X"].shape[0]
-        assert prov["n_fields"] == int(np.unique(arch["field_ids"]).size)
+        assert prov["n_fields"] == 490  # spec R1: total fields in stats.zarr, not just those with cycles
 
     def test_get_archive_provenance(self):
         arch = load_real490_archive()

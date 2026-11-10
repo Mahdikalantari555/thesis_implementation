@@ -174899,5 +174899,6 @@
       ],
       "spatial_test_original_alert_fraction": 0.014598540145985401
     }
-  }
+  },
+  "data_source": "simulated"
 }

@@ -217,6 +217,30 @@ def run_loyo_archive_benchmark(
         idx_y = np.linspace(0, len(valid_years) - 1, max_loyo_years).round().astype(int)
         valid_years = [valid_years[i] for i in idx_y]
 
+    # A single-class label vector makes AUC-PR undefined (sklearn returns an
+    # IndexError from an empty confusion matrix). On the real 490-field archive
+    # y_stress is a placeholder of zeros until the CWSI/ETa zonal extraction
+    # lands, so report the detector suite as not-run rather than crashing.
+    n_pos = int(np.sum(y_true == 1))
+    n_neg = int(np.sum(y_true == 0))
+    if n_pos == 0 or n_neg == 0:
+        return {
+            "status": "not_run",
+            "note": (
+                "AUC-PR/recall are undefined: y_stress has a single class "
+                f"(n_pos={n_pos}, n_neg={n_neg}). On the real 490-field archive "
+                "stress labels are pending CWSI/ETa zonal extraction, so the "
+                "detector comparison is reported as not-run instead of being "
+                "computed on a degenerate label vector."
+            ),
+            "n_fields": int(len(np.unique(fids))),
+            "n_cycles_evaluated": 0,
+            "n_loyo_folds": 0,
+            "held_out_years": [],
+            "detectors": {},
+            "paired_wilcoxon_vs_ssl": {},
+        }
+
     detector_names = [
         "SSL_MaskedTransformer",
         "B1_PhaseZScore",
@@ -420,8 +444,12 @@ def main() -> int:
             unique_fields = np.unique(archive["field_ids"])
             selected = unique_fields[:args.max_fields]
             mask = np.isin(archive["field_ids"], selected)
-            for k, v in archive.items():
-                if isinstance(v, np.ndarray) and len(v) == len(archive["field_ids"]):
+            n_cycles_before = len(archive["field_ids"])
+            # Snapshot the keys first: mutating the dict while iterating it lets
+            # the per-key length test read an already-shrunk field_ids array.
+            for k in list(archive.keys()):
+                v = archive[k]
+                if isinstance(v, np.ndarray) and len(v) == n_cycles_before:
                     archive[k] = v[mask]
             archive["provenance"] = prov
             archive["provenance"]["n_fields"] = len(selected)
@@ -492,6 +520,14 @@ def main() -> int:
     }
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(report, indent=2))
+
+    if results.get("status") == "not_run":
+        print(f"\n=== RQ1 Leave-One-Year-Out Benchmark (source={report_source}) ===")
+        print(f"NOT RUN: {results['note']}")
+        pd.DataFrame([{"archive": report_source, "status": "not_run", "note": results["note"]}]).to_csv(
+            out_path.with_suffix(".csv"), index=False
+        )
+        return 0
 
     rows = []
     for det, m in results["detectors"].items():

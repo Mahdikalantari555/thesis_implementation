@@ -1,49 +1,71 @@
 {
   "false_alarm_budget": 0.05,
   "eigencl_reference_lead_days": 12.0,
-  "ssl_lead_time_vs_ndvi_mean_days": 34.0,
+  "ssl_lead_time_vs_ndvi_mean_days": 0.0,
   "ssl_lead_time_vs_ndvi_ci_95": [
-    27.333333333333332,
-    39.333333333333336
+    0.0,
+    0.0
   ],
-  "ssl_lead_time_vs_ndvi_median_days": 45.0,
-  "exceeds_eigencl_12d_reference": true,
+  "ssl_lead_time_vs_ndvi_median_days": 0.0,
+  "exceeds_eigencl_12d_reference": false,
   "methods": {
     "SSL_Causal_OpticalThermal": {
-      "detection_rate_at_5pct_far": 1.0,
-      "mean_delay_days_from_onset": 41.0,
+      "detection_rate_at_5pct_far": 0.0,
+      "mean_delay_days_from_onset": NaN,
       "delay_days_ci_95": [
-        38.333333333333336,
-        43.666666666666664
+        NaN,
+        NaN
       ],
-      "median_delay_days_from_onset": 45.0
+      "median_delay_days_from_onset": NaN
     },
     "B1_CUSUM_Causal": {
-      "detection_rate_at_5pct_far": 1.0,
-      "mean_delay_days_from_onset": 40.333333333333336,
+      "detection_rate_at_5pct_far": 0.05263157894736842,
+      "mean_delay_days_from_onset": NaN,
       "delay_days_ci_95": [
-        37.65833333333333,
-        43.333333333333336
+        NaN,
+        NaN
       ],
-      "median_delay_days_from_onset": 45.0
+      "median_delay_days_from_onset": NaN
     },
     "B1_PhaseZ_Causal": {
-      "detection_rate_at_5pct_far": 1.0,
-      "mean_delay_days_from_onset": 37.0,
+      "detection_rate_at_5pct_far": 0.10526315789473684,
+      "mean_delay_days_from_onset": 7.5,
       "delay_days_ci_95": [
-        34.0,
-        40.0
+        0.0,
+        15.0
       ],
-      "median_delay_days_from_onset": 30.0
+      "median_delay_days_from_onset": 7.5
     },
     "NDVI_Index_Threshold": {
-      "detection_rate_at_5pct_far": 1.0,
-      "mean_delay_days_from_onset": 75.0,
+      "detection_rate_at_5pct_far": 0.0,
+      "mean_delay_days_from_onset": NaN,
       "delay_days_ci_95": [
-        68.33333333333333,
-        80.66666666666667
+        NaN,
+        NaN
       ],
-      "median_delay_days_from_onset": 75.0
+      "median_delay_days_from_onset": NaN
     }
-  }
+  },
+  "provenance": {
+    "data_source": "real490",
+    "n_fields": 490,
+    "n_cycles": 799,
+    "n_dates": 538,
+    "first_acquisition_date": "2013-03-30",
+    "last_acquisition_date": "2026-09-10",
+    "cycle_file_sha256": "cef2b94c1960d8f39ba2d113a26863258b74e9f4a8b21d0522839d581c1f2e35",
+    "git_sha": "04121213",
+    "seeds": [
+      42
+    ],
+    "splits_sha256": "unknown",
+    "stats_zarr_sha256": "2b25e514fb3978ba7102f29c5d94cba703fb01555a47367cf1eed81c4cbe43b1",
+    "y_stress_proxy": "weak_proxy_top20pct_mean_cwsi_not_validated_stress",
+    "eta_deficit_source": "absent",
+    "cwsi_source": "absent"
+  },
+  "data_source": "real490",
+  "source": "real490",
+  "n_fields": 490,
+  "n_cycles": 799
 }

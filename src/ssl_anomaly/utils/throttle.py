@@ -30,6 +30,13 @@ def limit_threads(n: int = 2) -> None:
         os.environ[key] = str(n)
     os.environ.setdefault("GDAL_CACHEMAX", "512")  # MB
     os.environ.setdefault("OMP_PROC_BIND", "TRUE")
+    # On Windows the Intel-MKL numpy build and torch each ship their own OpenMP
+    # runtime. When both are loaded, LAPACK calls (np.cov / np.linalg.svd /
+    # solve / inv, and therefore scipy.stats.spearmanr) can abort the process
+    # with a native exception (0xC06D007F, "application has failed to start").
+    # Forcing MKL onto its sequential layer keeps LAPACK usable.
+    if os.name == "nt":  # pragma: win32 cover
+        os.environ.setdefault("MKL_THREADING_LAYER", "SEQUENTIAL")
     log.debug("Set BLAS/OpenMP threads to %d", n)
 
 

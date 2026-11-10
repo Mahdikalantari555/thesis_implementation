@@ -248,26 +248,30 @@ def main() -> int:
         P_t = torch.from_numpy(P_pad)
         nb = model.n_bands
         use_b = eval_band_indices if eval_band_indices is not None else list(range(nb))
-        _, embs_t = model.encode_sequence(X_t, mask=None, key_padding_mask=P_t)
         tok_rms = np.full((N, T_max), np.nan, dtype=np.float64)
-        for st in range(0, T_max, 4):
-            en = min(T_max, st + 4)
-            m = torch.zeros((N, T_max), dtype=torch.bool)
-            m[:, st:en] = ~P_t[:, st:en]
-            xin = X_t.clone()
-            xin[:, st:en, :nb] = 0.0
-            h, _ = model.encode_sequence(xin, mask=m, key_padding_mask=P_t)
-            recon = model.task_head(h)
-            diff = (recon[:, st:en, :][:, :, use_b] - X_t[:, st:en, :][:, :, use_b]).numpy()
-            rms = np.sqrt(np.mean(diff**2, axis=-1))
-            obs = (~P_t[:, st:en]).numpy()
-            rms[~obs] = np.nan
-            tok_rms[:, st:en] = rms
+        # Scoring only: no gradients are needed, and the task head's output
+        # still carries a graph unless we opt out of autograd here.
+        with torch.no_grad():
+            _, embs_t = model.encode_sequence(X_t, mask=None, key_padding_mask=P_t)
+            for st in range(0, T_max, 4):
+                en = min(T_max, st + 4)
+                m = torch.zeros((N, T_max), dtype=torch.bool)
+                m[:, st:en] = ~P_t[:, st:en]
+                xin = X_t.clone()
+                xin[:, st:en, :nb] = 0.0
+                h, _ = model.encode_sequence(xin, mask=m, key_padding_mask=P_t)
+                recon = model.task_head(h)
+                diff = (recon[:, st:en, :][:, :, use_b] - X_t[:, st:en, :][:, :, use_b]).detach().numpy()
+                rms = np.sqrt(np.mean(diff**2, axis=-1))
+                obs = (~P_t[:, st:en]).numpy()
+                rms[~obs] = np.nan
+                tok_rms[:, st:en] = rms
+            embs_np = embs_t.detach().numpy()
         scores = np.zeros(N, dtype=np.float64)
         for i in range(N):
             fin = np.sort(tok_rms[i][np.isfinite(tok_rms[i])])
             scores[i] = float(np.mean(fin[-min(3, fin.size) :])) if fin.size else 0.0
-        return scores, embs_t.numpy()
+        return scores, embs_np
 
     def _standardize_cycle_matrix(X_train, X_all):
         med = np.nanmedian(X_train, axis=(0, 1))

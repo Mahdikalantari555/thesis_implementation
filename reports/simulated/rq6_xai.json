@@ -1,0 +1,130 @@
+{
+  "provenance": {
+    "data_source": "simulated",
+    "n_fields": 55,
+    "n_cycles": 420,
+    "n_dates": 0,
+    "first_acquisition_date": "",
+    "last_acquisition_date": "",
+    "cycle_file_sha256": "simulated",
+    "git_sha": "unknown",
+    "splits_sha256": "unknown",
+    "seeds": [
+      42
+    ],
+    "y_stress_proxy": "simulated_top20pct_cwsi",
+    "eta_deficit_source": "simulated",
+    "cwsi_source": "simulated"
+  },
+  "data_source": "simulated",
+  "source": "simulated",
+  "n_fields": 55,
+  "n_cycles": 420,
+  "n_stressed_cycles_evaluated": 1,
+  "band_names": [
+    "SR_B2",
+    "SR_B3",
+    "SR_B4",
+    "SR_B5",
+    "SR_B6",
+    "SR_B7",
+    "ST_B10",
+    "NDVI",
+    "NDWI",
+    "NDMI"
+  ],
+  "methods": [
+    {
+      "xai_method": "Integrated_Gradients",
+      "deletion_auc": 0.44349667401160126,
+      "random_deletion_auc": 0.7531051976346596,
+      "deletion_gain": 0.3096085236230583,
+      "insertion_auc": 1.057699688498998,
+      "random_insertion_auc": 0.7627280252858512,
+      "insertion_gain": 0.29497166321314683,
+      "physiology_sign_concordance": 1.0,
+      "canopy_loss_concordance": 1.0,
+      "lst_heating_concordance": 1.0,
+      "swir_dehydration_concordance": NaN,
+      "grand_growth_stage_share": 0.3383608588585948,
+      "sanity_recon_abs_rho": 0.5723479796366914,
+      "sanity_neural_disc_abs_rho": 0.028623805430517884,
+      "passes_neural_sanity_check": true
+    },
+    {
+      "xai_method": "Temporal_GradCAM",
+      "deletion_auc": 0.7526984867030495,
+      "random_deletion_auc": 0.7531051976346596,
+      "deletion_gain": 0.0004067109316100437,
+      "insertion_auc": 0.8136686861882977,
+      "random_insertion_auc": 0.7627280252858512,
+      "insertion_gain": 0.05094066090244653,
+      "physiology_sign_concordance": 0.0,
+      "canopy_loss_concordance": 0.0,
+      "lst_heating_concordance": 0.0,
+      "swir_dehydration_concordance": NaN,
+      "grand_growth_stage_share": 0.17659751617816932,
+      "sanity_recon_abs_rho": 0.10791031102967989,
+      "sanity_neural_disc_abs_rho": 0.0453647821515951,
+      "passes_neural_sanity_check": true
+    },
+    {
+      "xai_method": "Window_Occlusion",
+      "deletion_auc": 0.6110236001170081,
+      "random_deletion_auc": 0.7531051976346596,
+      "deletion_gain": 0.14208159751765148,
+      "insertion_auc": 0.9383213446205021,
+      "random_insertion_auc": 0.7627280252858512,
+      "insertion_gain": 0.17559331933465094,
+      "physiology_sign_concordance": 1.0,
+      "canopy_loss_concordance": 1.0,
+      "lst_heating_concordance": 1.0,
+      "swir_dehydration_concordance": NaN,
+      "grand_growth_stage_share": 0.4485818406924135,
+      "sanity_recon_abs_rho": 0.22277255322145675,
+      "sanity_neural_disc_abs_rho": 0.012620403253387513,
+      "passes_neural_sanity_check": true
+    },
+    {
+      "xai_method": "Temporal_SHAP",
+      "deletion_auc": 0.7331346492824563,
+      "random_deletion_auc": 0.7531051976346596,
+      "deletion_gain": 0.019970548352203243,
+      "insertion_auc": 0.8100017998765845,
+      "random_insertion_auc": 0.7627280252858512,
+      "insertion_gain": 0.04727377459073334,
+      "physiology_sign_concordance": 0.5,
+      "canopy_loss_concordance": 0.0,
+      "lst_heating_concordance": 0.6666666666666666,
+      "swir_dehydration_concordance": NaN,
+      "grand_growth_stage_share": 0.34955189526372166,
+      "sanity_recon_abs_rho": 0.9920533481522643,
+      "sanity_neural_disc_abs_rho": 0.6030564045568213,
+      "passes_neural_sanity_check": false
+    }
+  ],
+  "stage_attribution_shares": {
+    "Integrated_Gradients": {
+      "emergence_tillering": 0.1641575859512208,
+      "grand_growth": 0.3383608588585948,
+      "maturation_ripening": 0.49748155518898085
+    },
+    "Temporal_GradCAM": {
+      "emergence_tillering": 0.3320767648375145,
+      "grand_growth": 0.17659751617816932,
+      "maturation_ripening": 0.4913257189840426
+    },
+    "Window_Occlusion": {
+      "emergence_tillering": 0.1356985953237469,
+      "grand_growth": 0.4485818406924135,
+      "maturation_ripening": 0.4157195639827468
+    },
+    "Temporal_SHAP": {
+      "emergence_tillering": 0.1775656202828695,
+      "grand_growth": 0.34955189526372166,
+      "maturation_ripening": 0.4728824844532992
+    }
+  },
+  "physiology_reference": "simulated",
+  "note": "Real490 archive has no validated stress labels (y_stress proxy absent); attribution run on normal cycles."
+}

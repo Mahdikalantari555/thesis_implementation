@@ -29,9 +29,9 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
   - ✅ Task 2: all 8 run_rq*.py + run_data_scarcity.py refactored with --source {real490,real32,simulated}; simulated → reports/simulated/
   - ✅ Task 3.1: data/processed/splits_490.json built (370 fields, 799 cycles, 20 spatial blocks, SHA-256 recorded)
   - ✅ Task 3.2: proxies absent on real490 (no 32-farm cwsi_et borrow); test passes
-  - ⏳ Task 4: smoke tests partial (run_rq5 OK; run_rq6/run_rq7_rq8 pending debug)
-  - ⏳ Task 5: findings 08/10/11/12 updated; real490 status + sim superseded sections added
-  - ⏳ Task 6: more tests + spec check + archive change pending
+  - ✅ Task 4: smoke tests all pass on real490 (run_rq1–rq7_rq8 + run_data_scarcity all EXIT 0)
+  - ✅ Task 5: findings 08/10/11/12 updated; real490 status + sim superseded sections added
+  - ✅ Task 6: tests added (test_provenance_complete, test_fail_closed, test_no_32farm_borrow, test_sim_output_path); spec R1–R5 verified; change archived to openspec/changes/archive/
   - See `openspec/changes/rerun-rq-suite-on-real-490/`.
 
 ## Queued — openspec candidates (one change each, user-approved direction)

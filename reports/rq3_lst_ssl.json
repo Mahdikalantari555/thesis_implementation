@@ -1,106 +1,102 @@
 {
+  "provenance": {
+    "data_source": "real490",
+    "n_fields": 490,
+    "n_cycles": 799,
+    "n_dates": 538,
+    "first_acquisition_date": "2013-03-30",
+    "last_acquisition_date": "2026-09-10",
+    "cycle_file_sha256": "cef2b94c1960d8f39ba2d113a26863258b74e9f4a8b21d0522839d581c1f2e35",
+    "git_sha": "04121213",
+    "seeds": [
+      42
+    ],
+    "splits_sha256": "unknown",
+    "stats_zarr_sha256": "2b25e514fb3978ba7102f29c5d94cba703fb01555a47367cf1eed81c4cbe43b1",
+    "y_stress_proxy": "weak_proxy_top20pct_mean_cwsi_not_validated_stress",
+    "eta_deficit_source": "absent",
+    "cwsi_source": "absent"
+  },
+  "data_source": "real490",
+  "source": "real490",
+  "n_fields": 490,
+  "n_cycles": 799,
   "circularity_safeguard": "Zero CWSI targets used; real perturbation test scores optical SR_B2..SR_B7 only.",
   "seeds": [
-    42,
-    43,
-    44,
-    45,
-    46
+    42
   ],
   "models": {
     "optical_only_ssl": {
       "real_optical_pert_pr": {
-        "mean": 0.8103304072580254,
+        "mean": 0.7968187772414754,
         "ci_95": [
-          0.7867452901692054,
-          0.828776225815408
-        ]
-      },
-      "real_et0_probe_r2": {
-        "mean": 0.28848929157766035,
-        "ci_95": [
-          0.2048270537977018,
-          0.37356829892915233
+          0.7968187772414754,
+          0.7968187772414754
         ]
       },
       "coupled_stress_pr": {
-        "mean": 0.4734837409556668,
+        "mean": 0.0,
         "ci_95": [
-          0.43066974215985016,
-          0.5226516095792382
+          0.0,
+          0.0
         ]
       },
       "eta_probe_r2": {
-        "mean": 0.06774210637519447,
+        "mean": null,
         "ci_95": [
-          0.03873763566520363,
-          0.09762600528714968
+          null,
+          null
         ]
       }
     },
     "optical_plus_lst_ssl": {
       "real_optical_pert_pr": {
-        "mean": 0.8235403729054191,
+        "mean": 0.7550951190192033,
         "ci_95": [
-          0.8084913511195386,
-          0.837802192092384
-        ]
-      },
-      "real_et0_probe_r2": {
-        "mean": 0.29810585421072744,
-        "ci_95": [
-          0.10033450643038666,
-          0.5349391962115987
+          0.7550951190192033,
+          0.7550951190192033
         ]
       },
       "coupled_stress_pr": {
-        "mean": 0.7226278195896084,
+        "mean": 0.0,
         "ci_95": [
-          0.6950129342169895,
-          0.7442965570019734
+          0.0,
+          0.0
         ]
       },
       "eta_probe_r2": {
-        "mean": 0.20260822609618798,
+        "mean": null,
         "ci_95": [
-          0.16595017865163708,
-          0.24342176288520276
+          null,
+          null
         ]
       }
     }
   },
   "paired_deltas_lst_minus_optical": {
     "real_optical_pert_pr": {
-      "delta_lst_minus_optical": 0.013209965647393584,
+      "delta_lst_minus_optical": -0.041723658222272086,
       "delta_ci_95": [
-        -0.018729236436066922,
-        0.050633362507315136
-      ],
-      "wilcoxon_pval": 0.8125
-    },
-    "real_et0_probe_r2": {
-      "delta_lst_minus_optical": 0.009616562633067094,
-      "delta_ci_95": [
-        -0.2148671315872103,
-        0.29029996783732026
+        -0.041723658222272086,
+        -0.041723658222272086
       ],
       "wilcoxon_pval": 1.0
     },
     "coupled_stress_pr": {
-      "delta_lst_minus_optical": 0.24914407863394153,
+      "delta_lst_minus_optical": 0.0,
       "delta_ci_95": [
-        0.1965048072119227,
-        0.2967308324209211
+        0.0,
+        0.0
       ],
-      "wilcoxon_pval": 0.0625
+      "wilcoxon_pval": 1.0
     },
     "eta_probe_r2": {
-      "delta_lst_minus_optical": 0.13486611972099352,
+      "delta_lst_minus_optical": null,
       "delta_ci_95": [
-        0.1119312268518321,
-        0.15780101259015494
+        null,
+        null
       ],
-      "wilcoxon_pval": 0.0625
+      "wilcoxon_pval": null
     }
   }
 }

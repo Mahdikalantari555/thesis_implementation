@@ -291,11 +291,26 @@ def main() -> int:
         e_norm = {"note": "E-NORM requires real32 zarr data"}
         e_seg = {"note": "E-SEG requires real32 zarr data"}
 
-    # RQ4 Cloud-completeness sweep
-    sim_cloud = simulate_490_field_archive(n_fields=65, n_years=10.0, seed=seed)
-    cloud_sweep = run_cloud_completeness_benchmark(
-        sim_cloud["X"], sim_cloud["y_stress"], epochs=20, seeds=(seed, seed + 1, seed + 2)
-    )
+    # RQ4 Cloud-completeness sweep.
+    # The sweep needs validated stress labels to compute AUC-PR. On real490 the
+    # CWSI/ETa proxies are absent (all-zero y_stress), so running it would
+    # produce a degenerate metric. Simulator data is used ONLY on the
+    # explicit --source simulated path.
+    if source == "simulated":
+        sim_cloud = simulate_490_field_archive(n_fields=65, n_years=10.0, seed=seed)
+        cloud_sweep = run_cloud_completeness_benchmark(
+            sim_cloud["X"], sim_cloud["y_stress"], epochs=20, seeds=(seed, seed + 1, seed + 2)
+        )
+    else:
+        cloud_sweep = {
+            "note": (
+                f"RQ4 cloud-completeness sweep not run for source={source}: it requires "
+                "validated stress labels (AUC-PR). real490 CWSI/ETa proxies are absent "
+                "(y_stress is a placeholder), so the sweep is reported as not-run rather "
+                "than computed on simulated data. Re-run with --source simulated for the "
+                "synthetic sweep."
+            )
+        }
 
     report = {
         "provenance": prov,
@@ -311,12 +326,21 @@ def main() -> int:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(report, indent=2))
 
-    df_cloud = pd.DataFrame(list(cloud_sweep.values()))
-    df_cloud.to_csv(out_path.with_suffix(".csv"), index=False)
     print(f"\n=== RQ4 Cloud-Completeness Sweep (source={prov['data_source']}) ===")
-    print(df_cloud.to_string(index=False, float_format=lambda v: f"{v:.4f}"))
+    if "note" in cloud_sweep:
+        print(f"NOT RUN: {cloud_sweep['note']}")
+        pd.DataFrame([{"status": "not_run", "note": cloud_sweep["note"]}]).to_csv(
+            out_path.with_suffix(".csv"), index=False
+        )
+    else:
+        df_cloud = pd.DataFrame(list(cloud_sweep.values()))
+        df_cloud.to_csv(out_path.with_suffix(".csv"), index=False)
+        print(df_cloud.to_string(index=False, float_format=lambda v: f"{v:.4f}"))
     print("\n=== E-ALIGN Three-Metric Summary ===")
-    print(pd.DataFrame(e_align).T.to_string(float_format=lambda v: f"{v:.4f}"))
+    if "note" in e_align:
+        print(f"NOT RUN: {e_align['note']}")
+    else:
+        print(pd.DataFrame(dict(e_align)).T.to_string(float_format=lambda v: f"{v:.4f}"))
     return 0
 
 

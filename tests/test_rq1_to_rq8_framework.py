@@ -327,9 +327,10 @@ def test_require_real_archive_fail_closed() -> None:
 def test_real490_no_32farm_cwsi_et_borrow() -> None:
     """R4: No 32-farm cwsi_et reaches a 490 report; proxies absent."""
     archive = load_real490_archive()
-    assert archive["eta_deficit_source"] == "absent"
-    assert archive["cwsi_source"] == "absent"
-    assert archive["y_stress_proxy"] == "weak_proxy_top20pct_mean_cwsi_not_validated_stress"
+    prov = archive["provenance"]
+    assert prov["eta_deficit_source"] == "absent"
+    assert prov["cwsi_source"] == "absent"
+    assert prov["y_stress_proxy"] == "weak_proxy_top20pct_mean_cwsi_not_validated_stress"
     assert np.all(np.isnan(archive["eta_deficit"]))
     assert np.all(np.isnan(archive["cwsi"]))
 

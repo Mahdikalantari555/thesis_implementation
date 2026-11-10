@@ -71,5 +71,6 @@
       "cwsi_spearman_rho": 0.28293297919373284,
       "cwsi_spearman_pval": 0.09957626183051047
     }
-  }
+  },
+  "data_source": "simulated"
 }
