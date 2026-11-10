@@ -24,7 +24,7 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
 
 ## In progress
 
-- (nothing — next: pick from Queued)
+- ▶ **`rerun-rq-suite-on-real-490`** (proposed 2026-11-10) — RQ1–RQ8 + data-scarcity results in findings 11–12 came from `simulate_490_field_archive`, not the real 490-field archive; re-run on real data, fail closed, provenance in every report. See `openspec/changes/rerun-rq-suite-on-real-490/`.
 
 ## Queued — openspec candidates (one change each, user-approved direction)
 
@@ -59,6 +59,8 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
 1. **Validation ladder full write-up** (the 5 levels) — send whenever ready; blocks item 5's spec.
 2. METRIC products: confirm which interpolated product is authoritative for daily values (item 1) — scene rasters vs `interpolation/` semantics.
 3. For the full-archive axis: keep the completeness stat semantics (invalid acquisitions count as missing) as-is?
+4. `rust/` crate was added by coding-agent commits, not by the user; its `32.7×` claim is unreproduced. Keep (and verify) or remove?
+5. Date count: METRIC 539 scenes vs `stats.zarr` 538 dates — which date is missing and why?
 
 ## Thesis-level reminders
 
