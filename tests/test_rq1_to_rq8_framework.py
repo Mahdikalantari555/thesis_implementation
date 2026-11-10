@@ -262,7 +262,7 @@ def test_validation_gate_rq7_probing_and_rq8_contamination() -> None:
         epochs=2,
         seed=31,
     )
-    assert len(rq7) == 4  # random + 3 SSL arms
+    assert len(rq7) == 5  # random + 4 SSL arms
 
     arch = simulate_490_field_archive(n_fields=20, n_years=6.0, stress_prevalence=0.25, seed=31)
     Xc = arch["X"][arch["y_stress"] == 0]
