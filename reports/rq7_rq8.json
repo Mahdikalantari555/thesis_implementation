@@ -7,15 +7,15 @@
     "first_acquisition_date": "2013-03-30",
     "last_acquisition_date": "2026-09-10",
     "cycle_file_sha256": "cef2b94c1960d8f39ba2d113a26863258b74e9f4a8b21d0522839d581c1f2e35",
-    "git_sha": "581f7ece",
+    "git_sha": "20b0d18a",
     "seeds": [
       42
     ],
     "splits_sha256": "unknown",
     "stats_zarr_sha256": "2b25e514fb3978ba7102f29c5d94cba703fb01555a47367cf1eed81c4cbe43b1",
-    "y_stress_proxy": "weak_proxy_top20pct_mean_cwsi_not_validated_stress",
-    "eta_deficit_source": "absent",
-    "cwsi_source": "absent"
+    "y_stress_proxy": "real_cwsi_et_zonal_top20pct",
+    "eta_deficit_source": "metric_zonal_eta_daily",
+    "cwsi_source": "metric_zonal_cwsi_et"
   },
   "data_source": "real490",
   "source": "real490",
@@ -28,32 +28,42 @@
       "n_passing_non_circular_proxies": 0,
       "passing_proxies": [],
       "top_k": 30,
-      "top_k_independent_stress_precision": NaN,
+      "top_k_independent_stress_precision": 0.3,
       "proxies": {
         "eta_evaporative_deficit": {
           "non_circular": true,
-          "spearman_rho": NaN,
+          "spearman_rho": 0.012519314556729746,
           "ci_95": [
-            NaN,
-            NaN
+            -0.06703617037590592,
+            0.091685307239406
           ],
-          "pval": NaN,
+          "pval": 0.723834964231926,
+          "passed": false
+        },
+        "non_circular_optical_vs_cwsi": {
+          "non_circular": true,
+          "spearman_rho": 0.06007462335438095,
+          "ci_95": [
+            -0.00718651777922983,
+            0.12804356692911417
+          ],
+          "pval": 0.08970063752935876,
           "passed": false
         },
         "agronomic_yield_deficit": {
           "non_circular": true,
-          "spearman_rho": -0.3412946869677322,
+          "spearman_rho": -0.4418442225714474,
           "ci_95": [
-            -0.4019313636506795,
-            -0.2771471554309266
+            -0.495727644744717,
+            -0.3847985650051904
           ],
-          "pval": 3.025107779060922e-23,
+          "pval": 1.6390368425579038e-39,
           "passed": false
         }
       },
       "unmet_criteria": [
         "Fewer than 2 independent non-circular proxies passed rho>=0.2 (passed=[]).",
-        "No independent event-level labels/consensus supplied for Top-K precision."
+        "Top-30 independent stress precision 0.300 < 0.50."
       ]
     },
     "circular_cwsi_only_gate_rejected": {
@@ -63,7 +73,15 @@
       "passing_proxies": [],
       "top_k": 30,
       "top_k_independent_stress_precision": NaN,
-      "proxies": {},
+      "proxies": {
+        "circular_full_vs_cwsi_diagnostic_only": {
+          "non_circular": false,
+          "spearman_rho": 0.10188720392972418,
+          "pval": 0.003939069266959563,
+          "passed": false,
+          "warning": "Excluded from gate: ST_B10 appears in both full score and CWSI."
+        }
+      },
       "unmet_criteria": [
         "Fewer than 2 independent non-circular proxies passed rho>=0.2 (passed=[]).",
         "No independent event-level labels/consensus supplied for Top-K precision."
@@ -74,42 +92,42 @@
   "rq7_frozen_probing_multiyear": [
     {
       "encoder_source": "untrained_random_encoder",
-      "et0_r2": -0.0011728167559494906,
-      "gdd_r2": 0.7919413825377442,
-      "radiation_r2": -0.01416472722440587,
-      "eta_deficit_r2": NaN,
+      "et0_r2": -0.0011902078187875365,
+      "gdd_r2": 0.7760212812711087,
+      "radiation_r2": -0.016498012856345,
+      "eta_deficit_r2": 0.5116071594532954,
       "late_ratoon_auc": NaN
     },
     {
       "encoder_source": "ssl_masked_recon",
-      "et0_r2": 4.4588165729053664e-05,
-      "gdd_r2": 0.7548929405524641,
-      "radiation_r2": -0.018954572780628398,
-      "eta_deficit_r2": NaN,
+      "et0_r2": 0.0041085931741006165,
+      "gdd_r2": 0.7257159613665771,
+      "radiation_r2": -0.009854919050596544,
+      "eta_deficit_r2": 0.3999607462051824,
       "late_ratoon_auc": NaN
     },
     {
       "encoder_source": "ssl_traj_contrastive",
-      "et0_r2": -0.003462714102045794,
-      "gdd_r2": 0.7015457771710061,
-      "radiation_r2": -0.008137651460896178,
-      "eta_deficit_r2": NaN,
+      "et0_r2": 0.0002451753362375797,
+      "gdd_r2": 0.6719908329881309,
+      "radiation_r2": -0.014204830440422533,
+      "eta_deficit_r2": 0.4698676650589487,
       "late_ratoon_auc": NaN
     },
     {
       "encoder_source": "ssl_anomaly_degradation",
-      "et0_r2": -0.0020222853728180112,
-      "gdd_r2": 0.7682160348350522,
-      "radiation_r2": -0.02471774129829818,
-      "eta_deficit_r2": NaN,
+      "et0_r2": 0.0009174195636648674,
+      "gdd_r2": 0.7320527978328195,
+      "radiation_r2": -0.020584825011791263,
+      "eta_deficit_r2": 0.5306512954726723,
       "late_ratoon_auc": NaN
     },
     {
       "encoder_source": "ssl_time2agri",
-      "et0_r2": 0.0014296759682420612,
-      "gdd_r2": 0.7033629973689944,
-      "radiation_r2": -0.00918008873443421,
-      "eta_deficit_r2": NaN,
+      "et0_r2": -0.000364766936345573,
+      "gdd_r2": 0.6921998328363731,
+      "radiation_r2": -0.016006125188899878,
+      "eta_deficit_r2": 0.4704065637464401,
       "late_ratoon_auc": NaN
     }
   ],
@@ -117,75 +135,105 @@
   "rq8_contamination_sweep": [
     {
       "contamination_rate": 0.0,
-      "ssl_untrimmed_auc_pr": NaN,
-      "ssl_trimmed_q25_auc_pr": NaN,
-      "ssl_trimming_gain": NaN,
-      "b1_untrimmed_mean_sd_auc_pr": NaN,
-      "b1_trimmed_mad_auc_pr": NaN,
-      "ssl_trimmed_recall_10pct": NaN,
-      "ssl_untrimmed_recall_10pct": NaN,
-      "status": "not_run"
+      "ssl_untrimmed_auc_pr": 0.25296636781160464,
+      "ssl_trimmed_q25_auc_pr": 0.2970695866919648,
+      "ssl_trimming_gain": 0.04410321888036017,
+      "b1_untrimmed_mean_sd_auc_pr": 0.29219686144663537,
+      "b1_trimmed_mad_auc_pr": 0.2720679667120698,
+      "ssl_trimmed_recall_10pct": 0.14285714285714285,
+      "ssl_untrimmed_recall_10pct": 0.11428571428571428
     },
     {
       "contamination_rate": 0.05,
-      "ssl_untrimmed_auc_pr": NaN,
-      "ssl_trimmed_q25_auc_pr": NaN,
-      "ssl_trimming_gain": NaN,
-      "b1_untrimmed_mean_sd_auc_pr": NaN,
-      "b1_trimmed_mad_auc_pr": NaN,
-      "ssl_trimmed_recall_10pct": NaN,
-      "ssl_untrimmed_recall_10pct": NaN,
-      "status": "not_run"
+      "ssl_untrimmed_auc_pr": 0.254957653750478,
+      "ssl_trimmed_q25_auc_pr": 0.3302859842960395,
+      "ssl_trimming_gain": 0.07532833054556148,
+      "b1_untrimmed_mean_sd_auc_pr": 0.29947440745890685,
+      "b1_trimmed_mad_auc_pr": 0.2998133574970283,
+      "ssl_trimmed_recall_10pct": 0.14285714285714285,
+      "ssl_untrimmed_recall_10pct": 0.11428571428571428
     },
     {
       "contamination_rate": 0.1,
-      "ssl_untrimmed_auc_pr": NaN,
-      "ssl_trimmed_q25_auc_pr": NaN,
-      "ssl_trimming_gain": NaN,
-      "b1_untrimmed_mean_sd_auc_pr": NaN,
-      "b1_trimmed_mad_auc_pr": NaN,
-      "ssl_trimmed_recall_10pct": NaN,
-      "ssl_untrimmed_recall_10pct": NaN,
-      "status": "not_run"
+      "ssl_untrimmed_auc_pr": 0.2062007191564201,
+      "ssl_trimmed_q25_auc_pr": 0.2989333578186286,
+      "ssl_trimming_gain": 0.09273263866220852,
+      "b1_untrimmed_mean_sd_auc_pr": 0.22890573012264448,
+      "b1_trimmed_mad_auc_pr": 0.3188453493554735,
+      "ssl_trimmed_recall_10pct": 0.14285714285714285,
+      "ssl_untrimmed_recall_10pct": 0.08571428571428572
     },
     {
       "contamination_rate": 0.15,
-      "ssl_untrimmed_auc_pr": NaN,
-      "ssl_trimmed_q25_auc_pr": NaN,
-      "ssl_trimming_gain": NaN,
-      "b1_untrimmed_mean_sd_auc_pr": NaN,
-      "b1_trimmed_mad_auc_pr": NaN,
-      "ssl_trimmed_recall_10pct": NaN,
-      "ssl_untrimmed_recall_10pct": NaN,
-      "status": "not_run"
+      "ssl_untrimmed_auc_pr": 0.20517210010727152,
+      "ssl_trimmed_q25_auc_pr": 0.29967323023216397,
+      "ssl_trimming_gain": 0.09450113012489245,
+      "b1_untrimmed_mean_sd_auc_pr": 0.2312276442413604,
+      "b1_trimmed_mad_auc_pr": 0.2634356975216443,
+      "ssl_trimmed_recall_10pct": 0.14285714285714285,
+      "ssl_untrimmed_recall_10pct": 0.08571428571428572
     },
     {
       "contamination_rate": 0.2,
-      "ssl_untrimmed_auc_pr": NaN,
-      "ssl_trimmed_q25_auc_pr": NaN,
-      "ssl_trimming_gain": NaN,
-      "b1_untrimmed_mean_sd_auc_pr": NaN,
-      "b1_trimmed_mad_auc_pr": NaN,
-      "ssl_trimmed_recall_10pct": NaN,
-      "ssl_untrimmed_recall_10pct": NaN,
-      "status": "not_run"
+      "ssl_untrimmed_auc_pr": 0.19774661822782896,
+      "ssl_trimmed_q25_auc_pr": 0.29541945256197,
+      "ssl_trimming_gain": 0.09767283433414103,
+      "b1_untrimmed_mean_sd_auc_pr": 0.2125483121492453,
+      "b1_trimmed_mad_auc_pr": 0.26677354629039035,
+      "ssl_trimmed_recall_10pct": 0.17142857142857143,
+      "ssl_untrimmed_recall_10pct": 0.05714285714285714
     },
     {
       "contamination_rate": 0.3,
-      "ssl_untrimmed_auc_pr": NaN,
-      "ssl_trimmed_q25_auc_pr": NaN,
-      "ssl_trimming_gain": NaN,
-      "b1_untrimmed_mean_sd_auc_pr": NaN,
-      "b1_trimmed_mad_auc_pr": NaN,
-      "ssl_trimmed_recall_10pct": NaN,
-      "ssl_untrimmed_recall_10pct": NaN,
-      "status": "not_run"
+      "ssl_untrimmed_auc_pr": 0.19285770852950002,
+      "ssl_trimmed_q25_auc_pr": 0.2872236852177292,
+      "ssl_trimming_gain": 0.09436597668822916,
+      "b1_untrimmed_mean_sd_auc_pr": 0.2015560498285058,
+      "b1_trimmed_mad_auc_pr": 0.30658681729137244,
+      "ssl_trimmed_recall_10pct": 0.14285714285714285,
+      "ssl_untrimmed_recall_10pct": 0.05714285714285714
     }
   ],
   "rq8_false_alarm_confounders": {
-    "status": "not_run",
-    "note": "RQ8 contamination sweep and false-alarm confounder decomposition not run: y_stress has a single class (n_pos=0, n_neg=799), so AUC-PR and recall@10pct are undefined. On the real 490-field archive stress labels are pending CWSI/ETa zonal extraction; re-run with --source simulated for the synthetic sweep.",
-    "raw_ssl_stress_vs_confounders_auc_pr": NaN,
-    "physics_filtered_stress_vs_confounders_auc_pr": NaN
+    "raw_ssl_stress_vs_confounders_auc_pr": 0.30190626544391624,
+    "physics_filtered_stress_vs_confounders_auc_pr": 0.3363096816320736,
+    "cohort_breakdown": {
+      "clean_normal": {
+        "n_cycles": 45,
+        "raw_ssl_flag_rate_at_20pct_budget": 0.17777777777777778,
+        "physics_filtered_flag_rate_at_20pct_budget": 0.08888888888888889,
+        "mean_raw_score": 1.6653694903409044
+      },
+      "cloud_shadow_residual": {
+        "n_cycles": 45,
+        "raw_ssl_flag_rate_at_20pct_budget": 0.15555555555555556,
+        "physics_filtered_flag_rate_at_20pct_budget": 0.15555555555555556,
+        "mean_raw_score": 1.7264354092103462
+      },
+      "harvest_date_jitter_30d": {
+        "n_cycles": 45,
+        "raw_ssl_flag_rate_at_20pct_budget": 0.2222222222222222,
+        "physics_filtered_flag_rate_at_20pct_budget": 0.28888888888888886,
+        "mean_raw_score": 62.41534438177393
+      },
+      "late_lodging_partial_cut": {
+        "n_cycles": 45,
+        "raw_ssl_flag_rate_at_20pct_budget": 0.13333333333333333,
+        "physics_filtered_flag_rate_at_20pct_budget": 0.1111111111111111,
+        "mean_raw_score": 1.5644031012499775
+      },
+      "early_weed_flush": {
+        "n_cycles": 45,
+        "raw_ssl_flag_rate_at_20pct_budget": 0.2,
+        "physics_filtered_flag_rate_at_20pct_budget": 0.2222222222222222,
+        "mean_raw_score": 1.82428676949607
+      },
+      "true_water_canopy_stress": {
+        "n_cycles": 45,
+        "raw_ssl_flag_rate_at_20pct_budget": 0.3111111111111111,
+        "physics_filtered_flag_rate_at_20pct_budget": 0.3333333333333333,
+        "mean_raw_score": 690.6946352689355
+      }
+    }
   }
 }

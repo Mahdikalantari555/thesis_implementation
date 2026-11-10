@@ -18,6 +18,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from ssl_anomaly.io.field_mask import load_field_mask
 from ssl_anomaly.io.stats_zarr import load_stats_zarr
 
 log = logging.getLogger("ssl_anomaly.eval.real_archive")
@@ -79,18 +80,201 @@ def _get_git_sha() -> str:
     return "unknown"
 
 
-def _load_metric_zonal_stats() -> dict | None:
-    """Attempt to load METRIC zonal CWSI_ET / ETaDaily from Data/Metric/products/.
+def _build_date_path_map(directory: Path, prefix: str) -> dict[str, Path]:
+    """Build date_str → Path mapping from METRIC product rasters.
 
-    Returns None if not available (will be filled as 'absent' in archive).
+    Expects filenames like: {PREFIX}_YYYY-MM-DD_*.tif or {PREFIX}_ET_YYYY-MM-DD_*.tif.
+    Tries all underscore-split parts and uses the first one that parses as a date.
     """
+    mapping: dict[str, Path] = {}
+    if not directory.exists():
+        return mapping
+    for p in directory.glob("*.tif"):
+        stem = p.stem
+        for part in stem.split("_"):
+            try:
+                pd.Timestamp(part)  # validate date format
+                mapping[part] = p
+                break
+            except (ValueError, TypeError):
+                continue
+    return mapping
+
+
+def _load_metric_zonal_stats() -> dict | None:
+    """Load METRIC zonal CWSI_ET / ETaDaily per field per date.
+
+    Returns dict with keys:
+        - cwsi: dict[(date_str, field_id)] -> mean cwsi_et
+        - eta: dict[(date_str, field_id)] -> mean eta_daily
+    or None if not available.
+
+    Uses a cached parquet file to avoid recomputing zonal stats on every call.
+    """
+    import rasterio
+
     metric_root = WORKSPACE_ROOT / "Data/Metric/products"
-    if not metric_root.exists():
+    cwsi_dir = metric_root / "interpolation" / "CWSI_ET"
+    eta_dir = metric_root / "interpolation" / "ETaDaily"
+    field_mask_path = WORKSPACE_ROOT / "Data/Processed/interim/field_mask_full.tif"
+    cache_path = REPO_ROOT / "data/interim/metric_zonal_stats_cache.parquet"
+
+    if not cwsi_dir.exists():
+        log.warning("CWSI_ET interpolation dir not found: %s", cwsi_dir)
+        return None
+    if not field_mask_path.exists():
+        log.warning("Field mask not found: %s", field_mask_path)
         return None
 
-    # Placeholder: METRIC zonal stats not yet wired (dependency: todo item 1
-    # visualize-metric-products). Return None so proxies remain absent.
-    return None
+    # Try cache first
+    if cache_path.exists():
+        try:
+            cache_df = pd.read_parquet(cache_path)
+            log.info("Loaded metric zonal stats cache: %d rows", len(cache_df))
+            cwsi_data: dict[tuple[str, int], float] = {}
+            eta_data: dict[tuple[str, int], float] = {}
+            for _, row in cache_df.iterrows():
+                key = (str(row["date"]), int(row["field_id"]))
+                if "cwsi_mean" in row and pd.notna(row["cwsi_mean"]):
+                    cwsi_data[key] = float(row["cwsi_mean"])
+                if "eta_mean" in row and pd.notna(row["eta_mean"]):
+                    eta_data[key] = float(row["eta_mean"])
+            if cwsi_data:
+                return {"cwsi": cwsi_data, "eta": eta_data}
+        except Exception as e:
+            log.warning("Failed to load cache: %s; recomputing", e)
+
+    # Load field mask
+    labels, mask_meta = load_field_mask(field_mask_path)
+    n_fields = len(mask_meta["field_ids"])
+    log.info("Loaded field mask: %d fields, shape=%s", n_fields, labels.shape)
+
+    # Build date → path mappings
+    cwsi_paths = _build_date_path_map(cwsi_dir, "CWSI_ET")
+    eta_paths = _build_date_path_map(eta_dir, "ETaDaily") if eta_dir.exists() else {}
+
+    log.info("Found %d CWSI_ET dates, %d ETaDaily dates", len(cwsi_paths), len(eta_paths))
+
+    all_dates = sorted(set(cwsi_paths.keys()) | set(eta_paths.keys()))
+
+    # Per-field, per-date accumulators: field_id -> {date_str: value}
+    field_cwsi: dict[int, dict[str, float]] = {}
+    field_eta: dict[int, dict[str, float]] = {}
+
+    for i, date_str in enumerate(all_dates):
+        cwsi_path = cwsi_paths.get(date_str)
+        eta_path = eta_paths.get(date_str)
+
+        bands_dict = {}
+        valid_mask = None
+
+        if cwsi_path:
+            try:
+                with rasterio.open(cwsi_path) as src:
+                    arr = src.read(1).astype(np.float64)
+                if arr.shape != labels.shape:
+                    log.debug(
+                        "CWSI_ET %s shape %s != mask %s; skipping", date_str, arr.shape, labels.shape
+                    )
+                    continue
+                bands_dict["cwsi_et"] = arr
+                vm = np.isfinite(arr)
+                valid_mask = vm if valid_mask is None else (valid_mask & vm)
+            except Exception as e:
+                log.debug("Failed to read CWSI_ET %s: %s", date_str, e)
+                continue
+
+        if eta_path:
+            try:
+                with rasterio.open(eta_path) as src:
+                    arr = src.read(1).astype(np.float64)
+                if arr.shape != labels.shape:
+                    log.debug(
+                        "ETaDaily %s shape %s != mask %s; skipping", date_str, arr.shape, labels.shape
+                    )
+                    continue
+                bands_dict["eta_daily"] = arr
+                vm = np.isfinite(arr)
+                valid_mask = vm if valid_mask is None else (valid_mask & vm)
+            except Exception as e:
+                log.debug("Failed to read ETaDaily %s: %s", date_str, e)
+                continue
+
+        if not bands_dict:
+            continue
+
+        # Compute per-field zonal means using bincount (fast)
+        inside = labels > 0
+        lab_inside = labels[inside]
+        ok_pixels = inside & valid_mask
+        lab_ok = labels[ok_pixels]
+
+        for name, arr in bands_dict.items():
+            v = arr[ok_pixels].astype(np.float64)
+            finite = np.isfinite(v)
+            vf, lf = v[finite], lab_ok[finite]
+
+            wsum = np.bincount(lf, weights=vf, minlength=n_fields + 1)
+            cnt = np.bincount(lf, minlength=n_fields + 1)
+            mean = np.full(n_fields + 1, np.nan)
+            np.divide(wsum, np.maximum(cnt, 1), out=mean, where=cnt > 0)
+
+            target = field_cwsi if name == "cwsi_et" else field_eta
+            for field_id in range(1, n_fields + 1):
+                val = float(mean[field_id])
+                if np.isnan(val):
+                    continue
+                if field_id not in target:
+                    target[field_id] = {}
+                target[field_id][date_str] = val
+
+        if (i + 1) % 500 == 0:
+            log.info("Processed %d/%d dates", i + 1, len(all_dates))
+
+    log.info(
+        "Computed zonal stats: %d fields with CWSI_ET, %d fields with ETaDaily",
+        len(field_cwsi),
+        len(field_eta),
+    )
+
+    if not field_cwsi:
+        return None
+
+    # Flatten to (date_str, field_id) -> value dicts
+    cwsi_data: dict[tuple[str, int], float] = {}
+    eta_data: dict[tuple[str, int], float] = {}
+
+    # Build cache records using dict for O(1) lookup (avoid O(n²) list scan)
+    cache_records: dict[tuple[str, int], dict] = {}
+
+    for fid, dates in field_cwsi.items():
+        for d, v in dates.items():
+            cwsi_data[(d, fid)] = v
+            key = (d, fid)
+            if key not in cache_records:
+                cache_records[key] = {"date": d, "field_id": fid, "cwsi_mean": np.nan, "eta_mean": np.nan}
+            cache_records[key]["cwsi_mean"] = v
+
+    for fid, dates in field_eta.items():
+        for d, v in dates.items():
+            eta_data[(d, fid)] = v
+            key = (d, fid)
+            if key not in cache_records:
+                cache_records[key] = {"date": d, "field_id": fid, "cwsi_mean": np.nan, "eta_mean": np.nan}
+            cache_records[key]["eta_mean"] = v
+
+    cache_rows = list(cache_records.values())
+
+    # Save cache
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_df = pd.DataFrame(cache_rows)
+        cache_df.to_parquet(cache_path, index=False)
+        log.info("Saved metric zonal stats cache: %d rows", len(cache_df))
+    except Exception as e:
+        log.warning("Failed to save cache: %s", e)
+
+    return {"cwsi": cwsi_data, "eta": eta_data}
 
 
 def load_real490_archive(
@@ -189,7 +373,7 @@ def load_real490_archive(
         [pd.Timestamp(str(d)).year for d in start_dates], dtype=np.int64
     )
 
-    # Load METRIC zonal stats for CWSI/ETa (absent until todo item 1 is done)
+    # Load METRIC zonal stats for CWSI/ETa (real data from Data/Metric/products/)
     metric_stats = _load_metric_zonal_stats()
 
     n_cycles = len(X)
@@ -198,19 +382,76 @@ def load_real490_archive(
     # that happen to have cycles (370 fields with >=1 cycle).
     reader = load_stats_zarr(stats_zarr_path)
     n_fields = len(reader.fields)
-    # Since we don't have CWSI_ET yet, we use a placeholder - mark as absent
-    # The label name follows the design decision: weak_proxy_top20pct_mean_cwsi_not_validated_stress
-    y_stress = np.zeros(n_cycles, dtype=np.int32)
-    if metric_stats is not None and "cwsi_et" in metric_stats:
-        # TODO: compute from real CWSI_ET zonal stats
-        pass
-    else:
-        # Placeholder: all zeros, marked as absent in provenance
-        y_stress[:] = 0  # Will be noted as absent proxy
 
-    # eta_deficit and cwsi - absent until METRIC zonal stats available
-    eta_deficit = np.full(n_cycles, np.nan, dtype=np.float64)
+    # Compute per-cycle CWSI_ET and ETaDaily means from real METRIC zonal stats,
+    # then derive y_stress from top 20% mean CWSI_ET (high CWSI = stress).
+    y_stress = np.zeros(n_cycles, dtype=np.int32)
     cwsi = np.full(n_cycles, np.nan, dtype=np.float64)
+    eta_deficit = np.full(n_cycles, np.nan, dtype=np.float64)
+
+    y_stress_proxy = "weak_proxy_top20pct_mean_cwsi_not_validated_stress"
+
+    if metric_stats is not None and metric_stats.get("cwsi"):
+        # Build field_id -> {date_str: value} lookups for fast per-cycle aggregation
+        cwsi_data = metric_stats["cwsi"]
+        eta_data = metric_stats["eta"]
+
+        field_cwsi: dict[int, dict[str, float]] = {}
+        for (d_str, fid), val in cwsi_data.items():
+            field_cwsi.setdefault(fid, {})[d_str] = val
+
+        field_eta: dict[int, dict[str, float]] = {}
+        for (d_str, fid), val in eta_data.items():
+            field_eta.setdefault(fid, {})[d_str] = val
+
+        cycle_cwsi_means = []
+        cycle_eta_means = []
+
+        for i in range(n_cycles):
+            fid = int(field_ids[i])
+            start_d = str(start_dates[i])
+            end_d = str(end_dates[i])
+
+            # Collect CWSI_ET values for dates within [start_date, end_date]
+            cwsi_vals = [
+                v for d, v in field_cwsi.get(fid, {}).items() if start_d <= d <= end_d
+            ]
+            eta_vals = [
+                v for d, v in field_eta.get(fid, {}).items() if start_d <= d <= end_d
+            ]
+
+            cycle_cwsi_means.append(float(np.mean(cwsi_vals)) if cwsi_vals else np.nan)
+            cycle_eta_means.append(float(np.mean(eta_vals)) if eta_vals else np.nan)
+
+        cycle_cwsi_means = np.array(cycle_cwsi_means)
+        cycle_eta_means = np.array(cycle_eta_means)
+
+        cwsi[:] = cycle_cwsi_means
+        eta_deficit[:] = cycle_eta_means
+
+        # y_stress: top 20% by mean CWSI_ET = stress (label 1), rest = non-stress (label 0)
+        valid_mask = ~np.isnan(cycle_cwsi_means)
+        if valid_mask.sum() > 1:
+            valid_cwsi = cycle_cwsi_means[valid_mask]
+            threshold = float(np.percentile(valid_cwsi, 80))
+            y_stress[valid_mask & (cycle_cwsi_means >= threshold)] = 1
+            n_stress = int(y_stress.sum())
+            log.info(
+                "Computed y_stress from real CWSI_ET: %d/%d stress cycles (threshold=%.4f)",
+                n_stress,
+                n_cycles,
+                threshold,
+            )
+        else:
+            log.warning(
+                "Not enough valid CWSI_ET cycles to compute y_stress threshold; keeping all zeros"
+            )
+
+        y_stress_proxy = "real_cwsi_et_zonal_top20pct"
+    else:
+        log.warning(
+            "No real METRIC CWSI_ET zonal stats available; y_stress remains all zeros (degenerate)"
+        )
 
     # Load splits_490.json for provenance
     splits_sha256 = "unknown"
@@ -220,6 +461,8 @@ def load_real490_archive(
             splits_sha256 = splits_data.get("splits_sha256", "unknown")
         except Exception:
             pass
+
+    has_real_cwsi = metric_stats is not None and bool(metric_stats.get("cwsi"))
 
     # Build provenance dict
     first_date = reader.dates[0].strftime("%Y-%m-%d")
@@ -237,11 +480,9 @@ def load_real490_archive(
         "seeds": [42],
         "splits_sha256": splits_sha256,
         "stats_zarr_sha256": stats_hash,
-        "y_stress_proxy": "weak_proxy_top20pct_mean_cwsi_not_validated_stress"
-        if metric_stats is None
-        else "real_cwsi_et_zonal_top20pct",
-        "eta_deficit_source": "absent" if metric_stats is None else "metric_zonal_eta_daily",
-        "cwsi_source": "absent" if metric_stats is None else "metric_zonal_cwsi_et",
+        "y_stress_proxy": y_stress_proxy,
+        "eta_deficit_source": "metric_zonal_eta_daily" if has_real_cwsi else "absent",
+        "cwsi_source": "metric_zonal_cwsi_et" if has_real_cwsi else "absent",
     }
 
     # Build bands list matching the channel order in X

@@ -1,2 +1,2 @@
 archive,status,note
-real490,not_run,"AUC-PR/recall are undefined: y_stress has a single class (n_pos=0, n_neg=49). On the real 490-field archive stress labels are pending CWSI/ETa zonal extraction, so the detector comparison is reported as not-run instead of being computed on a degenerate label vector."
+real490,not_run,"AUC-PR/recall are undefined: y_stress has a single class (n_pos=0, n_neg=5). On the real 490-field archive stress labels are pending CWSI/ETa zonal extraction, so the detector comparison is reported as not-run instead of being computed on a degenerate label vector."
