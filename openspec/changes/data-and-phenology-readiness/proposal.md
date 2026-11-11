@@ -38,12 +38,14 @@ Before `train-and-finalize-main-architecture` starts, two things decide whether 
 - New docs:
   - `docs/findings/13_literature_phenology_and_perturbations.md`
   - `docs/findings/14_cycle_audit.md`
+  - `docs/findings/14_stage_conditioned_thresholds.md`
   - `docs/methods_explained.md` (new sections)
 - New scripts (small, agent-runnable):
   - `scripts/audit_cycles.py` (sampling, sanity flags, plots)
   - `scripts/data_quality_report.py`
-- `reports/cycle_audit/` (plots, CSV of reviewed cycles), `reports/data_quality.json`
-- `openspec/changes/train-and-finalize-main-architecture/design.md` (decisions D2/D3/D6 updated)
+  - `scripts/stage_conditioned_anomaly.py` (stage-conditioned thresholds + npphen confidence envelope)
+- `reports/cycle_audit/` (plots, CSV of reviewed cycles), `reports/data_quality.json`, `reports/stage_conditioned_anomaly/` (per-bin anomaly results)
+- `openspec/changes/train-and-finalize-main-architecture/design.md` (decisions D2/D3/D5/D6 updated)
 - `todo.md`
 
 ## Out of Scope

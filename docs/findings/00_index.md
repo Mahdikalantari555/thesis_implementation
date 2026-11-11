@@ -18,3 +18,4 @@
 11. `11_rq1_to_rq8_empirical_framework.md` — چارچوب تجربی کامل ادبیات پژوهش (`RQ1–RQ8`، شکاف‌های `G1–G8`، دروازهٔ اعتبارسنجی مستقل `Anomaly ≠ Stress`، مقاومت ابری `date/Δt`، پیش‌دستی `+34` روزه و `Temporal XAI`)
 12. `12_data_scarcity_diagnostics.md` — تشخیص کمبود داده و کیفیت بازنمایی (`DS1–DS5`: learning curve، train/val gap، collapse/alignment/uniformity + t-SNE، few-shot، واریانس seed/LOYO) + پروتکل_eval مدل‌های آینده در `docs/eval_protocol_future_models.md`
 13. `13_literature_phenology_and_perturbations.md` — مرور منابع: استخراج خودکار فنولوژی/چرخه، محور زمان برای SSL، اختلال‌های نیشکر و SSL روی سری نامنظم (۳۹ منبع، ۲۲ موجود + ۱۷ تازه؛ پیشنهادهای R1–R8 برای سند تصمیم)
+14. `14_stage_conditioned_thresholds.md` — تشخیص آنومالی با آستانه‌های conditional (npphen confidence envelope) روی ۷۹۹ چرخه و ۳۷۰ مزرعه: ۱۸,۵۰۵ مشاهده، ۱,۷۷۴ شانه (۹.۵۹%)

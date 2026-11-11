@@ -54,3 +54,18 @@ After D1–D3, a short section added to `train-and-finalize-main-architecture/de
 - the cycle exclusion rule
 
 Each decision cites the review or audit section it rests on. The user approves this record before any training code is written.
+
+## D5. Stage-conditioned anomaly detection
+
+After D1–D4, stage-conditioned anomaly detection is implemented so that natural phenological decline (senescence, pre-harvest drying, dormancy) is not flagged as stress.
+
+- **Method**: each non-censored cycle-bin is assigned a phenology stage by normalized progress within the cycle (progress = bin_index × bin_days / cycle_length_days):
+  - S1 establishment/growth: 0.00–0.25
+  - S2 vegetative/reproductive: 0.25–0.60
+  - S3 maturity/senescence: 0.60–0.85
+  - S4 harvest/dormancy: 0.85–1.00
+- **Confidence envelope**: NDVI values pooled per stage across all cycles; median and MAD computed; lower envelope = median − 2 × MAD.
+- **Anomaly flag**: a cycle-bin is flagged only if NDVI < lower_envelope[stage]. Natural within-stage decline inside the envelope is NOT flagged.
+- **Implementation**: `scripts/stage_conditioned_anomaly.py` (supports `--smoke` and `--all`).
+- **Output**: `reports/stage_conditioned_anomaly/stage_conditioned_anomaly.parquet`, `.../anomalies_only.parquet`, `.../summary.json`.
+- **Results** (--all, seed=20261111, 370 fields, 799 cycles): 18,505 valid obs, 1,774 flagged (9.59%). S3 lower envelope = −0.027 → senescence decline never flagged.
