@@ -1,11 +1,11 @@
 # Tasks: data-and-phenology-readiness
 
 ## 1. Literature review
-- [ ] 1.1 Reuse `thesis_research/SSL_Proposal` paper matrix; list what already covers D1 sections 1–4
-- [ ] 1.2 Search and read new sources for gaps (phenology extraction, time axis, sugarcane stress signatures, SSL on irregular series)
-- [ ] 1.3 Write `docs/findings/13_literature_phenology_and_perturbations.md` (per-paper table + implications + crop-generalisation note)
-- [ ] 1.4 Perturbation catalogue with sources; mark assumptions; link to advisor question (todo OQ6)
-- [ ] 1.5 Add plain-language sections to `docs/methods_explained.md` for the methods adopted
+- [x] 1.1 Reuse `thesis_research/SSL_Proposal` paper matrix; list what already covers D1 sections 1–4
+- [x] 1.2 Search and read new sources for gaps (phenology extraction, time axis, sugarcane stress signatures, SSL on irregular series) — جستجو به درخواست کاربر متوقف شد، 2026-11-11
+- [x] 1.3 Write `docs/findings/13_literature_phenology_and_perturbations.md` (per-paper table + implications + crop-generalisation note)
+- [x] 1.4 Perturbation catalogue with sources; mark assumptions; link to advisor question (todo OQ6)
+- [ ] 1.5 Add plain-language sections to `docs/methods_explained.md` for the methods adopted (sections ۱۵–۱۹ added; see finding 13 R3/R4/R5/R6)
 
 ## 2. Cycle audit
 - [ ] 2.1 `scripts/audit_cycles.py`: sanity flags for all cycles, stratified sample (seed recorded), per-cycle plots

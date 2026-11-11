@@ -70,7 +70,14 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
 3. For the full-archive axis: keep the completeness stat semantics (invalid acquisitions count as missing) as-is?
 4. `rust/` crate was added by coding-agent commits, not by the user; its `32.7×` claim is unreproduced. Keep (and verify) or remove?
 5. Date count: METRIC 539 scenes vs `stats.zarr` 538 dates — which date is missing and why?
-6. **For the advisor (Dr. Hamzeh):** which stress signatures and magnitudes are realistic for Amirkabir sugarcane in Landsat time series (water deficit, salinity, waterlogging, pests/disease, early ripening, lodging)? Decides the final perturbation set of `train-and-finalize-main-architecture` (design D6; interim set used until then). Literature review task 0.3 runs in parallel.
+6. **For the advisor (Dr. Hamzeh):** which stress signatures and magnitudes are realistic for Amirkabir sugarcane in Landsat time series (water deficit, salinity, waterlogging, pests/disease, early ripening, lodging)? Decides the final perturbation set of `train-and-finalize-main-architecture` (design D6; interim set used until then). Five sub-questions from findings 13 §3.3:
+   - pre-harvest irrigation cut-off — timing and magnitude?
+   - pre-harvest burning — does it occur and what is its NDVI/LST signature?
+   - which disturbances are transient vs chronic?
+   - typical NDVI drop magnitude in mid-season water stress?
+   - waterlogging occurrence and which months?
+   Literature review task 0.3 runs in parallel.
+7. **1704 vs 799 cycle-count discrepancy:** `docs/findings/02_phenology_cycles.md` reports 1704 non-censored cycles, but real490 stats show 799 cycles (`splits_490.json`). Recount needed (finding 13 R8) before the 10%/25% segmentation decision rule can be applied.
 
 ## Thesis-level reminders
 
