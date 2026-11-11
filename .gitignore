@@ -71,6 +71,7 @@ platform/.tmpbuild/
 .memdb
 .opencode
 .zcode
+.qoder
 
 # Section D (cycle audit) — deprioritized, intentionally not tracked
 docs/findings/14_cycle_audit.md
