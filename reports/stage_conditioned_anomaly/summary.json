@@ -1,0 +1,48 @@
+{
+  "script": "scripts/stage_conditioned_anomaly.py",
+  "generated_at": "2026-11-11T12:00:46.259660+00:00",
+  "data_source": "D:\\RS\\Thesis\\thesis_implementation\\data\\interim\\growth_cycles_490.npz",
+  "smoke": false,
+  "seed": 20261111,
+  "n_fields": 370,
+  "n_cycles_processed": 799,
+  "n_valid_obs": 18505,
+  "n_flagged": 1774,
+  "flag_rate": 0.095866,
+  "bin_days": 15,
+  "envelope_k": 2.0,
+  "stage_envelopes": {
+    "S1_establishment_growth": {
+      "median": 0.29721875488758087,
+      "mad": 0.12089184671640396,
+      "lower": 0.05543506145477295,
+      "upper": 0.5390024483203888,
+      "n": 6866
+    },
+    "S2_vegetative_reproductive": {
+      "median": 0.6514068245887756,
+      "mad": 0.06331020593643188,
+      "lower": 0.5247864127159119,
+      "upper": 0.7780272364616394,
+      "n": 9561
+    },
+    "S3_maturity_senescence": {
+      "median": 0.316558301448822,
+      "mad": 0.17193593084812164,
+      "lower": -0.027313560247421265,
+      "upper": 0.6604301631450653,
+      "n": 2033
+    },
+    "S4_harvest_dormancy": {
+      "median": 0.1755964308977127,
+      "mad": 0.034004926681518555,
+      "lower": 0.1075865775346756,
+      "upper": 0.24360628426074982,
+      "n": 45
+    }
+  },
+  "wall_time_seconds": 16.16,
+  "output_parquet": "D:\\RS\\Thesis\\thesis_implementation\\reports\\stage_conditioned_anomaly\\stage_conditioned_anomaly.parquet",
+  "output_anomalies": "D:\\RS\\Thesis\\thesis_implementation\\reports\\stage_conditioned_anomaly\\stage_conditioned_anomalies_only.parquet",
+  "git_sha": "41f87f1c6d87a61dddc66de248f2b74f605f0ec2"
+}
