@@ -17,8 +17,8 @@
 - [x] 3.1 `scripts/data_quality_report.py` → `reports/data_quality.json` (observation density, valid fraction, LST range, NaN fractions, 538 vs 539 dates)
 
 ## 4. Decision record (gate)
-- [ ] 4.1 Add the decision record to `train-and-finalize-main-architecture/design.md` (time axis, segmentation params, perturbation set, exclusion rule), citing sections of 13/14
-- [ ] 4.2 User approval of the decision record
+- [x] 4.1 Add the decision record to `train-and-finalize-main-architecture/design.md` (D11: time axis, segmentation params, perturbation set, exclusion rule, stage-conditioned anomaly detection), citing sections of 13/14
+- [ ] 4.2 User approval of the decision record (pending — training sections 2–5 of train-and-finalize-main-architecture stay open until approved)
 
 ## 5. Stage-conditioned anomaly detection
 - [x] 5.1 `scripts/stage_conditioned_anomaly.py`: stage-conditioned thresholds with npphen-style confidence envelope; does not flag natural phenological decline as anomaly

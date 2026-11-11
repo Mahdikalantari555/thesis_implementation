@@ -111,3 +111,27 @@ Decisions agreed with the user on 2026-11-10. Anything marked **(proposed)** is 
 - **Small n**: about 800 cycles before the splits, so the test may hold only around 100. Report confidence intervals (bootstrap over fields) on the final test.
 - **Unrealistic perturbations**: synthetic perturbations may not resemble real stress. This is mitigated by the literature review and the advisor question; it is an explicit L2 limitation.
 - **Temporal train cutoff**: the cutoff reduces training data. The count is logged, and if it removes more than 15 % of cycles it is raised with the user.
+
+## D11. Data-readiness decision record (from data-and-phenology-readiness D1–D5)
+
+Decisions below are adopted from `docs/findings/13_literature_phenology_and_perturbations.md` (R1–R8) and `docs/findings/14_stage_conditioned_thresholds.md` (findings 14). They gate the start of training sections 2–5 of this change.
+
+**R1 — Segmentation:** Keep current harvest-driven cycle segmentation (`src/ssl_anomaly/phenology/cycles.py` + `smoothing.py`): Whittaker λ by CV on full series, `find_peaks(−NDVI)` prominence ≥ 0.15, prior-plateau ≥ 0.7 max, post-trough rise ≥ 0.15 in 180 days, length 180–540 days, replant detected by NDVI < 0.3 for 120 days. Matches Kavats 2020 / Joshi 2024 logic.
+
+**R2 — Causality / harvest confirmation:** New cycle opens only after harvest confirmation (proposed: 2 valid later observations or 45 days, whichever first — assumption, no direct source). In-between observations = `no_data` / `harvest_pending`.
+
+**R3 — Time axis:** Keep DSH 36×15-day bins as main axis; add sin/cos DOY as auxiliary input (Sadbhave 2025 +8 F1; Wijesingha & Beila 2026). Normalized cycle progress (0–1) rejected as non-causal. GDD/thermal time deferred until ERA5 is wired.
+
+**R4 — Model input:** Masked TF round 1 uses 36 bins. Irregular-token variant deferred as a single later change.
+
+**R5 — Perturbation catalogue:** P1–P8 with magnitudes in MAD-of-phase (all assumptions, swept 0.5–2×MAD): P1 NDVI drop (water deficit, mid, Jul–Sep, gradual, 30–60 d, partial recovery) KEEP; P2 LST/CWSI rise (fast, 1–3 obs, full recovery) KEEP but require no-LST ablation; P3 P1+P2 together ADD; P4 phenology delay KEEP; P5 early growth plateau KEEP; P6 early senescence CONDITIONAL; P7 one-observation transient dip CONDITIONAL (require ≥2 obs); P8 chronic whole-season salinity drop EXCLUDED from transient metric.
+
+**R6 — Training mask:** Sampled from real valid_frac/cloud pattern (GloSSR).
+
+**R7 — BFAST Monitor:** B3 = BFAST Monitor on DSH axis optional.
+
+**R8 — Cycle recount:** 1704 (findings 02) vs 799 (current real490 stats) discrepancy needs recount via `scripts/data_quality_report.py --all` before test lock.
+
+**Findings 14 — Stage-conditioned anomaly detection:** Implemented in `scripts/stage_conditioned_anomaly.py`. Stage-conditioned thresholds with npphen-style confidence envelope prevent flagging natural phenological decline (senescence/harvest/dormancy) as stress. Results (--all, seed=20261111, 370 fields, 799 cycles): 18,505 valid obs, 1,774 flagged (9.59%). S3 maturity/senescence lower envelope = −0.027 → natural decline never flagged. S2 vegetative lower envelope = 0.525 → unexpected drops during growth are flagged.
+
+**Gate:** Training sections 2–5 of this change stay open until the user approves this decision record (task 4.2).
