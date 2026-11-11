@@ -72,6 +72,11 @@ platform/.tmpbuild/
 .opencode
 .zcode
 
+# Section D (cycle audit) — deprioritized, intentionally not tracked
+docs/findings/14_cycle_audit.md
+reports/cycle_audit/
+scripts/audit_cycles.py
+
 # Data artifacts
 data/.tmp*
 .tmp-esbuild/
