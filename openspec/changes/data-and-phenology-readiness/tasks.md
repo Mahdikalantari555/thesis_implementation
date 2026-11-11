@@ -18,7 +18,7 @@
 
 ## 4. Decision record (gate)
 - [x] 4.1 Add the decision record to `train-and-finalize-main-architecture/design.md` (D11: time axis, segmentation params, perturbation set, exclusion rule, stage-conditioned anomaly detection), citing sections of 13/14
-- [ ] 4.2 User approval of the decision record (pending — training sections 2–5 of train-and-finalize-main-architecture stay open until approved)
+- [x] 4.2 User approval of the decision record (approved by user 2026-11-11 — training sections 2–5 of train-and-finalize-main-architecture are now unblocked)
 
 ## 5. Stage-conditioned anomaly detection
 - [x] 5.1 `scripts/stage_conditioned_anomaly.py`: stage-conditioned thresholds with npphen-style confidence envelope; does not flag natural phenological decline as anomaly

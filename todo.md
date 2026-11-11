@@ -47,8 +47,8 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
    - Export cycle spans per field (`t_start/t_end/harvest_day` → real dates) into the payload
    - Temporal view: shaded cycle bands + harvest markers + the 36×15-day phase-binned series (DSH axis) beside the DOY axis
    - Plain-language doc section (what a "cycle" is and why models score per phase) — expand `docs/platform_score_methods.md` §4.1
-3b. **`data-and-phenology-readiness`** — ✅ agent tasks complete (literature review findings 13, cycle audit script, data quality report, stage-conditioned anomaly detection script + findings 14, openspec D5 spec + D11 decision record). ▶ Waiting on user approval for task 4.2 (decision record) before training sections 2–5 of item 4 can start.
-4. **`retrain-and-improve-models`** → openspec change `train-and-finalize-main-architecture` — ⏸ BLOCKED on user approval of 3b task 4.2 (decision record) before sections 2–5 can start:
+3b. **`data-and-phenology-readiness`** — ✅ agent tasks complete (literature review findings 13, cycle audit script, data quality report, stage-conditioned anomaly detection script + findings 14, openspec D5 spec + D11 decision record). ✅ User approved task 4.2 — training sections 2–5 of item 4 unblocked.
+4. **`retrain-and-improve-models`** → openspec change `train-and-finalize-main-architecture` — ▶ UNBLOCKED (user approved 3b task 4.2) — training sections 2–5 can now start:
    - Current checkpoints are deliberately small (`d_model=32`, ≤ ~10⁵ params, 15 epochs, single-shot, trained 2026-11-04)
    - More epochs/parameters/time once data wiring is final; re-train on the final cycle export; keep formula-id/versioning so the payload records *which* checkpoint scored it
    - Include masked_transformer (needs a cycle-compatible artifact) and JEPA scoring
