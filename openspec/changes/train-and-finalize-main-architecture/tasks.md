@@ -21,6 +21,7 @@ Rule for all sections: the agent runs only unit tests and `--smoke` runs. Full t
 - [ ] 2.1 Mask-aware tensor builder (value + observation mask per band) in `real_archive.py`; remove `nan_to_num` from training paths
 - [ ] 2.2 Train-only robust normalization per band × phase bin, saved to sidecar
 - [ ] 2.3 Unit tests: no NaN reaches the model, masked entries give zero loss, stats computed from train ids only
+- [ ] 2.4 Add sin/cos DOY as auxiliary input channels per data-and-phenology-readiness R3 for **all** candidate models (Masked TF, GRU-AE, B1); keep 36-bin DSH as primary axis; ablate the DOY channels. Outputs and reports must carry full provenance (data_source, n, seeds, date range, git SHA) and be publication-ready.
 
 ## 3. Perturbations and dev metric
 - [ ] 3.1 MAD-scaled injection in `synthetic.py`; add growth stall, early senescence, transient drop with recovery; keep onset bin as ground truth
@@ -37,6 +38,15 @@ Rule for all sections: the agent runs only unit tests and `--smoke` runs. Full t
 ## 5. Training script
 - [ ] 5.1 `scripts/train_main.py`: device auto-select, seeds `[13, 42, 2026]`, tqdm progress (epoch, losses, ETA), `progress.jsonl`, `--resume`, `--smoke`, early stopping on dev reconstruction loss, wall-time logging
 - [ ] 5.2 Agent runs smoke tests for both models; then hands the user the full commands (one per model) with expected time on laptop
+
+## 5b. Tooling and reproducibility
+- [ ] 5b.1 Save model weights per seed (state_dict + optimizer/scheduler/rng) for `--resume`; deterministic checkpoint naming `<model>_seed<seed>.pt`
+- [ ] 5b.2 Write `run_manifest.json` per run (git SHA, split hash, device, wall time, config hash, seeds)
+- [ ] 5b.3 Add `scripts/run_dev_matrix.py` (resume-aware, smoke-gated) for the 3-seed × 3-model matrix
+- [ ] 5b.4 Add `scripts/check_dev_env.py` pre-flight validator (data, splits, hash drift)
+- [ ] 5b.5 Add `Data/Scripts/README.md` index (deferred reorg)
+- [ ] 5b.6 Validate `reports/dev_log.csv` schema in unit tests
+- [ ] 5b.7 Write causality and mask zero-loss tests first (tasks 3.3 / 4.5) for TDD
 
 ## 6. Development loop (run by user, logged)
 - [ ] 6.1 Architecture screen: Masked TF vs GRU-AE vs B1 causal, 3 seeds each
@@ -56,3 +66,20 @@ Rule for all sections: the agent runs only unit tests and `--smoke` runs. Full t
 
 ## 9. Incremental placeholder
 - [ ] 9.1 `ssl_anomaly/train/incremental.py` stub raising `NotImplementedError` with docstring
+
+## 10. ML hardening (from skill search)
+- [ ] 10.1 Gradient clipping + NaN/Inf guard in training loop; fail loudly on non-finite loss
+- [ ] 10.2 Deterministic seeding: torch.use_deterministic_algorithms where supported; record cudnn flags in run_manifest
+- [ ] 10.3 Ablation harness for DOY sin/cos channels (on/off) with paired comparison
+- [ ] 10.4 Causal attention mask unit test: appending future bins must not change earlier scores
+- [ ] 10.5 Threshold calibration on clean dev (FAR 5%) with bootstrap CI over fields
+- [ ] 10.6 Model card in sidecar: params, FLOPs, training time, device, git SHA, split hash
+- [ ] 10.7 Pre-flight `check_dev_env.py` extended to verify mask channel presence and band order
+
+## 11. Academic & reproducibility (from skill search)
+- [ ] 11.1 Apply `scholar-evaluation` rubric to thesis claims and model results (claims match ladder rung)
+- [ ] 11.2 Use `literature-review` + `citation-management` to keep `lit_review/` and Zotero current
+- [ ] 11.3 Use `scientific-writing` for proposal/chapter drafting (Persian + English)
+- [ ] 11.4 Adopt `benchmark-methodology` / `eval-harness` checklist for dev metric and dev_log schema
+- [ ] 11.5 Adopt `mle-workflow` conventions for training script organization and run manifests
+- [ ] 11.6 Install selected skills locally if approved (scholar-evaluation, literature-review, citation-management, scientific-writing)

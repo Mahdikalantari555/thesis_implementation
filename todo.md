@@ -49,6 +49,10 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
    - Plain-language doc section (what a "cycle" is and why models score per phase) — expand `docs/platform_score_methods.md` §4.1
 3b. **`data-and-phenology-readiness`** — ✅ agent tasks complete (literature review findings 13, cycle audit script, data quality report, stage-conditioned anomaly detection script + findings 14, openspec D5 spec + D11 decision record). ✅ User approved task 4.2 — training sections 2–5 of item 4 unblocked.
 4. **`retrain-and-improve-models`** → openspec change `train-and-finalize-main-architecture` — ▶ UNBLOCKED (user approved 3b task 4.2) — training sections 2–5 can now start:
+   - D11 decision record adopted (R1–R8 + findings 14); sin/cos DOY auxiliary input (R3) applies to all candidate models; outputs/reports must be publication-ready with full provenance.
+   - Tooling (new): save per-seed weights for resume, run_manifest.json, run_dev_matrix.py, check_dev_env.py, Data/Scripts/README.md, dev_log schema test, TDD-first causality/mask tests.
+   - ML hardening (new): gradient clipping + NaN guard, deterministic seeding, DOY ablation harness, causal-mask test, FAR calibration with bootstrap CI, model card sidecar.
+   - Academic/repro (new): scholar-evaluation rubric, literature-review/citation-management, scientific-writing, benchmark-methodology/eval-harness, mle-workflow, install selected skills.
    - Current checkpoints are deliberately small (`d_model=32`, ≤ ~10⁵ params, 15 epochs, single-shot, trained 2026-11-04)
    - More epochs/parameters/time once data wiring is final; re-train on the final cycle export; keep formula-id/versioning so the payload records *which* checkpoint scored it
    - Include masked_transformer (needs a cycle-compatible artifact) and JEPA scoring

@@ -115,8 +115,15 @@ machine. The rules below are binding.
 - Scripts auto-select the device (`cuda` when available, else `cpu`) so the
   same command runs on the laptop, the lab GPU, or Colab. Laptop budget for
   development runs: ≤ 15 min per seed, ≤ 500 k parameters.
+- **Save model weights** (state_dict + optimizer/scheduler/rng) per seed so
+  `--resume` works; never ship a run without its checkpoint and sidecar.
 - When the user reports results, the agent reads the produced files (not only
   the console summary) and reviews them with §7 before proposing the next step.
+- **Scientific validity of outputs:** every training/evaluation/export run must
+  write a complete, publication-ready report (metrics with mean ± std over
+  seeds, n, date range, seeds, device, wall time, git SHA, data_source, split
+  hashes) and never emit placeholder/NaN-filled numbers; reports missing any of
+  these fields are defects, not "done".
 
 ## 7. Critical ML/AI review checklist (apply to every method, script and result)
 
