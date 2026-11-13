@@ -1,13 +1,13 @@
 {
   "provenance": {
     "data_source": "real490",
-    "n_fields": 1,
-    "n_cycles": 5,
+    "n_fields": 490,
+    "n_cycles": 799,
     "n_dates": 538,
     "first_acquisition_date": "2013-03-30",
     "last_acquisition_date": "2026-09-10",
     "cycle_file_sha256": "cef2b94c1960d8f39ba2d113a26863258b74e9f4a8b21d0522839d581c1f2e35",
-    "git_sha": "20b0d18a",
+    "git_sha": "bd348610",
     "seeds": [
       42
     ],
@@ -19,16 +19,245 @@
   },
   "data_source": "real490",
   "source": "real490",
-  "n_fields": 1,
-  "n_cycles": 5,
+  "n_fields": 490,
+  "n_cycles": 799,
   "rq1_results": {
-    "status": "not_run",
-    "note": "AUC-PR/recall are undefined: y_stress has a single class (n_pos=0, n_neg=5). On the real 490-field archive stress labels are pending CWSI/ETa zonal extraction, so the detector comparison is reported as not-run instead of being computed on a degenerate label vector.",
-    "n_fields": 1,
-    "n_cycles_evaluated": 0,
-    "n_loyo_folds": 0,
-    "held_out_years": [],
-    "detectors": {},
-    "paired_wilcoxon_vs_ssl": {}
+    "n_fields": 370,
+    "n_cycles_evaluated": 799,
+    "n_loyo_folds": 13,
+    "held_out_years": [
+      2013,
+      2014,
+      2015,
+      2016,
+      2017,
+      2018,
+      2019,
+      2020,
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "detectors": {
+      "SSL_MaskedTransformer": {
+        "auc_pr": 0.2982225917972361,
+        "recall_at_5pct_alert_budget": 0.08125,
+        "recall_at_10pct_alert_budget": 0.15625,
+        "eta_deficit_spearman_rho": -0.05398526823943462,
+        "eta_deficit_pval": 0.1273333791512767,
+        "field_cluster_concordance_mean": 0.5443929442466412,
+        "field_cluster_concordance_ci_95": [
+          0.5231667101187998,
+          0.564796978004435
+        ]
+      },
+      "B1_PhaseZScore": {
+        "auc_pr": 0.2980019104171764,
+        "recall_at_5pct_alert_budget": 0.0875,
+        "recall_at_10pct_alert_budget": 0.15,
+        "eta_deficit_spearman_rho": -0.13927618639841155,
+        "eta_deficit_pval": 7.816234501883968e-05,
+        "field_cluster_concordance_mean": 0.5518897996713664,
+        "field_cluster_concordance_ci_95": [
+          0.5280198437797207,
+          0.5716183219220103
+        ]
+      },
+      "B1_CUSUM_SlowDrift": {
+        "auc_pr": 0.325684327599117,
+        "recall_at_5pct_alert_budget": 0.0875,
+        "recall_at_10pct_alert_budget": 0.20625,
+        "eta_deficit_spearman_rho": -0.22657027173464656,
+        "eta_deficit_pval": 9.246927741312696e-11,
+        "field_cluster_concordance_mean": 0.5599317670241745,
+        "field_cluster_concordance_ci_95": [
+          0.5379594742244261,
+          0.5797456596666294
+        ]
+      },
+      "B3_ECOD": {
+        "auc_pr": 0.34845775177804683,
+        "recall_at_5pct_alert_budget": 0.1125,
+        "recall_at_10pct_alert_budget": 0.19375,
+        "eta_deficit_spearman_rho": -0.16015952741678977,
+        "eta_deficit_pval": 5.377995853716759e-06,
+        "field_cluster_concordance_mean": 0.5514543366943347,
+        "field_cluster_concordance_ci_95": [
+          0.5290878257317505,
+          0.570001571062506
+        ]
+      },
+      "NDVI_Threshold_Alarm": {
+        "auc_pr": 0.2817691443233337,
+        "recall_at_5pct_alert_budget": 0.04375,
+        "recall_at_10pct_alert_budget": 0.1125,
+        "eta_deficit_spearman_rho": -0.1227004385180724,
+        "eta_deficit_pval": 0.0005088851685598344,
+        "field_cluster_concordance_mean": 0.5578327728183383,
+        "field_cluster_concordance_ci_95": [
+          0.5363281344565051,
+          0.5789438594076903
+        ]
+      },
+      "CWSI_Threshold_Alarm": {
+        "auc_pr": 0.5791615228244074,
+        "recall_at_5pct_alert_budget": 0.2125,
+        "recall_at_10pct_alert_budget": 0.34375,
+        "eta_deficit_spearman_rho": -0.31428105620747737,
+        "eta_deficit_pval": 8.921492042112729e-20,
+        "field_cluster_concordance_mean": 0.5981992509410229,
+        "field_cluster_concordance_ci_95": [
+          0.5782170462539139,
+          0.619423848224603
+        ]
+      },
+      "RF_Baseline": {
+        "auc_pr": 0.3276653909314691,
+        "recall_at_5pct_alert_budget": 0.1,
+        "recall_at_10pct_alert_budget": 0.19375,
+        "eta_deficit_spearman_rho": -0.3318944968804991,
+        "eta_deficit_pval": 5.342768463156587e-22,
+        "field_cluster_concordance_mean": 0.5615451730182127,
+        "field_cluster_concordance_ci_95": [
+          0.542001780864828,
+          0.5818432006889814
+        ]
+      },
+      "GBT_Baseline": {
+        "auc_pr": 0.35586184322103054,
+        "recall_at_5pct_alert_budget": 0.125,
+        "recall_at_10pct_alert_budget": 0.2,
+        "eta_deficit_spearman_rho": -0.2696366934231699,
+        "eta_deficit_pval": 8.915719680072953e-15,
+        "field_cluster_concordance_mean": 0.5638571994718053,
+        "field_cluster_concordance_ci_95": [
+          0.5449474078160881,
+          0.5829993501438564
+        ]
+      }
+    },
+    "paired_wilcoxon_vs_ssl": [
+      {
+        "reference": "SSL_MaskedTransformer",
+        "comparator": "B1_PhaseZScore",
+        "n_fields": 370,
+        "mean_ref": 0.5379716521456196,
+        "mean_comp": 0.5502202076920475,
+        "mean_diff_ref_minus_comp": -0.012248555546427885,
+        "diff_ci_95": [
+          -0.02940854679997358,
+          0.005675169090062698
+        ],
+        "median_effect_size": -0.007217355027117178,
+        "wilcoxon_stat": 31543.5,
+        "p_raw": 0.17783247449307582,
+        "p_holm": 0.36177123669396466,
+        "significant_holm_05": false
+      },
+      {
+        "reference": "SSL_MaskedTransformer",
+        "comparator": "B1_CUSUM_SlowDrift",
+        "n_fields": 370,
+        "mean_ref": 0.5379716521456196,
+        "mean_comp": 0.5575880484453701,
+        "mean_diff_ref_minus_comp": -0.019616396299750493,
+        "diff_ci_95": [
+          -0.03850151975683891,
+          -0.0015752501115454838
+        ],
+        "median_effect_size": -0.01611389236545685,
+        "wilcoxon_stat": 30067.5,
+        "p_raw": 0.04741456129706769,
+        "p_holm": 0.23707280648533846,
+        "significant_holm_05": false
+      },
+      {
+        "reference": "SSL_MaskedTransformer",
+        "comparator": "B3_ECOD",
+        "n_fields": 370,
+        "mean_ref": 0.5379716521456196,
+        "mean_comp": 0.5603904494517762,
+        "mean_diff_ref_minus_comp": -0.022418797306156497,
+        "diff_ci_95": [
+          -0.04653843144503344,
+          0.0011132883285574153
+        ],
+        "median_effect_size": -0.014601585314977128,
+        "wilcoxon_stat": 30564.5,
+        "p_raw": 0.09753590791490542,
+        "p_holm": 0.36177123669396466,
+        "significant_holm_05": false
+      },
+      {
+        "reference": "SSL_MaskedTransformer",
+        "comparator": "NDVI_Threshold_Alarm",
+        "n_fields": 370,
+        "mean_ref": 0.5379716521456196,
+        "mean_comp": 0.5573257877043859,
+        "mean_diff_ref_minus_comp": -0.01935413555876635,
+        "diff_ci_95": [
+          -0.04218443521744523,
+          0.0019017339684579985
+        ],
+        "median_effect_size": -0.01673967459324155,
+        "wilcoxon_stat": 30832.0,
+        "p_raw": 0.09044280917349116,
+        "p_holm": 0.36177123669396466,
+        "significant_holm_05": false
+      },
+      {
+        "reference": "SSL_MaskedTransformer",
+        "comparator": "CWSI_Threshold_Alarm",
+        "n_fields": 370,
+        "mean_ref": 0.5379716521456196,
+        "mean_comp": 0.614145638128742,
+        "mean_diff_ref_minus_comp": -0.0761739859831224,
+        "diff_ci_95": [
+          -0.10707585374575362,
+          -0.04225578254591084
+        ],
+        "median_effect_size": -0.06351689612015016,
+        "wilcoxon_stat": 25751.0,
+        "p_raw": 3.166636886120282e-05,
+        "p_holm": 0.0002216645820284197,
+        "significant_holm_05": true
+      },
+      {
+        "reference": "SSL_MaskedTransformer",
+        "comparator": "RF_Baseline",
+        "n_fields": 370,
+        "mean_ref": 0.5379716521456196,
+        "mean_comp": 0.5568573208466826,
+        "mean_diff_ref_minus_comp": -0.01888566870106295,
+        "diff_ci_95": [
+          -0.040984775753314565,
+          0.005967833525014376
+        ],
+        "median_effect_size": -0.010012515644555714,
+        "wilcoxon_stat": 30972.5,
+        "p_raw": 0.10420107537961024,
+        "p_holm": 0.36177123669396466,
+        "significant_holm_05": false
+      },
+      {
+        "reference": "SSL_MaskedTransformer",
+        "comparator": "GBT_Baseline",
+        "n_fields": 370,
+        "mean_ref": 0.5379716521456196,
+        "mean_comp": 0.5637648572942691,
+        "mean_diff_ref_minus_comp": -0.025793205148649457,
+        "diff_ci_95": [
+          -0.051138521768684476,
+          -8.404992244167054e-05
+        ],
+        "median_effect_size": -0.02732582394659995,
+        "wilcoxon_stat": 29044.5,
+        "p_raw": 0.016338248642106132,
+        "p_holm": 0.09802949185263679,
+        "significant_holm_05": false
+      }
+    ]
   }
 }

@@ -254,10 +254,23 @@ def run_loyo_archive_benchmark(
     oof_scores: dict[str, np.ndarray] = {m: np.full(len(X), np.nan, dtype=np.float64) for m in detector_names}
     evaluated_mask = np.zeros(len(X), dtype=bool)
 
+    print(
+        f"[RQ1] LOYO setup: {len(valid_years)} folds, years={valid_years}, "
+        f"n_cycles={len(X)}, n_fields={len(np.unique(fids))}, "
+        f"ssl_epochs={ssl_epochs}",
+        flush=True,
+    )
+
     for yi, yr in enumerate(valid_years):
         tr_idx = np.where(years != yr)[0]
         va_idx = np.where(years == yr)[0]
         evaluated_mask[va_idx] = True
+
+        print(
+            f"[RQ1] Fold {yi + 1}/{len(valid_years)}: held-out year={yr} "
+            f"(train={len(tr_idx)}, eval={len(va_idx)})",
+            flush=True,
+        )
 
         X_tr = X[tr_idx]
         f_tr = fids[tr_idx]
@@ -280,6 +293,7 @@ def run_loyo_archive_benchmark(
         )
         norm_tr = act_dict["all"]
         X_tr_norm = X_tr[norm_tr]
+        print(f"[RQ1]   trimmed normal train: {len(X_tr_norm)} cycles", flush=True)
 
         # 1. B1 Phase Z-score + B1 CUSUM slow-drift
         bl = fit_baseline({"all": X_tr_norm}, X_by_f_arr, min_n=5)
@@ -321,9 +335,11 @@ def run_loyo_archive_benchmark(
         )
 
         # 5. Reconstruction SSL (MaskedTransformer)
+        print(f"[RQ1]   training SSL MaskedTransformer ({ssl_epochs} epochs)...", flush=True)
         oof_scores["SSL_MaskedTransformer"][va_idx] = _fit_and_score_ssl_fold(
             X_tr_norm, X_va, epochs=ssl_epochs, seed=seed + yi
         )
+        print(f"[RQ1]   fold {yi + 1}/{len(valid_years)} done.", flush=True)
 
     ev = evaluated_mask
     yt = y_true[ev]
@@ -438,6 +454,7 @@ def main() -> int:
     seed = args.seed
 
     if source == "real490":
+        print("[RQ1] Loading real490 archive...", flush=True)
         archive = load_real490_archive()  # fail-closed
         prov = build_provenance(archive, seeds=[seed])
         if args.max_fields is not None:
@@ -508,6 +525,11 @@ def main() -> int:
 
     epochs = 8 if source == "simulated" else 25
     max_loyo = 4 if source == "simulated" else None
+    print(
+        f"[RQ1] Starting LOYO benchmark (source={report_source}, epochs={epochs}, "
+        f"max_loyo_years={max_loyo})...",
+        flush=True,
+    )
     results = run_loyo_archive_benchmark(archive, ssl_epochs=epochs, max_loyo_years=max_loyo, seed=seed)
 
     report = {

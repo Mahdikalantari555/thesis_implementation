@@ -37,12 +37,14 @@ SPLITS_JSON_PATH = REPO_ROOT / "data/processed/splits_490.json"
 EXPECTED_STATS_HASH: str | None = None
 
 
-def _compute_stats_zarr_hash() -> str:
+def _compute_stats_zarr_hash(reader=None, *, stats_zarr_path: str | Path = STATS_ZARR_PATH) -> tuple[str, object]:
     """Compute a SHA-256 hash of the stats.zarr content that affects cycle extraction.
 
     Hashes the schema-critical arrays: field, time, band, sensor, valid_frac, median.
+    Returns (hash_hex, reader) so the loaded reader can be reused.
     """
-    reader = load_stats_zarr(STATS_ZARR_PATH)
+    if reader is None:
+        reader = load_stats_zarr(stats_zarr_path)
 
     # Collect schema-validated arrays; bands is a list[str], dates is DatetimeIndex
     parts = []
@@ -55,7 +57,7 @@ def _compute_stats_zarr_hash() -> str:
     parts.append(reader.get_stat("median").tobytes())
 
     concatenated = b"".join(parts)
-    return hashlib.sha256(concatenated).hexdigest()
+    return hashlib.sha256(concatenated).hexdigest(), reader
 
 
 def _compute_npz_hash(npz_path: Path) -> str:
@@ -133,12 +135,21 @@ def _load_metric_zonal_stats() -> dict | None:
             log.info("Loaded metric zonal stats cache: %d rows", len(cache_df))
             cwsi_data: dict[tuple[str, int], float] = {}
             eta_data: dict[tuple[str, int], float] = {}
-            for _, row in cache_df.iterrows():
-                key = (str(row["date"]), int(row["field_id"]))
-                if "cwsi_mean" in row and pd.notna(row["cwsi_mean"]):
-                    cwsi_data[key] = float(row["cwsi_mean"])
-                if "eta_mean" in row and pd.notna(row["eta_mean"]):
-                    eta_data[key] = float(row["eta_mean"])
+
+            if "cwsi_mean" in cache_df.columns:
+                sub = cache_df.loc[cache_df["cwsi_mean"].notna(), ["date", "field_id", "cwsi_mean"]]
+                if len(sub):
+                    keys = list(zip(sub["date"].astype(str), sub["field_id"].astype(int)))
+                    vals = sub["cwsi_mean"].astype(float).to_numpy()
+                    cwsi_data = dict(zip(keys, vals.tolist()))
+
+            if "eta_mean" in cache_df.columns:
+                sub = cache_df.loc[cache_df["eta_mean"].notna(), ["date", "field_id", "eta_mean"]]
+                if len(sub):
+                    keys = list(zip(sub["date"].astype(str), sub["field_id"].astype(int)))
+                    vals = sub["eta_mean"].astype(float).to_numpy()
+                    eta_data = dict(zip(keys, vals.tolist()))
+
             if cwsi_data:
                 return {"cwsi": cwsi_data, "eta": eta_data}
         except Exception as e:
@@ -327,8 +338,11 @@ def load_real490_archive(
             "Missing required real-490 archive files:\n  " + "\n  ".join(missing)
         )
 
-    # Compute hash of stats.zarr
-    stats_hash = _compute_stats_zarr_hash()
+    log.info("Loading real 490-field archive...")
+
+    # Compute hash of stats.zarr (and keep reader for reuse below).
+    log.info("Computing stats.zarr content hash (this can take a moment)...")
+    stats_hash, reader = _compute_stats_zarr_hash(stats_zarr_path=stats_zarr_path)
     log.info("stats.zarr content hash: %s", stats_hash[:16])
 
     # Compute hash of NPZ file
@@ -344,6 +358,7 @@ def load_real490_archive(
         pass
 
     # Load NPZ data
+    log.info("Loading cycle tensors from %s", npz_path.name)
     npz_data = np.load(npz_path, allow_pickle=True)
     X = npz_data["X"]  # (N, 36, 8)
     start_dates = npz_data["start_dates"]
@@ -354,6 +369,7 @@ def load_real490_archive(
     channel_names = list(npz_data["channel_names"])
 
     # Load cycles parquet for metadata (censoring, etc.)
+    log.info("Loading cycle metadata from %s", cycles_parquet_path.name)
     cycles_df = pd.read_parquet(cycles_parquet_path)
 
     # Filter to non-censored cycles that match NPZ
@@ -374,13 +390,13 @@ def load_real490_archive(
     )
 
     # Load METRIC zonal stats for CWSI/ETa (real data from Data/Metric/products/)
+    log.info("Loading METRIC zonal stats (CWSI/ETa)...")
     metric_stats = _load_metric_zonal_stats()
 
     n_cycles = len(X)
 
     # Total field count comes from stats.zarr (all 490 fields), not just fields
     # that happen to have cycles (370 fields with >=1 cycle).
-    reader = load_stats_zarr(stats_zarr_path)
     n_fields = len(reader.fields)
 
     # Compute per-cycle CWSI_ET and ETaDaily means from real METRIC zonal stats,

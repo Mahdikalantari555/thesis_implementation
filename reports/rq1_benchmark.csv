@@ -1,2 +1,9 @@
-archive,status,note
-real490,not_run,"AUC-PR/recall are undefined: y_stress has a single class (n_pos=0, n_neg=5). On the real 490-field archive stress labels are pending CWSI/ETa zonal extraction, so the detector comparison is reported as not-run instead of being computed on a degenerate label vector."
+archive,detector,auc_pr,recall_at_5pct,recall_at_10pct,eta_deficit_rho,cluster_concordance
+real490,SSL_MaskedTransformer,0.2982225917972361,0.08125,0.15625,-0.05398526823943462,0.5443929442466412
+real490,B1_PhaseZScore,0.2980019104171764,0.0875,0.15,-0.13927618639841155,0.5518897996713664
+real490,B1_CUSUM_SlowDrift,0.325684327599117,0.0875,0.20625,-0.22657027173464656,0.5599317670241745
+real490,B3_ECOD,0.34845775177804683,0.1125,0.19375,-0.16015952741678977,0.5514543366943347
+real490,NDVI_Threshold_Alarm,0.2817691443233337,0.04375,0.1125,-0.1227004385180724,0.5578327728183383
+real490,CWSI_Threshold_Alarm,0.5791615228244074,0.2125,0.34375,-0.31428105620747737,0.5981992509410229
+real490,RF_Baseline,0.3276653909314691,0.1,0.19375,-0.3318944968804991,0.5615451730182127
+real490,GBT_Baseline,0.35586184322103054,0.125,0.2,-0.2696366934231699,0.5638571994718053
