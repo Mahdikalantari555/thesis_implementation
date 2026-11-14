@@ -70,6 +70,147 @@ class TransformerBlock(nn.Module):
         return x
 
 
+class CausalTransformerBlock(nn.Module):
+    """TransformerBlock restricted to a causal attention pattern.
+
+    ``attn_mask`` is the standard (T, T) boolean mask where True = forbidden;
+    position t may attend only to positions <= t. Dropout follows the parent
+    convention and is disabled by ``.eval()``.
+    """
+
+    def __init__(self, d_model: int, n_heads: int, d_ff: int, dropout: float = 0.1) -> None:
+        super().__init__()
+        self.attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout, batch_first=True)
+        self.ff = nn.Sequential(
+            nn.Linear(d_model, d_ff),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_ff, d_model),
+            nn.Dropout(dropout),
+        )
+        self.ln1 = nn.LayerNorm(d_model)
+        self.ln2 = nn.LayerNorm(d_model)
+        self.d_model = d_model
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        key_padding_mask: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        T = x.size(1)
+        causal = torch.triu(
+            torch.ones(T, T, dtype=torch.bool, device=x.device), diagonal=1
+        )
+        h = self.ln1(x)
+        a, _ = self.attn(
+            h, h, h,
+            attn_mask=causal,
+            key_padding_mask=key_padding_mask,
+            need_weights=False,
+        )
+        x = x + a
+        x = x + self.ff(self.ln2(x))
+        return x
+
+
+class CausalMaskedTransformer(nn.Module):
+    """Causal 1-D Transformer with masked reconstruction of observed bins only.
+
+    Input tokens are (values, observation-mask flags, optional DOY sin/cos);
+    the reconstruction head outputs the value channels only. The pretext masks
+    a subset of the *observed* bins; a masked bin must be predicted from bins
+    at or before its own index (causal attention), never from the future —
+    this is what makes the leave-one-bin-out score causal (design D4/D5).
+    """
+
+    def __init__(
+        self,
+        d_in: int,
+        n_out: int,
+        d_model: int = 80,
+        n_heads: int = 4,
+        n_layers: int = 3,
+        d_ff: int = 160,
+        dropout: float = 0.1,
+        max_len: int = 64,
+    ) -> None:
+        super().__init__()
+        self.d_in = d_in
+        self.n_out = n_out
+        self.d_model = d_model
+        self.input_proj = nn.Linear(d_in, d_model)
+        self.mask_embed = nn.Parameter(torch.zeros(1, 1, d_model))
+        nn.init.normal_(self.mask_embed, std=0.02)
+        self.pos = SinusoidalPositionalEncoding(d_model, max_len=max_len, dropout=dropout)
+        self.blocks = nn.ModuleList(
+            [CausalTransformerBlock(d_model, n_heads, d_ff, dropout=dropout) for _ in range(n_layers)]
+        )
+        self.ln_f = nn.LayerNorm(d_model)
+        self.head = nn.Sequential(
+            nn.Linear(d_model, d_model),
+            nn.GELU(),
+            nn.Linear(d_model, n_out),
+        )
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        pretext_mask: torch.Tensor | None = None,
+        key_padding_mask: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """Return recon (B, T, n_out).
+
+        x: (B, T, d_in); pretext_mask: (B, T) bool True where the bin is
+        withheld (value replaced by the learned mask embedding);
+        key_padding_mask: (B, T) bool True = padding (fully unobserved bins).
+        """
+        h = self.input_proj(x)
+        if pretext_mask is not None:
+            m = pretext_mask.unsqueeze(-1).to(h.dtype)
+            h = h * (1 - m) + self.mask_embed.expand_as(h) * m
+        h = self.pos(h)
+        pad = key_padding_mask if key_padding_mask is not None else torch.zeros(
+            x.shape[0], x.shape[1], dtype=torch.bool, device=x.device
+        )
+        for blk in self.blocks:
+            h = blk(h, key_padding_mask=pad)
+        h = self.ln_f(h)
+        return self.head(h)
+
+    def masked_reconstruction_loss(
+        self,
+        x: torch.Tensor,
+        pretext_mask: torch.Tensor,
+        target: torch.Tensor,
+        key_padding_mask: torch.Tensor | None = None,
+        channel_mask: torch.Tensor | None = None,
+        delta: float = 1.0,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Smooth-L1 loss on masked, observed channels only.
+
+        x: (B, T, d_in); pretext_mask: (B, T); target: (B, T, n_out) the value
+        channels; channel_mask: (B, T, n_out) bool observation mask (loss is
+        computed only on observed entries — masked entries give zero loss).
+        Returns (loss_scalar, per_token_loss (B, T)).
+        """
+        recon = self.forward(x, pretext_mask=pretext_mask, key_padding_mask=key_padding_mask)
+        tok = F.smooth_l1_loss(recon, target, reduction="none", beta=delta).mean(dim=-1)  # (B, T)
+        # Fully-unobserved (padded) query positions attend to an empty key set
+        # under the causal mask → their recon is NaN. Those positions are
+        # excluded by the loss mask, so zero the NaNs first to keep 0 * NaN
+        # out of the reduction.
+        tok = torch.nan_to_num(tok, nan=0.0)
+        loss_mask = pretext_mask.clone()
+        if channel_mask is not None:
+            loss_mask = loss_mask & channel_mask.any(dim=-1)
+        if key_padding_mask is not None:
+            loss_mask = loss_mask & ~key_padding_mask
+        tok = tok * loss_mask.float()
+        n = loss_mask.sum(dim=1).clamp(min=1)
+        loss = (tok.sum(dim=1) / n).mean()
+        return loss, tok
+
+
 class MaskedTransformer(nn.Module):
     """1-D Transformer encoder with masked (denoising) reconstruction head.
 

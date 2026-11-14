@@ -12,6 +12,88 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class CausalGRUAE(nn.Module):
+    """Unidirectional GRU that predicts the current bin from earlier bins only.
+
+    The GRU consumes the input tokens step by step; the reconstruction head
+    maps the hidden state *before* consuming bin b (``h_{b-1}``, a learned
+    initial state for b = 0) to that bin's value channels. Nothing after bin b
+    can influence its prediction, which makes the leave-one-bin-out score
+    causal by construction (design D4, ``gru_ae_main``).
+
+    Input tokens are (values, observation-mask flags, optional DOY sin/cos);
+    a withheld bin's value channels are zeroed before the forward pass while
+    its observation-mask flags stay (they are covariates, not targets).
+    """
+
+    def __init__(
+        self,
+        d_in: int,
+        n_out: int,
+        d_model: int = 224,
+        n_layers: int = 1,
+        dropout: float = 0.1,
+    ) -> None:
+        super().__init__()
+        self.d_in = d_in
+        self.n_out = n_out
+        self.d_model = d_model
+        self.n_layers = n_layers
+        self.gru = nn.GRU(
+            input_size=d_in,
+            hidden_size=d_model,
+            num_layers=n_layers,
+            batch_first=True,
+            dropout=dropout if n_layers > 1 else 0.0,
+            bidirectional=False,
+        )
+        self.h0 = nn.Parameter(torch.zeros(n_layers, 1, d_model))
+        self.head = nn.Sequential(
+            nn.Linear(d_model, d_model),
+            nn.GELU(),
+            nn.Linear(d_model, n_out),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return recon (B, T, n_out) where position t is predicted from h_{t-1}.
+
+        Position 0 is predicted from the learned initial state; position t>0
+        from the GRU hidden state after consuming tokens 0..t-1.
+        """
+        B, T, _ = x.shape
+        h0 = self.h0.expand(self.n_layers, B, self.d_model).contiguous()
+        h_all, _ = self.gru(x, h0)  # (B, T, d_model) hidden AFTER each token
+        # Position 0 is predicted from the learned initial state (last layer);
+        # position t>0 from the hidden state after consuming tokens 0..t-1.
+        h_init = self.h0[-1].expand(B, 1, self.d_model)  # (B, 1, d_model)
+        prev = torch.cat([h_init, h_all[:, :-1, :]], dim=1)
+        return self.head(prev.contiguous())
+
+    def masked_reconstruction_loss(
+        self,
+        x: torch.Tensor,
+        pretext_mask: torch.Tensor,
+        target: torch.Tensor,
+        channel_mask: torch.Tensor | None = None,
+        delta: float = 1.0,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Smooth-L1 loss on masked, observed channels only.
+
+        x has the pretext-masked bins' value channels already zeroed.
+        channel_mask (B, T, n_out) restricts the loss to observed entries.
+        Returns (loss_scalar, per_token_loss (B, T)).
+        """
+        recon = self.forward(x)
+        tok = F.smooth_l1_loss(recon, target, reduction="none", beta=delta).mean(dim=-1)
+        loss_mask = pretext_mask.clone()
+        if channel_mask is not None:
+            loss_mask = loss_mask & channel_mask.any(dim=-1)
+        tok = tok * loss_mask.float()
+        n = loss_mask.sum(dim=1).clamp(min=1)
+        loss = (tok.sum(dim=1) / n).mean()
+        return loss, tok
+
+
 class GRUAutoencoder(nn.Module):
     """Small GRU autoencoder; CPU-friendly baseline SSL model.
 
