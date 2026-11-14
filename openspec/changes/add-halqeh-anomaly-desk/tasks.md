@@ -27,11 +27,11 @@
 ## 5. Gates, evidence, docs
 
 - [x] 5.1 Extend `scripts/capture_platform_screenshots.mjs` to the 9-view set: desk scenarios (EN + FA, a selected slip case, envelope + naive modes; tile-server-on raster screenshot; tile-server-off degradation run). Verify: script green end-to-end over the production build.
-- [ ] 5.2 Full gate on this branch, results reported verbatim: (1) `D:\Dev\Miniforge3\envs\geo\python.exe -X utf8 -m pytest tests/unit/test_platform_data_contract.py tests/unit/test_platform_bilingual.py -q`; (2) `node node_modules/typescript/bin/tsc --noEmit` and `TMP/TEMP → platform/.tmpbuild node node_modules/vite/bin/vite.js build` in `platform/`; (3) `serve_tiles.py --port 8765` + capture script (`--locale en`), plus a `--no-tile-server` run; (4) `python scripts/test_tile_concurrency.py` only if tile-serving code changed (expected: no). Evidence committed under `reports/`.
-- [ ] 5.3 Regenerate + commit the desk payload and all code in conventional single-purpose commits on `add-halqeh-anomaly-desk`; confirm `git status` shows no path from `D:\RS\Thesis\Halqeh\` and no Grok scaffolding anywhere in the diff.
+- [x] 5.2 Full gate on this branch, results reported verbatim: (1) `D:\Dev\Miniforge3\envs\geo\python.exe -X utf8 -m pytest tests/unit/test_platform_data_contract.py tests/unit/test_platform_bilingual.py -q`; (2) `node node_modules/typescript/bin/tsc --noEmit` and `TMP/TEMP → platform/.tmpbuild node node_modules/vite/bin/vite.js build` in `platform/`; (3) `serve_tiles.py --port 8765` + capture script (`--locale en`), plus a `--no-tile-server` run; (4) `python scripts/test_tile_concurrency.py` only if tile-serving code changed (expected: no). Evidence committed under `reports/`.
+- [x] 5.3 Regenerate + commit the desk payload and all code in conventional single-purpose commits on `add-halqeh-anomaly-desk`; confirm `git status` shows no path from `D:\RS\Thesis\Halqeh\` and no Grok scaffolding anywhere in the diff.
 - [x] 5.4 Record validation-ladder framing in the view (footer: run provenance, L2–L3 evidence browsing; verdicts are annotations, not ground truth) — no metric or accuracy claim appears in the desk. Verify: grep the desk + i18n for accuracy/performance phrasing.
 
 ## 6. Wrap-up
 
 - [x] 6.1 Update `docs/platform_bug_audit.md` only if gate runs surfaced defects; otherwise note the audit outcome (clean) with the run date.
-- [ ] 6.2 Summarize for the user: what was ported vs. dropped, payload stats (n cases/bins, size), gate outputs, and the exact remaining manual step (none expected — long-running jobs are not introduced by this change).
+- [x] 6.2 Summarize for the user: what was ported vs. dropped, payload stats (n cases/bins, size), gate outputs, and the exact remaining manual step (none expected — long-running jobs are not introduced by this change).

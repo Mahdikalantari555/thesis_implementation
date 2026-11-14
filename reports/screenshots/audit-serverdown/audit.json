@@ -1,5 +1,5 @@
 {
-  "startedAt": "2026-11-07T13:36:33.104Z",
+  "startedAt": "2026-11-14T14:02:28.051Z",
   "locale": "en",
   "tileServerExpectedUp": false,
   "views": {
@@ -27,15 +27,11 @@
       "pageErrors": [],
       "failedRequests": [
         {
-          "url": "http://127.0.0.1:8765/tiles/2023-06-14/rgb/12/2596/1676.png",
-          "errorText": "net::ERR_CONNECTION_REFUSED"
-        },
-        {
-          "url": "http://127.0.0.1:8765/tiles/2023-06-14/rgb/12/2597/1676.png",
-          "errorText": "net::ERR_CONNECTION_REFUSED"
-        },
-        {
           "url": "http://127.0.0.1:8765/tiles/2023-06-14/rgb/12/2596/1675.png",
+          "errorText": "net::ERR_CONNECTION_REFUSED"
+        },
+        {
+          "url": "http://127.0.0.1:8765/tiles/2023-06-14/rgb/12/2597/1677.png",
           "errorText": "net::ERR_CONNECTION_REFUSED"
         },
         {
@@ -47,7 +43,11 @@
           "errorText": "net::ERR_CONNECTION_REFUSED"
         },
         {
-          "url": "http://127.0.0.1:8765/tiles/2023-06-14/rgb/12/2597/1677.png",
+          "url": "http://127.0.0.1:8765/tiles/2023-06-14/rgb/12/2598/1676.png",
+          "errorText": "net::ERR_CONNECTION_REFUSED"
+        },
+        {
+          "url": "http://127.0.0.1:8765/tiles/2023-06-14/rgb/12/2598/1675.png",
           "errorText": "net::ERR_CONNECTION_REFUSED"
         },
         {
@@ -55,15 +55,15 @@
           "errorText": "net::ERR_CONNECTION_REFUSED"
         },
         {
-          "url": "http://127.0.0.1:8765/tiles/2023-06-14/rgb/12/2598/1676.png",
-          "errorText": "net::ERR_CONNECTION_REFUSED"
-        },
-        {
           "url": "http://127.0.0.1:8765/tiles/2023-06-14/rgb/12/2595/1677.png",
           "errorText": "net::ERR_CONNECTION_REFUSED"
         },
         {
-          "url": "http://127.0.0.1:8765/tiles/2023-06-14/rgb/12/2595/1675.png",
+          "url": "http://127.0.0.1:8765/tiles/2023-06-14/rgb/12/2596/1676.png",
+          "errorText": "net::ERR_CONNECTION_REFUSED"
+        },
+        {
+          "url": "http://127.0.0.1:8765/tiles/2023-06-14/rgb/12/2597/1676.png",
           "errorText": "net::ERR_CONNECTION_REFUSED"
         },
         {
@@ -71,7 +71,7 @@
           "errorText": "net::ERR_CONNECTION_REFUSED"
         },
         {
-          "url": "http://127.0.0.1:8765/tiles/2023-06-14/rgb/12/2598/1675.png",
+          "url": "http://127.0.0.1:8765/tiles/2023-06-14/rgb/12/2595/1675.png",
           "errorText": "net::ERR_CONNECTION_REFUSED"
         }
       ],
@@ -112,9 +112,56 @@
       "pageErrors": [],
       "failedRequests": [],
       "screenshot": "08_reports-experiments.png"
+    },
+    "desk": {
+      "console": [
+        "[network] Failed to load resource: net::ERR_CONNECTION_REFUSED"
+      ],
+      "pageErrors": [],
+      "failedRequests": [
+        {
+          "url": "http://127.0.0.1:8765/scenes",
+          "errorText": "net::ERR_CONNECTION_REFUSED"
+        },
+        {
+          "url": "https://c.tile.openstreetmap.org/11/1298/837.png",
+          "errorText": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://a.tile.openstreetmap.org/11/1299/837.png",
+          "errorText": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://b.tile.openstreetmap.org/11/1297/837.png",
+          "errorText": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://b.tile.openstreetmap.org/11/1300/837.png",
+          "errorText": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://c.tile.openstreetmap.org/11/1297/838.png",
+          "errorText": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://c.tile.openstreetmap.org/11/1300/838.png",
+          "errorText": "net::ERR_ABORTED"
+        }
+      ],
+      "screenshot": "09_anomaly-desk.png"
     }
   },
   "tileScenario": null,
+  "deskScenario": {
+    "slipFilterClicked": true,
+    "slipChipClicked": true,
+    "chips": 506,
+    "naiveClicked": false,
+    "sceneLabelOk": false,
+    "deskRasterTiles": 0,
+    "absentStateOk": true,
+    "ok": true
+  },
   "pass": true,
-  "finishedAt": "2026-11-07T13:37:27.527Z"
+  "finishedAt": "2026-11-14T14:03:13.519Z"
 }
