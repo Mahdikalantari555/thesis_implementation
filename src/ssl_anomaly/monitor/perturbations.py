@@ -208,8 +208,10 @@ def sample_strata(
     for _ in range(min(cfg.n_per_stratum, n_cycles)):
         ptype = str(cfg.types[int(rng.integers(len(cfg.types)))])
         phase = str(cfg.phases[int(rng.integers(len(cfg.phases)))])
-        # Primary severity (1×MAD) oversampled 2:1 against the others.
-        if rng.random() < 0.5:
+        # Primary severity (1×MAD) oversampled 2:1 — only when it is part of
+        # the configured set (the extended-severity diagnostic sweeps other
+        # severities and must not have 1×MAD silently mixed in).
+        if 1.0 in cfg.severities and rng.random() < 0.5:
             sev = 1.0
         else:
             sev = float(cfg.severities[int(rng.integers(len(cfg.severities)))])

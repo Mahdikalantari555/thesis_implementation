@@ -53,6 +53,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--mask-ratio", type=float, default=0.3, help="fraction of observed bins withheld per sample")
     p.add_argument("--no-doy", action="store_true", help="ablation: drop the sin/cos DOY channels (task 2.4)")
+    p.add_argument("--no-lst", action="store_true", help="ablation: drop the LST channel (design D3 no-LST variant)")
     p.add_argument("--smoke", action="store_true", help="1 epoch, 16 cycles, <2 min (agent-only runs)")
     p.add_argument("--resume", action="store_true", help="resume from the last saved checkpoint")
     p.add_argument("--run-id", default=None, help="run id (default: <model>_s<seed>_<date>)")
@@ -82,6 +83,12 @@ def main(argv: list[str] | None = None) -> int:
     sel = mproto.select_splits(data, manifest, splits=("train", "dev"))
     is_train = np.array([k in set(manifest["cycles"]["train"]) for k in sel["cycle_keys"]])
     X_all, M_all = sel["X"], sel["M"]  # raw values + observation masks
+    if args.no_lst:
+        # D3 no-LST variant: drop the last channel (order ndvi…swir2, lst).
+        X_all, M_all = X_all[:, :, :-1], M_all[:, :, :-1]
+        sel = dict(sel)
+        sel["X"], sel["M"] = X_all, M_all
+        sel["band_names"] = list(sel["band_names"])[:-1]
     if args.smoke:
         # Spec: --smoke = 1 epoch on 16 train cycles, < 2 min. Keep a few dev
         # cycles so the dev-loss path is exercised too.
@@ -380,7 +387,18 @@ def _write_manifest(
         "parameter_count": params,
         "data_source": "real490 (masked rebuild from stats.zarr)",
     }
-    (run_dir / "run_manifest.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    manifest_path = run_dir / "run_manifest.json"
+    if manifest_path.exists():
+        # One manifest per run_id, shared by its seeds: union the seeds and
+        # keep the first creation date (each seed run updates this file).
+        try:
+            prev = json.loads(manifest_path.read_text(encoding="utf-8"))
+            payload["seeds"] = sorted(set(prev.get("seeds", [])) | set(seeds))
+            payload["created"] = prev.get("created", payload["created"])
+            payload["wall_time_s"] = round(float(prev.get("wall_time_s", 0)) + wall, 1)
+        except Exception:
+            pass
+    manifest_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
 if __name__ == "__main__":

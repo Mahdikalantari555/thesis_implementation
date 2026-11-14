@@ -47,6 +47,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--far", type=float, default=0.05)
     p.add_argument("--n-per-stratum", type=int, default=8, help="injected cycles per dev cycle per round")
     p.add_argument("--rounds", type=int, default=6, help="injection rounds (each injects 1 perturbation per cycle)")
+    p.add_argument("--extended-severity", action="store_true", default=True,
+                   help="diagnostic: also inject 4/6/8×MAD to find where detection starts (OQ6)")
+    p.add_argument("--no-extended-severity", dest="extended_severity", action="store_false")
     p.add_argument("--smoke", action="store_true", help="tiny subset for agent smoke runs")
     p.add_argument("--device", default=None)
     p.add_argument("--notes", default="")
@@ -54,7 +57,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def load_scorer(model: str, seed: int, run_id: str, device: str) -> tuple:
-    """Load one checkpoint and return (scorer, n_params)."""
+    """Load one checkpoint and return (scorer, n_params, n_channels)."""
     import torch
 
     ckpt_dir = mproto.CHECKPOINTS_DEV_DIR / run_id
@@ -68,7 +71,7 @@ def load_scorer(model: str, seed: int, run_id: str, device: str) -> tuple:
         b1.scale = d["scale"]
         if "robust_range" in d.files:
             b1.robust_range = d["robust_range"]
-        return b1, 0
+        return b1, 0, int(b1.median.shape[-1])
     ckpt_path = ckpt_dir / f"{model}_seed{seed}.pt"
     if not ckpt_path.exists():
         raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
@@ -78,13 +81,18 @@ def load_scorer(model: str, seed: int, run_id: str, device: str) -> tuple:
         k: cfg[k] for k in ("d_model", "n_layers", "d_ff", "n_heads", "dropout") if k in cfg
     })
     torch_model.load_state_dict(payload["state_dict"])
-    return mmodels.DeepCausalScorer(
+    scorer = mmodels.DeepCausalScorer(
         model, torch_model, use_doy=bool(cfg.get("use_doy", True)), device=device,
-    ), mmodels.count_parameters(torch_model)
+    )
+    return scorer, mmodels.count_parameters(torch_model), int(cfg["n_out"])
 
 
 def score_cycles(scorer, X_raw: np.ndarray, M: np.ndarray, doy: np.ndarray, norm: dict | None):
-    """Score cycles; returns (scores (N,T), pred_raw (N,T,C)).
+    """Score cycles; returns dict with per-bin statistics + predictions.
+
+    - "mean": observed-mask-weighted MSE in z-space (D5 L1 statistic; secondary)
+    - "z2": per-(bin, channel) squared z-space residuals (alarm-statistic input)
+    - "pred_raw": withheld-bin predictions mapped back to raw units (NRMSE)
 
     Deep scorers work in z-space; predictions are mapped back to raw units so
     NRMSE is comparable with B1. B1 predicts the train climatology directly.
@@ -92,16 +100,27 @@ def score_cycles(scorer, X_raw: np.ndarray, M: np.ndarray, doy: np.ndarray, norm
     if isinstance(scorer, mmodels.B1PhaseZCausal):
         N, T, C = X_raw.shape
         scores = np.full((N, T), np.nan)
+        z2 = np.zeros((N, T, C))
         pred_raw = np.zeros((N, T, C))
         for i in range(N):
             scores[i] = scorer.score_cycle(X_raw[i], M[i], doy[i, :, 0])
             g = scorer.season_group(doy[i, :, 0]) if scorer.use_doy else np.zeros(T, dtype=np.int64)
-            pred_raw[i] = scorer.median[g, np.arange(T)]
-        return scores, pred_raw
+            med = scorer.median[g, np.arange(T)]
+            scale = scorer.scale[g, np.arange(T)]
+            pred_raw[i] = med
+            zc = np.where(M[i], (X_raw[i] - med) / scale, 0.0)
+            # Signed robust-z residual vs the train climatology, then the
+            # causal field-offset correction (dev-loop change #2, refined).
+            resid_corr = mscoring.causal_offset_correct(zc[None], M[i][None])[0]
+            z2[i] = resid_corr * resid_corr * M[i]
+        return {"mean": scores, "z2": z2, "pred_raw": pred_raw}
     z = minputs.apply_norm(norm, X_raw, M)
     scores, pred_z = scorer.loo_batch(z, M, doy)
     pred_raw = pred_z * norm["scale"][None] + norm["median"][None]
-    return scores, pred_raw
+    resid = z - pred_z  # signed: value − prediction
+    resid_corr = mscoring.causal_offset_correct(resid, M)
+    z2 = (resid_corr * resid_corr) * M  # zero where unobserved
+    return {"mean": scores, "z2": z2, "pred_raw": pred_raw}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -131,44 +150,89 @@ def main(argv: list[str] | None = None) -> int:
         args.n_per_stratum = 2
         N = len(keep)
 
-    cfg_pert = mpert.PerturbationConfig(n_per_stratum=args.n_per_stratum)
+    # Ablation runs (no-LST) carry fewer channels: slice X/M to the
+    # checkpoint's channel count (order preserved; dropped channels are the
+    # trailing lst). channel_count recorded in metrics.
+    probe_scorer, _, probe_channels = load_scorer(args.model, seeds[0], args.run_id, device)
+    channel_count = probe_channels
+    if channel_count < X.shape[2]:
+        X, M = X[:, :, :channel_count], M[:, :, :channel_count]
+    N, T, C = X.shape
+    print(f"[eval] channels={channel_count}, dev cycles={N}, rounds={args.rounds}")
+
+    # Perturbation types touching a dropped channel (no-LST ablation) cannot
+    # be injected: restrict to types whose channels all exist.
+    usable_types = tuple(
+        pt for pt in mpert.INTERIM_TYPES if all(ch < C for ch in mpert.TYPE_CHANNELS[pt])
+    )
+    dropped_types = [pt for pt in mpert.INTERIM_TYPES if pt not in usable_types]
+    if dropped_types:
+        print(f"[eval] dropped-channel injections skipped: {dropped_types}")
+
+    cfg_pert = mpert.PerturbationConfig(types=usable_types, n_per_stratum=args.n_per_stratum)
     per_seed: list[dict] = []
 
     for seed in seeds:
-        scorer, params = load_scorer(args.model, seed, args.run_id, device)
+        scorer, params, _ = load_scorer(args.model, seed, args.run_id, device)
 
         # ---- Clean dev scores (calibration + NRMSE) -----------------------
-        clean_scores, clean_pred_raw = score_cycles(scorer, X, M, doy, norm)
-        clean_list = [clean_scores[i] for i in range(N)]
+        clean = score_cycles(scorer, X, M, doy, norm)
+        clean_pred_raw = clean["pred_raw"]
 
         # ---- Injected dev cycles ------------------------------------------
-        inj_scores: list[np.ndarray] = []
+        inj_z2: list[np.ndarray] = []
+        inj_masks: list[np.ndarray] = []
+        inj_mean: list[np.ndarray] = []
         inj_meta: list[dict] = []
-        inj_pred_raw = []
         for rnd in range(args.rounds):
             rng = np.random.default_rng(10_000 + seed * 97 + rnd)
             results = mpert.inject_dataset(X, M, norm_scale_or_mad(norm, scorer), cfg_pert, rng)
             Xinj = np.stack([r.x for r in results])
             Minj = np.stack([r.m for r in results])
             doy_inj = doy[[r.source_row for r in results]]
-            s_inj, p_inj = score_cycles(scorer, Xinj, Minj, doy_inj, norm)
+            s_inj = score_cycles(scorer, Xinj, Minj, doy_inj, norm)
             for j, r in enumerate(results):
-                inj_scores.append(s_inj[j])
+                inj_z2.append(s_inj["z2"][j])
+                inj_masks.append(r.m)
+                inj_mean.append(s_inj["mean"][j])
                 inj_meta.append({
                     "type": r.pert_type, "severity": float(r.severity),
                     "phase": r.phase, "onset_bin": int(r.onset_bin),
                 })
-                inj_pred_raw.append(p_inj[j])
+
+        # ---- Alarm statistic (dev-loop change #2) ---------------------------
+        # Cumulative channel-max: per-(bin,channel) z² normalized by the
+        # clean-dev cell q95, accumulated as a running mean over bins ≤ t,
+        # maxed over channels (change #1's cycle-max was dominated by null
+        # heavy-tail bins; the paired diagnostic showed even +2.6 onset jumps
+        # never lifted the cycle max). The D5 mean-z² stays as a secondary.
+        cell_q95 = mscoring.cell_q95_normalizer(clean["z2"], M)
+        clean_paths = mscoring.cumulative_channel_max(clean["z2"], M, cell_q95)
+        inj_paths = mscoring.cumulative_channel_max(
+            np.stack(inj_z2), np.stack(inj_masks), cell_q95,
+        )
+        clean_norm_list = [clean_paths[i] for i in range(N)]
+        inj_norm_list = [inj_paths[j] for j in range(len(inj_meta))]
 
         # ---- Threshold calibration on clean dev ---------------------------
         sev1_idx = [j for j, meta in enumerate(inj_meta) if abs(meta["severity"] - 1.0) < 1e-9]
         threshold, per_k = mscoring.choose_threshold(
-            clean_list,
-            [inj_scores[j] for j in sev1_idx],
+            clean_norm_list,
+            [inj_norm_list[j] for j in sev1_idx],
             [inj_meta[j]["onset_bin"] for j in sev1_idx],
             far_target=args.far,
         )
         tau, k = threshold.tau, threshold.k
+
+        # Secondary: D5 mean-z² statistic with its own global calibration
+        # (kept for continuity and comparison).
+        mean_thr, mean_far = mscoring.calibrate_threshold(
+            [clean["mean"][i] for i in range(N)], k=1, far_target=args.far,
+        )
+        mean_det1 = float(np.mean([
+            mscoring.first_alarm_bin(inj_mean[j], mean_thr, 1, inj_meta[j]["onset_bin"]) >= 0
+            for j in sev1_idx
+        ])) if sev1_idx else float("nan")
 
         # ---- Detection metrics --------------------------------------------
         def detect_at(sev: float | None) -> tuple[float, float, list[float]]:
@@ -177,7 +241,7 @@ def main(argv: list[str] | None = None) -> int:
             delays = []
             det = 0
             for j in idx:
-                fb = mscoring.first_alarm_bin(inj_scores[j], tau, k, inj_meta[j]["onset_bin"])
+                fb = mscoring.first_alarm_bin(inj_norm_list[j], tau, k, inj_meta[j]["onset_bin"])
                 if fb >= 0:
                     det += 1
                     delays.append((fb - inj_meta[j]["onset_bin"]) * 15)
@@ -200,14 +264,14 @@ def main(argv: list[str] | None = None) -> int:
         for ptype in mpert.INTERIM_TYPES:
             idx = [j for j in sev1_idx if inj_meta[j]["type"] == ptype]
             if idx:
-                r, dmed, _ = _rate_delay(inj_scores, inj_meta, idx, tau, k)
+                r, dmed, _ = _rate_delay(inj_norm_list, inj_meta, idx, tau, k)
             else:
                 r, dmed = float("nan"), float("nan")
             per_type[ptype] = {"n": len(idx), "detection_rate": r, "median_delay_days": dmed}
         for ph in mpert.PHASES:
             idx = [j for j in sev1_idx if inj_meta[j]["phase"] == ph]
             if idx:
-                r, dmed, _ = _rate_delay(inj_scores, inj_meta, idx, tau, k)
+                r, dmed, _ = _rate_delay(inj_norm_list, inj_meta, idx, tau, k)
             else:
                 r, dmed = float("nan"), float("nan")
             per_phase[ph] = {"n": len(idx), "detection_rate": r, "median_delay_days": dmed}
@@ -217,10 +281,10 @@ def main(argv: list[str] | None = None) -> int:
         for frac in (0.25, 0.50, 0.75):
             cut = max(1, int(np.ceil(frac * T)))
             clean_max = np.array([
-                np.nanmax(np.where(np.isfinite(s[:cut]), s[:cut], -np.inf)) for s in clean_list
+                np.nanmax(np.where(np.isfinite(s[:cut]), s[:cut], -np.inf)) for s in clean_norm_list
             ])
             inj_max = np.array([
-                np.nanmax(np.where(np.isfinite(inj_scores[j][:cut]), inj_scores[j][:cut], -np.inf))
+                np.nanmax(np.where(np.isfinite(inj_norm_list[j][:cut]), inj_norm_list[j][:cut], -np.inf))
                 for j in sev1_idx
             ])
             aucpr[str(frac)] = mscoring.partial_auc_pr(clean_max, inj_max)
@@ -231,11 +295,22 @@ def main(argv: list[str] | None = None) -> int:
         )
         nrmse_valid = nrmse[np.isfinite(nrmse)]
 
+        # Secondary mean-z² statistic summary on clean dev.
+        mean_clean = clean["mean"][np.isfinite(clean["mean"])]
+
         per_seed.append({
             "seed": seed,
             "tau": float(tau), "k": int(k),
             "far_target": args.far, "far_achieved": float(threshold.far_achieved),
             "threshold_per_k": per_k,
+            "alarm_statistic": "trailing3_window_channel_max_z2_cell_q95_normalized",
+            "per_bin_q95": [round(float(v), 6) for row in cell_q95 for v in row],
+            "secondary_mean_statistic": {
+                "tau_k1_far5pct": float(mean_thr),
+                "far_achieved": float(mean_far),
+                "detection_rate_1mad": mean_det1,
+                "clean_q95": float(np.nanpercentile(mean_clean, 95)),
+            },
             "detection_rate_1mad": det1,
             "detection_rate_all_severities": det_all,
             "median_delay_days_1mad": delay1,
@@ -243,13 +318,51 @@ def main(argv: list[str] | None = None) -> int:
             "per_type_1mad": per_type,
             "per_phase_1mad": per_phase,
             "aucpr_partial": aucpr,
-            "nrmse_per_band": {b: float(nrmse[i]) for i, b in enumerate(BAND_NAMES)},
+            "nrmse_per_band": {b: float(nrmse[i]) for i, b in enumerate(BAND_NAMES[:C])},
             "nrmse_mean": float(np.mean(nrmse_valid)) if nrmse_valid.size else float("nan"),
             "params": params,
             "n_clean": int(N), "n_injected": len(inj_meta), "n_injected_1mad": len(sev1_idx),
         })
+
+        # ---- Extended-severity diagnostic (non-protocol, todo OQ6) ---------
+        # The protocol severities (0.5–2×MAD) showed no dynamic range: natural
+        # outlier cycles consume the 5 % FAR budget (methods §24). This block
+        # sweeps 4/6/8×MAD with the SAME frozen (τ, k) to answer "where does
+        # detection start?" — the number the advisor question needs.
+        extended = {}
+        if args.extended_severity and not args.smoke:
+            for sev_ext in (4.0, 6.0, 8.0):
+                rng_e = np.random.default_rng(20_000 + seed * 131 + int(sev_ext))
+                cfg_e = mpert.PerturbationConfig(
+                    types=usable_types, severities=(sev_ext,),
+                    phases=mpert.PHASES, durations=(2, 3, 5),
+                    n_per_stratum=min(N, args.n_per_stratum),
+                )
+                det_e, delays_e, n_e = 0, [], 0
+                for rnd in range(max(2, args.rounds // 2)):
+                    results = mpert.inject_dataset(X, M, norm_scale_or_mad(norm, scorer), cfg_e, rng_e)
+                    Xinj_e = np.stack([r.x for r in results])
+                    Minj_e = np.stack([r.m for r in results])
+                    doy_e = doy[[r.source_row for r in results]]
+                    z2_e = score_cycles(scorer, Xinj_e, Minj_e, doy_e, norm)["z2"]
+                    paths_e = mscoring.cumulative_channel_max(z2_e, Minj_e, cell_q95)
+                    for j, r in enumerate(results):
+                        n_e += 1
+                        fb = mscoring.first_alarm_bin(paths_e[j], tau, k, r.onset_bin)
+                        if fb >= 0:
+                            det_e += 1
+                            delays_e.append((fb - r.onset_bin) * 15)
+                extended[str(sev_ext)] = {
+                    "detection_rate": det_e / max(1, n_e),
+                    "median_delay_days": float(np.median(delays_e)) if delays_e else float("nan"),
+                    "n_injected": n_e,
+                }
+            per_seed[-1]["extended_severity_diagnostic"] = extended
+            print(f"[seed {seed}] extended severity: "
+                  + " ".join(f"{s}xMAD={v['detection_rate']:.2f}" for s, v in extended.items()))
         print(f"[seed {seed}] det@1MAD={det1:.3f} delay={delay1:.0f}d tau={tau:.4f} k={k} "
-              f"far={threshold.far_achieved:.3f} aucpr50={aucpr['0.5']:.3f}")
+              f"far={threshold.far_achieved:.3f} aucpr50={aucpr['0.5']:.3f} "
+              f"(mean-stat secondary det {mean_det1:.3f})")
 
     # ---- Aggregate over seeds ----------------------------------------------
     det_vals = [r["detection_rate_1mad"] for r in per_seed]
@@ -274,6 +387,7 @@ def main(argv: list[str] | None = None) -> int:
             "last": str(sel["end_dates"][-1])[:10],
         },
         "n_dev_cycles": int(N),
+        "channel_count": int(channel_count),
         "n_injected_total": sum(r["n_injected"] for r in per_seed),
         "primary": {
             "name": "detection_rate_at_1MAD",

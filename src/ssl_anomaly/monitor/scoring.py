@@ -24,13 +24,200 @@ class Threshold:
     far_target: float
     far_achieved: float
     calibration_n_cycles: int
+    per_bin_q95: np.ndarray | None = None  # (T,) clean-dev normalizer
+    statistic: str = "channel_max"
 
     def to_dict(self) -> dict:
         return {
             "tau": float(self.tau), "persistence_k": int(self.k),
             "far_target": float(self.far_target), "far_achieved": float(self.far_achieved),
             "calibration_n_cycles": int(self.calibration_n_cycles),
+            "statistic": self.statistic,
+            "per_bin_q95": (None if self.per_bin_q95 is None
+                            else [round(float(v), 6) for v in self.per_bin_q95]),
         }
+
+
+def channel_max_from_pred(
+    pred: np.ndarray,   # (N, T, C) withheld-bin predictions (z-space or raw)
+    truth: np.ndarray,  # (N, T, C)
+    mask: np.ndarray,   # (N, T, C) bool
+) -> np.ndarray:
+    """Per-bin alarm statistic: MAX over observed channels of the squared
+    prediction error.
+
+    Dev-loop change #1 (2026-11-14): the mean-over-channels MSE (D5's L1
+    statistic, still reported for NRMSE) dilutes band-specific anomalies by
+    the channel count — a 1×MAD single-band shift moves the 8-channel mean by
+    only ~0.02–0.1 while the null cycle-max sits at 2.5–6. Anomalies in this
+    catalogue are band-specific by construction (D6), so the alarm statistic
+    is the max-marginal; the mean statistic is kept as a reported secondary.
+    """
+    err = (pred - truth) ** 2
+    err = np.where(mask, err, -np.inf)
+    with np.errstate(all="ignore"):
+        s = err.max(axis=-1)
+    s[~mask.any(axis=-1)] = np.nan
+    return s
+
+
+def per_bin_q95_normalizer(
+    clean_scores: np.ndarray,  # (N, T) alarm statistic on clean cycles
+    *,
+    floor_at_median: bool = True,
+) -> np.ndarray:
+    """Per-bin q95 of the clean-dev scores; bins whose null scale differs by
+    10× (residual variance ≠ across-field dispersion) otherwise make a single
+    global τ meaningless. Floored at the cross-bin median so a badly
+    under-sampled bin cannot become over-permissive."""
+    T = clean_scores.shape[1]
+    q = np.full(T, np.nan)
+    for b in range(T):
+        col = clean_scores[:, b]
+        col = col[np.isfinite(col)]
+        if col.size >= 5:
+            q[b] = float(np.percentile(col, 95))
+    med = float(np.nanmedian(q))
+    if floor_at_median and np.isfinite(med) and med > 0:
+        q = np.where(np.isfinite(q), np.maximum(q, med), med)
+    q = np.where(np.isfinite(q) & (q > 0), q, 1.0)
+    return q
+
+
+def normalize_scores(scores: np.ndarray, per_bin_q95: np.ndarray) -> np.ndarray:
+    """Divide per-bin scores by the clean-dev per-bin q95 (NaN bins stay NaN)."""
+    out = np.array(scores, dtype=np.float64, copy=True)
+    ok = np.isfinite(out)
+    out[ok] = out[ok] / np.broadcast_to(per_bin_q95[None, :], out.shape)[ok]
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Dev-loop change #2: causal cumulative channel-max statistic
+# ---------------------------------------------------------------------------
+def causal_offset_correct(
+    resid: np.ndarray,     # (N, T, C) signed z-space residuals (value − prediction)
+    mask: np.ndarray,      # (N, T, C) bool
+    *,
+    window: int = 6,
+) -> np.ndarray:
+    """Subtract a causal running-median FIELD offset from the residuals.
+
+    The measured null tails are field-level offsets: a field running above or
+    below the across-field train median produces residuals of many MADs at
+    tight-scale (bin, channel) cells, which buries any 1×MAD injection under a
+    5 % cycle-level FAR (diagnostic 2026-11-14: clean S-path q95 ≈ 11.7 while
+    injections move paths by < 0.1). The fix measures deviation from the
+    FIELD's own recent baseline:
+
+        r'(n, b, c) = r(n, b, c) − median{ r(n, b', c) : b' among the last
+                                            `window` observed bins < b }
+
+    This is causal (past bins of the same cycle only), per channel, and
+    standard monitoring practice (BFAST-Monitor-style history model /
+    npphen-style baseline). A persistent anomaly becomes the field's new
+    baseline after ~`window` observed bins — the detector intentionally
+    measures the TRANSITION, not the level. Cells with no past observed bin
+    keep r' = r (nothing to correct against).
+    """
+    N, T, C = resid.shape
+    out = resid.copy()
+    for n in range(N):
+        for c in range(C):
+            obs_bins = np.where(mask[n, :, c])[0]
+            if obs_bins.size == 0:
+                continue
+            vals = resid[n, obs_bins, c]
+            med_running = np.zeros(obs_bins.size)
+            for j in range(obs_bins.size):
+                lo = max(0, j - window)
+                if j == 0:
+                    med_running[j] = 0.0  # no history → no correction
+                    continue
+                med_running[j] = np.median(vals[lo:j])
+            out[n, obs_bins, c] = vals - med_running
+    return out
+
+
+def cell_q95_normalizer(
+    z2_clean: np.ndarray,  # (N, T, C) squared z residuals on clean dev (0 where unobserved)
+    mask: np.ndarray,      # (N, T, C) bool
+    *,
+    min_cells: int = 8,
+) -> np.ndarray:
+    """Per-(bin, channel) q95 of the clean-dev squared z residuals, floored at
+    the per-channel cross-bin median (under-sampled cells must not become
+    over-permissive). Cells without enough observations get the floor."""
+    T, C = z2_clean.shape[1], z2_clean.shape[2]
+    q = np.full((T, C), np.nan)
+    for c in range(C):
+        for b in range(T):
+            vals = z2_clean[:, b, c][mask[:, b, c]]
+            if vals.size >= min_cells:
+                q[b, c] = float(np.percentile(vals, 95))
+        med = np.nanmedian(q[:, c])
+        if np.isfinite(med) and med > 0:
+            col = q[:, c]
+            col[~np.isfinite(col) | (col <= 0)] = med
+            q[:, c] = np.maximum(col, med)
+        else:
+            q[:, c] = 1.0
+    return q
+
+
+def cumulative_channel_max(
+    z2: np.ndarray,     # (N, T, C) squared z residuals (any scale)
+    mask: np.ndarray,   # (N, T, C) bool observation mask
+    q95: np.ndarray,    # (T, C) cell normalizer
+    *,
+    window: int = 3,
+    min_history: int = 3,
+) -> np.ndarray:
+    """Causal trailing-window alarm paths: (N, T) with
+
+        S(n, t) = max_c [ mean over the last `window` bins b ≤ t (calendar
+                          bins; unobserved gaps contribute nothing)
+                          of z²(n, b, c)/q95(b, c) ]
+
+    Why trailing-window (dev-loop change #2, refined): a leave-one-bin-out
+    scorer conditions on injected history, so a persistent shift is absorbed
+    into the prediction after its onset — the detectable signal is the
+    *transition* (onset + the bins before the prediction adapts). An expanding
+    mean dilutes that to noise over ~30 bins (measured: AUC-PR 0.12 <
+    prevalence); a trailing window of `window` bins accumulates the transition
+    while the null stays a mean of ≤ window draws (bounded). The max over
+    channels keeps the detector channel-agnostic without the 8-channel mean
+    dilution. Causal (bins ≤ t) and per-acquisition → platform-compatible.
+
+    ``min_history``: no alarm before `min_history` observed bins total.
+    NaN where not yet scored.
+    """
+    N, T, C = z2.shape
+    zn = z2 / q95[None, :, :]
+    zn = np.where(mask, zn, 0.0)
+    mf = mask.astype(np.float64)
+    csum = np.cumsum(zn, axis=1)          # (N, T, C)
+    ccnt = np.cumsum(mf, axis=1)          # (N, T, C)
+    # Trailing sums over the last `window` observed bins: cs(t) - cs(t - w_obs).
+    # Bins without observations contribute zero to the sums, so a plain fixed
+    # lag of `window` BINS approximates "last ≤ window observed bins" (long
+    # unobserved gaps dilute — the honest causal behaviour: no data, no alarm).
+    lag = min(window, T - 1)
+    trailing_sum = csum - np.concatenate(
+        [np.zeros((N, lag, C)), csum[:, :-lag, :]], axis=1,
+    ) if lag > 0 else csum
+    trailing_cnt = ccnt - np.concatenate(
+        [np.zeros((N, lag, C)), ccnt[:, :-lag, :]], axis=1,
+    ) if lag > 0 else ccnt
+    with np.errstate(invalid="ignore", divide="ignore"):
+        trailing_mean = trailing_sum / np.maximum(trailing_cnt, 1e-9)
+    trailing_mean = np.where(trailing_cnt > 0, trailing_mean, -np.inf)
+    with np.errstate(invalid="ignore"):
+        S = trailing_mean.max(axis=-1)        # (N, T)
+    S[np.isinf(S)] = np.nan
+    total_obs = np.cumsum(mask.any(axis=-1).astype(np.int64), axis=1)
+    S[total_obs < min_history] = np.nan
+    return S
 
 
 def alarm_per_cycle(

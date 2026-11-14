@@ -46,13 +46,24 @@ def test_pairwise_disjoint(manifest: dict) -> None:
 
 
 def test_uncensored_cycles_fully_covered(manifest: dict) -> None:
-    """train+dev+test + cutoff-dropped must equal the uncensored parquet count."""
+    """train+dev+test + cutoff-dropped + audit-excluded = uncensored count."""
     df = msplits.pd.read_parquet(msplits.CYCLES_PARQUET_PATH)
     n_uncensored = int((~df["censored"].astype(bool)).sum())
     assigned = sum(manifest["counts"][s] for s in ("train", "dev", "test"))
     dropped = manifest["n_dropped_train_cutoff"] + manifest["n_dropped_dev_cutoff"]
-    assert assigned + dropped == n_uncensored
+    excluded = manifest["audit_exclusions"]["n_excluded_from_metrics"]
+    assert assigned + dropped + excluded == n_uncensored
     assert manifest["counts"]["monitoring_only"] >= int(df["censored"].astype(bool).sum())
+
+
+def test_audit_exclusions_absent_from_metric_splits(manifest: dict) -> None:
+    """Every exclusion-list cycle sits in monitoring_only (finding-14 D2)."""
+    excl = msplits.load_audit_exclusions()
+    if not excl["keys"]:
+        pytest.skip("no exclusion list yet")
+    for name in ("train", "dev", "test"):
+        leaked = set(excl["keys"]) & set(manifest["cycles"][name])
+        assert not leaked, f"{len(leaked)} audit-excluded cycles leaked into {name}"
 
 
 def test_train_cycles_end_before_test_period(manifest: dict) -> None:
@@ -100,10 +111,13 @@ def test_block_exclusivity(manifest: dict) -> None:
     test_fields = set(manifest["kmeans"]["test_block_fields"])
     dev_fields = set(manifest["kmeans"]["dev_block_fields"])
     assert not (test_fields & dev_fields)
-    # Every block field that HAS uncensored cycles must sit in its split
-    # (block fields with only censored cycles legitimately appear nowhere).
+    # Every block field that HAS uncensored, non-excluded cycles must sit in
+    # its split (block fields whose cycles are all censored or audit-excluded
+    # legitimately appear nowhere).
     df = msplits.pd.read_parquet(msplits.CYCLES_PARQUET_PATH)
-    unc = df[~df["censored"].astype(bool)]
+    excl = set(msplits.load_audit_exclusions()["keys"])
+    df = df.assign(key=df["field"].astype(str) + ":" + df["cycle_id"].astype(str))
+    unc = df[(~df["censored"].astype(bool)) & (~df["key"].isin(excl))]
     has_unc = set(unc["field"].astype(int).unique())
     assert (test_fields & has_unc) <= set(manifest["test_fields"])
     assert (dev_fields & has_unc) <= set(manifest["dev_fields"])

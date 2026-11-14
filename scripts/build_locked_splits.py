@@ -21,8 +21,17 @@ from ssl_anomaly.monitor.splits import (  # noqa: E402
 
 
 def main() -> int:
-    if SPLITS_LOCKED_PATH.exists():
-        print(f"REFUSING: {SPLITS_LOCKED_PATH} already exists (built once, never regenerated).")
+    import argparse
+
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--force", default=None,
+                   help="rebuild an existing manifest; value is recorded as the rebuild reason")
+    args = p.parse_args()
+
+    if SPLITS_LOCKED_PATH.exists() and not args.force:
+        print(f"REFUSING: {SPLITS_LOCKED_PATH} already exists (built once, never regenerated). "
+              "Use --force <reason> for a protocol-corrected rebuild (the old file is kept as "
+              "splits_locked_superseded_<sha>.json).")
         return 1
 
     manifest = build_splits_locked()
@@ -31,6 +40,25 @@ def main() -> int:
     )
     dropped = manifest["n_dropped_train_cutoff"] + manifest["n_dropped_dev_cutoff"]
     drop_frac = dropped / max(1, n_uncensored + dropped)
+
+    if args.force:
+        import shutil
+        old = json.loads(SPLITS_LOCKED_PATH.read_text(encoding="utf-8"))
+        old_sha = old.get("manifest_sha256", "unknown")[:12]
+        superseded = SPLITS_LOCKED_PATH.parent / f"splits_locked_superseded_{old_sha}.json"
+        shutil.copyfile(SPLITS_LOCKED_PATH, superseded)
+        print(f"Superseded manifest archived: {superseded}")
+        manifest["rebuild_of"] = {
+            "superseded_manifest_sha256_prefix": old_sha,
+            "reason": args.force,
+            "note": "downstream artifacts trained on the superseded manifest are invalid "
+                    "and were re-run (models, evaluations, freeze, final test)",
+        }
+        # Re-hash after adding rebuild_of.
+        manifest.pop("manifest_sha256", None)
+        manifest["manifest_sha256"] = __import__(
+            "ssl_anomaly.monitor.splits", fromlist=["manifest_hash"]
+        ).manifest_hash(manifest)
 
     SPLITS_LOCKED_PATH.parent.mkdir(parents=True, exist_ok=True)
     SPLITS_LOCKED_PATH.write_text(json.dumps(manifest, indent=2), encoding="utf-8")

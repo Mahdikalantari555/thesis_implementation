@@ -42,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
     for model in models:
         run_id = f"{model}_{date}" + ("_smoke" if args.smoke else "")
         # --- Train every seed (skip completed checkpoints) ---
-        all_trained = True
+        train_failed = False
         for seed in seeds:
             ckpt_dir = REPO_ROOT / "checkpoints/dev" / run_id
             suffix = "npz" if model == "b1" else "pt"
@@ -55,14 +55,14 @@ def main(argv: list[str] | None = None) -> int:
             if ckpt.exists():
                 print(f"[skip-train] {ckpt.name} exists ({run_id})")
                 continue
-            all_trained = False
             print(f"[train] {' '.join(str(c) for c in cmd)}", flush=True)
             r = subprocess.run(cmd, cwd=REPO_ROOT)
             if r.returncode != 0:
                 failures.append(f"train {model} seed {seed} exit {r.returncode}")
+                train_failed = True
                 break
 
-        if args.skip_eval or not all_trained:
+        if args.skip_eval or train_failed:
             continue
 
         # --- One eval over all seeds (one metrics.json + one dev_log row) ---

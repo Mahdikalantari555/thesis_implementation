@@ -86,23 +86,46 @@ def load_b1(run_id: str, seed: int):
     return b1
 
 
-def score_arrays(scorer, norm, X, M, doy):
+def score_arrays(scorer, norm, X, M, doy, statistic: str = "z2"):
+    """Per-bin statistics for one split.
+
+    statistic="z2": per-(bin, channel) squared z-space residuals (input to the
+    cumulative alarm statistic). statistic="mean": D5 mean-z² (secondary).
+    """
     if isinstance(scorer, mmodels.B1PhaseZCausal):
         N, T, C = X.shape
         scores = np.full((N, T), np.nan)
+        z2 = np.zeros((N, T, C))
         for i in range(N):
+            g = scorer.season_group(doy[i, :, 0]) if scorer.use_doy else np.zeros(T, dtype=np.int64)
+            med = scorer.median[g, np.arange(T)]
+            scale = scorer.scale[g, np.arange(T)]
+            zc = np.where(M[i], (X[i] - med) / scale, 0.0)
+            zc_corr = mscoring.causal_offset_correct(zc[None], M[i][None])[0]
+            z2[i] = zc_corr * zc_corr * M[i]
             scores[i] = scorer.score_cycle(X[i], M[i], doy[i, :, 0])
-        return scores
+        return z2 if statistic == "z2" else scores
     z = minputs.apply_norm(norm, X, M)
-    scores, _ = scorer.loo_batch(z, M, doy)
-    return scores
+    scores, pred_z = scorer.loo_batch(z, M, doy)
+    if statistic == "mean":
+        return scores
+    resid = z - pred_z
+    resid_corr = mscoring.causal_offset_correct(resid, M)
+    return (resid_corr * resid_corr) * M
 
 
-def eval_split(scorer, norm, X, M, doy, tau: float, k: int, rounds: int, seed_base: int):
-    """Clean FAR + injected detection on one split's arrays."""
-    scores = score_arrays(scorer, norm, X, M, doy)
+def eval_split(scorer, norm, X, M, doy, tau: float, k: int, rounds: int, seed_base: int,
+               cell_q95: np.ndarray | None = None):
+    """Clean FAR + injected detection on one split's arrays.
+
+    ``cell_q95`` is the FROZEN dev calibration normalizer (36×8, from the
+    sidecar threshold block); the test split is never re-normalized from its
+    own data.
+    """
+    z2 = score_arrays(scorer, norm, X, M, doy, statistic="z2")
+    paths = mscoring.cumulative_channel_max(z2, M, cell_q95)
     n = X.shape[0]
-    far = float(np.mean([mscoring.alarm_per_cycle(scores[i], tau, k) for i in range(n)]))
+    far = float(np.mean([mscoring.alarm_per_cycle(paths[i], tau, k) for i in range(n)]))
 
     # Perturbation sizing: train stats sidecar for deep runs, B1's own pooled
     # stats otherwise (scale = MAD × 1.4826, identical in K and °C).
@@ -117,11 +140,12 @@ def eval_split(scorer, norm, X, M, doy, tau: float, k: int, rounds: int, seed_ba
         Xinj = np.stack([r.x for r in results])
         Minj = np.stack([r.m for r in results])
         doy_inj = doy[[r.source_row for r in results]]
-        s_inj = score_arrays(scorer, norm, Xinj, Minj, doy_inj)
+        z2_inj = score_arrays(scorer, norm, Xinj, Minj, doy_inj, statistic="z2")
+        paths_inj = mscoring.cumulative_channel_max(z2_inj, Minj, cell_q95)
         for j, r in enumerate(results):
             if abs(r.severity - 1.0) > 1e-9:
                 continue
-            fb = mscoring.first_alarm_bin(s_inj[j], tau, k, r.onset_bin)
+            fb = mscoring.first_alarm_bin(paths_inj[j], tau, k, r.onset_bin)
             det.append(1 if fb >= 0 else 0)
             delays.append((fb - r.onset_bin) * 15 if fb >= 0 else np.nan)
             types.append(r.pert_type)
@@ -135,7 +159,7 @@ def eval_split(scorer, norm, X, M, doy, tau: float, k: int, rounds: int, seed_ba
         "det_flags": det,
         "field_rows": fields_idx,
         "types": types,
-        "clean_scores": scores,
+        "clean_paths": paths,
     }
 
 
@@ -172,6 +196,14 @@ def freeze(args) -> int:
     scorer, norm, params, cfg = load_scorer_and_norm(args.model, seed, args.run_id, device)
     model_id = MODEL_ID_MAP[args.model]
 
+    # Model-card FLOPs: estimated forward MACs per cycle (36-token sequence),
+    # flagged as an estimate — an exact count needs a profiler, which is out
+    # of scope here (task 10.6 requires the field; honest labelling applies).
+    flops_est = {
+        "gru_ae": 2 * params * 36,
+        "masked_transformer": 2 * params * 36,
+    }[args.model]
+
     ckpt_src = mproto.CHECKPOINTS_DEV_DIR / args.run_id / f"{args.model}_seed{seed}.pt"
     ckpt_dst = REPO_ROOT / "checkpoints" / f"{model_id}.pt"
     ckpt_dst.parent.mkdir(parents=True, exist_ok=True)
@@ -189,6 +221,8 @@ def freeze(args) -> int:
         "bin_days": 15,
         "architecture_config": cfg,
         "parameter_count": params,
+        "flops_estimated_macs_forward_per_cycle": int(flops_est),
+        "training_wall_time_s_per_seed": metrics.get("wall_time_s"),
         "use_doy_channels": bool(cfg.get("use_doy", True)),
         "normalization": {
             "median": norm["median"].tolist(),
@@ -242,21 +276,36 @@ def final_test(args) -> int:
     field_ids = sel["field_ids"]
 
     scorer, norm, params, cfg = load_scorer_and_norm(args.model, seed, args.run_id, device)
-    main_res = eval_split(scorer, norm, X, M, doy, tau, k, args.rounds, seed_base=77_000 + seed)
+    if not best.get("per_bin_q95"):
+        raise RuntimeError(
+            "The dev metrics for this run predate alarm-statistic change #2 "
+            "(no per_bin_q95 cells recorded). Re-run scripts/eval_dev.py for the run first."
+        )
+    cell_q95 = np.array(best["per_bin_q95"], dtype=np.float64).reshape(36, 8)
+    main_res = eval_split(scorer, norm, X, M, doy, tau, k, args.rounds,
+                          seed_base=77_000 + seed, cell_q95=cell_q95)
 
-    b1 = load_b1(args.run_id, seed)
-    # B1's τ, k from the same dev calibration (metrics of the b1 run).
-    b1_metrics_path = mproto.DEV_DIR / f"b1_{time.strftime('%Y%m%d')}" / "metrics_b1.json"
-    b1_tau, b1_k = None, 1
+    # B1 lives in its own run dir (b1_<same date suffix as the main run>).
+    # run_id pattern "<model>_<date>" where model itself contains underscores.
+    suffix = args.run_id.rsplit("_", 1)[1] if "_" in args.run_id else time.strftime("%Y%m%d")
+    b1_run_id = f"b1_{suffix}"
+    b1 = load_b1(b1_run_id, seed)
+    # B1's τ, k, normalizer from the same dev calibration (metrics of the b1 run).
+    b1_metrics_path = mproto.DEV_DIR / b1_run_id / "metrics_b1.json"
+    b1_tau, b1_k, b1_cell = None, 1, None
     if b1_metrics_path.exists():
         bm = json.loads(b1_metrics_path.read_text(encoding="utf-8"))
         cand = [r for r in bm["per_seed"] if r["seed"] == seed] or bm["per_seed"]
         b1_tau, b1_k = cand[0]["tau"], cand[0]["k"]
-    if b1_tau is None:
+        if cand[0].get("per_bin_q95"):
+            b1_cell = np.array(cand[0]["per_bin_q95"], dtype=np.float64).reshape(36, 8)
+    if b1_tau is None or b1_cell is None:
         raise FileNotFoundError(
-            f"B1 dev metrics not found at {b1_metrics_path} — evaluate the b1 run first."
+            f"B1 dev metrics (with per_bin_q95 cells) not found at {b1_metrics_path} — "
+            "re-run scripts/eval_dev.py for the b1 run first."
         )
-    b1_res = eval_split(b1, None, X, M, doy, b1_tau, b1_k, args.rounds, seed_base=88_000 + seed)
+    b1_res = eval_split(b1, None, X, M, doy, b1_tau, b1_k, args.rounds,
+                        seed_base=88_000 + seed, cell_q95=b1_cell)
 
     ci_main = bootstrap_ci_fields(main_res["det_flags"], main_res["field_rows"], field_ids,
                                   args.bootstrap, seed=seed)

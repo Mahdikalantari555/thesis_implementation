@@ -108,6 +108,13 @@ class CausalTransformerBlock(nn.Module):
             key_padding_mask=key_padding_mask,
             need_weights=False,
         )
+        # Fully-masked query rows (unobserved/padded positions under a causal
+        # mask) come out of MHA as NaN; torch's masked softmax cannot normalize
+        # an empty key set. Their content is unused padding, but if left as NaN
+        # they contaminate every later query that attends them through
+        # 0 × NaN = NaN in the masked attention weights (measured: NaN spread
+        # from padded rows to observed rows in the next block). Zero them.
+        a = torch.nan_to_num(a, nan=0.0)
         x = x + a
         x = x + self.ff(self.ln2(x))
         return x

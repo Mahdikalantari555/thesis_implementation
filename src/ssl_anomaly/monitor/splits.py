@@ -44,10 +44,28 @@ TEST_PERIOD_START = pd.Timestamp("2024-01-01")
 
 SPLIT_NAMES = ("train", "dev", "test", "monitoring_only")
 
+CYCLE_AUDIT_EXCLUSION_PATH = REPO_ROOT / "reports/cycle_audit/exclusion_cycles.csv"
+
 # Fixed for reproducibility; recorded in the manifest.
 KMEANS_SEED = 13
 N_BLOCKS = 10
 TEST_BLOCK_TARGET_FRAC = 0.10
+
+
+def load_audit_exclusions(path: Path = CYCLE_AUDIT_EXCLUSION_PATH) -> dict:
+    """Load the cycle-audit exclusion list (finding 14 D2 outcome).
+
+    Returns {"keys": ["<field>:<cycle_id>", …], "sha256": …} or empty when the
+    file is absent (the audit has not produced a final list yet).
+    """
+    if not Path(path).exists():
+        return {"keys": [], "sha256": None}
+    df = pd.read_csv(path)
+    keys = [f"{int(r['field'])}:{int(r['cycle_id'])}" for _, r in df.iterrows()]
+    return {
+        "keys": keys,
+        "sha256": hashlib.sha256(Path(path).read_bytes()).hexdigest(),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -139,24 +157,41 @@ def build_splits_locked(
     cycles_parquet_path: Path = CYCLES_PARQUET_PATH,
     n_blocks: int = N_BLOCKS,
     seed: int = KMEANS_SEED,
+    exclusion_path: Path = CYCLE_AUDIT_EXCLUSION_PATH,
 ) -> dict:
-    """Build the locked split manifest (design D2). Does not write anything."""
+    """Build the locked split manifest (design D2 + finding-14 D2 exclusions).
+
+    The cycle-audit exclusion list (segmentation-error cycles: merged/split/
+    out-of-range sanity flags) is applied per the finding-14 outcome: excluded
+    cycles go to monitoring_only (never metrics; display-only).
+    """
     df = pd.read_parquet(cycles_parquet_path)
     blocks_info = compute_contiguous_blocks(farms_path=farms_path, n_blocks=n_blocks, seed=seed)
     picked = pick_blocks(blocks_info)
     test_fields = set(blocks_info["blocks"][f"block_{picked['test']}"])
     dev_fields = set(blocks_info["blocks"][f"block_{picked['dev']}"])
 
+    exclusions = load_audit_exclusions(exclusion_path)
+    excluded_keys = set(exclusions["keys"])
+
     start = BASE_DATE + pd.to_timedelta(df["t_start"].astype("int64"), unit="D")
     end = BASE_DATE + pd.to_timedelta(df["t_end"].astype("int64"), unit="D")
     df = df.assign(start_date=start, end_date=end)
 
     split_of: list[str] = []
+    n_excluded = 0
     n_dropped_train_cutoff = 0
     n_dropped_dev_cutoff = 0
     for _, row in df.iterrows():
         fid = int(row["field"])
         uncensored = not bool(row["censored"])
+        key = f"{fid}:{int(row['cycle_id'])}"
+        # Cycle-audit exclusions (finding 14 D2): segmentation-error cycles
+        # never enter metric splits — monitoring_only, display-only.
+        if key in excluded_keys:
+            split_of.append("monitoring_only")
+            n_excluded += 1
+            continue
         # Censored (in-progress) cycles ALWAYS go to monitoring_only — design
         # D2: "they never enter metrics"; the block rule applies to a field's
         # uncensored cycles only (they carry the tensors).
@@ -219,6 +254,13 @@ def build_splits_locked(
         ),
         "n_dropped_train_cutoff": int(n_dropped_train_cutoff),
         "n_dropped_dev_cutoff": int(n_dropped_dev_cutoff),
+        "audit_exclusions": {
+            "file": str(exclusion_path.name),
+            "sha256": exclusions["sha256"],
+            "n_excluded_from_metrics": int(n_excluded),
+            "source": "finding 14 D2 outcome (cycle audit); segmentation-error cycles "
+                      "-> monitoring_only (display-only, never metrics)",
+        },
         "counts": {},
         "cycles": {},
         "cycle_file_hashes": cycle_file_hashes(cycles_parquet_path=cycles_parquet_path),
