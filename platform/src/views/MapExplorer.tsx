@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from "recharts";
 import MapView from "../components/MapView";
-import { Panel, Badge, Label, Select, PipelineDataBadge, EmptyState, anomalyColor, fmtObs, ProvenanceChip, ProvenanceSummary, LegacyPayloadNotice } from "../components/ui";
+import { Panel, Badge, Label, Select, PipelineDataBadge, EmptyState, anomalyColor, fmtObs, ProvenanceChip, ProvenanceSummary, LegacyPayloadNotice, StressFlagChip, SplitTagChip } from "../components/ui";
 import { useAnalysis, DEFAULT_DATE_IDX } from "../context/AnalysisContext";
-import { FIELDS, MODELS, INDICATORS, getSeries, fieldById, DATES, LAST_IDX, ANOMALY_THRESHOLD, mean, COVERAGE, dateAt, clampIdx, isLegacyPayload, tickInterval } from "../data/data";
+import { FIELDS, MODELS, INDICATORS, getSeries, fieldById, DATES, LAST_IDX, ANOMALY_THRESHOLD, mean, COVERAGE, dateAt, clampIdx, isLegacyPayload, tickInterval, ladderRungFor } from "../data/data";
 import { useLocale, useT } from "../i18n";
 import scenesIndexData from "../data/scenes_index.json";
 import { Eye, EyeOff, Search, GitCompareArrows } from "lucide-react";
@@ -42,6 +42,9 @@ export default function MapExplorer() {
   const safeDateIdx = clampIdx(dateIdx);
   const safeCompareIdx = clampIdx(compareIdx);
   const obs = series[safeDateIdx];
+  // Validation-ladder rung of the main checkpoint backing the stress flag
+  // (per-field payload value; null without a checkpoint — never claimed).
+  const ladderRung = ladderRungFor(selectedField);
 
   // One date control drives both layers: the observation-date slider selects
   // the field series point, and the raster overlay shows that observation's
@@ -338,6 +341,27 @@ export default function MapExplorer() {
               <div className="text-[13px] font-semibold">{obs ? <bdi>{fmtObs(obs.cwsi, 2)}</bdi> : "—"}</div>
             </div>
           </div>
+          {/* v5: causal stress flag + split-membership tag for THIS observation.
+              The flag is "suspected stress (anomaly)" — honest naming until L4
+              validation — and a train-split observation is in-sample: its
+              scores/flag are optimistic and must be read as such. */}
+          {obs && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] text-slate-500">{t("stressFlag.label")}</span>
+              <StressFlagChip
+                flag={obs.stressFlag}
+                title={
+                  obs.stressFlagModel
+                    ? `${t("stressFlag.label")}: ${obs.stressFlagModel}${ladderRung ? ` · ${ladderRung}` : ""}`
+                    : undefined
+                }
+              />
+              {obs.stressFlag === "suspected_stress" && ladderRung && (
+                <span className="text-[9px] font-mono text-slate-400" title="ladder rung">{ladderRung}</span>
+              )}
+              <SplitTagChip split={obs.split} />
+            </div>
+          )}
           {obs && obs.stalenessReason && (
             <div className="mt-2 text-[11px] border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 p-2 text-amber-800 dark:text-amber-200">
               {t("map.inspector.stale", { reason: obs.stalenessReason, sample: obs.sampleDate, acquired: obs.acquisitionDate || "" })}

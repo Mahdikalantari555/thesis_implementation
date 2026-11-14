@@ -92,6 +92,9 @@ export const en = {
   "model.masked_transformer.name": "SSL Masked Transformer",
   "model.masked_transformer.type": "Transformer",
   "model.masked_transformer.desc": "Masked temporal transformer (Presto/MAE)",
+  "model.gru_ae.name": "GRU Autoencoder",
+  "model.gru_ae.type": "Reconstruction SSL",
+  "model.gru_ae.desc": "Causal GRU reconstruction autoencoder (masked bins)",
   "model.sts_net.name": "STS-Net 3D-CAE",
   "model.sts_net.type": "Spatio-Temporal",
   "model.sts_net.desc": "Spatio-temporal convolutional autoencoder (Dalal et al. 2026)",
@@ -132,6 +135,17 @@ export const en = {
   "field.code": "Field",
   "field.selected": "selected",
   "field.missing": "(missing)",
+
+  // ── Stress flag + split tags (contract v5) ───────────────────────────────
+  "stressFlag.label": "Stress flag",
+  "stressFlag.normal": "Normal",
+  "stressFlag.suspected": "Suspected stress",
+  "stressFlag.noData": "No data",
+  "stressFlag.unavailable": "Unavailable",
+  "split.train": "Train (in-sample)",
+  "split.dev": "Dev",
+  "split.test": "Test",
+  "split.monitoring": "Monitoring",
 
   // ── Overview ─────────────────────────────────────────────────────────────
   "overview.stat.fields": "Fields",

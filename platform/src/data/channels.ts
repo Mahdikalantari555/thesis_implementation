@@ -29,7 +29,7 @@ export const CHANNELS: ChannelSpec[] = [
   { name: 'eta', unit: 'mm/d', physicalRange: [0, 8], provenanceDefault: 'proxy', required: true, kind: 'water', derivedFrom: 'ndvi' },
   { name: 'lst', unit: '°C', physicalRange: [15, 55], provenanceDefault: 'observed', required: false, kind: 'thermal' },
   { name: 'precip', unit: 'mm', physicalRange: [0, 300], provenanceDefault: 'modelled', required: true, kind: 'weather' },
-  { name: 'temp', unit: '°C', physicalRange: [10, 48], provenanceDefault: 'modelled', required: true, kind: 'weather' },
+  { name: 'temp', unit: '°C', physicalRange: [0, 55], provenanceDefault: 'modelled', required: true, kind: 'weather' },
 ];
 
 export const channelByName = (name: string): ChannelSpec | undefined =>
@@ -39,32 +39,32 @@ export const CHANNEL_NAMES = CHANNELS.map(c => c.name);
 
 export type ChannelId = (typeof CHANNELS)[number]['name'];
 
-// ── Score registry (contract v3) ─────────────────────────────────────────────
+// ── Score registry (contract v5) ─────────────────────────────────────────────
 // Provenance of an anomaly score for one observation: "model" when computed by
-// a loaded checkpoint, "proxy" when it fell back to the CWSI rule (formula id
-// recorded), "absent" when no score exists (stale sample or failed checkpoint).
+// a loaded checkpoint, "absent" when no score exists (missing/failed checkpoint
+// or unmapped acquisition). Contract v5 removed the CWSI proxy fallback — no
+// observation ever carries "proxy"; the baseline slots keep "proxy" only as
+// their registry kind (they would need a non-CWSI formula artifact to score).
 export type ScoreProvenanceState = 'model' | 'proxy' | 'absent';
 
-/** Formula id recorded on observations scored by the CWSI proxy rule. */
-export const PROXY_SCORE_FORMULA_ID = 'cwsi_affine_v1';
-
-/** Contract version recorded on every exported farm record (v3: score provenance). */
-export const CONTRACT_VERSION = 4;
+/** Contract version recorded on every exported farm record (v5: stress flag). */
+export const CONTRACT_VERSION = 5;
 
 export interface ScoreSpec {
   name: string;
   provenanceDefault: ScoreProvenanceState;
-  /** Checkpoint stem under checkpoints/ when the score is model-backed. */
+  /** Checkpoint stem under checkpoints/ (pt + json sidecar) when model-backed. */
   checkpoint?: string;
 }
 
-// Order mirrors the platform MODELS list (mock.ts); mirror of
+// Order mirrors the platform MODELS list (data.ts); mirror of
 // scripts/platform_channels.py::SCORE_REGISTRY.
 export const SCORES: ScoreSpec[] = [
   { name: 'b0_calendar', provenanceDefault: 'proxy' },
   { name: 'b1_dsh', provenanceDefault: 'proxy' },
   { name: 'b1_cusum', provenanceDefault: 'proxy' },
-  { name: 'masked_transformer', provenanceDefault: 'proxy' },
+  { name: 'masked_transformer', provenanceDefault: 'model', checkpoint: 'masked_transformer_main' },
+  { name: 'gru_ae', provenanceDefault: 'model', checkpoint: 'gru_ae_main' },
   { name: 'sts_net', provenanceDefault: 'model', checkpoint: 'sts_net_490' },
   { name: 'tiny_cnn_mamba', provenanceDefault: 'model', checkpoint: 'tiny_cnn_mamba_490' },
   { name: 'time2agri', provenanceDefault: 'model', checkpoint: 'time2agri_490' },

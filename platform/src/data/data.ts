@@ -19,6 +19,7 @@ export type ModelId =
   | 'b1_dsh'
   | 'b1_cusum'
   | 'masked_transformer'
+  | 'gru_ae'
   | 'sts_net'
   | 'tiny_cnn_mamba'
   | 'time2agri';
@@ -51,6 +52,7 @@ export const MODELS: ModelDef[] = [
   { id: 'b1_dsh', name: 'B1 Phenological DSH', short: 'B1-DSH', color: '#0f766e', typeKey: 'model.b1_dsh.type', descKey: 'model.b1_dsh.desc' },
   { id: 'b1_cusum', name: 'B1 CUSUM Filter', short: 'B1-CUSUM', color: '#0284c7', typeKey: 'model.b1_cusum.type', descKey: 'model.b1_cusum.desc' },
   { id: 'masked_transformer', name: 'SSL Masked Transformer', short: 'Masked-TF', color: '#7c3aed', typeKey: 'model.masked_transformer.type', descKey: 'model.masked_transformer.desc' },
+  { id: 'gru_ae', name: 'GRU Autoencoder', short: 'GRU-AE', color: '#65a30d', typeKey: 'model.gru_ae.type', descKey: 'model.gru_ae.desc' },
   { id: 'sts_net', name: 'STS-Net 3D-CAE', short: 'STS-Net', color: '#d97706', typeKey: 'model.sts_net.type', descKey: 'model.sts_net.desc' },
   { id: 'tiny_cnn_mamba', name: 'Tiny-CNN-Mamba', short: 'CNN-Mamba', color: '#2563eb', typeKey: 'model.tiny_cnn_mamba.type', descKey: 'model.tiny_cnn_mamba.desc' },
   { id: 'time2agri', name: 'Time2Agri Contrastive', short: 'Time2Agri', color: '#be123c', typeKey: 'model.time2agri.type', descKey: 'model.time2agri.desc' },
@@ -154,7 +156,8 @@ export const FIELDS: Field[] = ((farmsKhuzestanData ?? []) as unknown as RawFarm
 
 export const hasFields = FIELDS.length > 0;
 
-/** True when any field was loaded without contractVersion >= 3 (legacy payload). */
+/** True when any field was loaded without contractVersion >= 4 (legacy payload;
+ * v5 farm records carry the same version number as the series payload). */
 export const isLegacyPayload = !FIELDS.length
   ? false
   : (farmsKhuzestanData as any[]).some(f => (f?.contractVersion ?? 0) < 4);
@@ -174,16 +177,35 @@ export const fieldById = (id: string): Field => FIELDS.find(f => f.id === id) ??
 
 
 // ── Time axis: single source of truth ────────────────────────────────────────
-// The axis is EVERY acquisition date of the archive (contract v4 payload,
+// The axis is EVERY acquisition date of the archive (contract v4/v5 payload,
 // first row -> last row); every slider, chart and label derives from it.
-const KHU_SERIES_V4 = JSON.parse(khuSeriesRaw) as V4Payload;
+const KHU_SERIES = JSON.parse(khuSeriesRaw) as SeriesPayload;
 
+/**
+ * Causal stress flag per observation (contract v5): "normal" /
+ * "suspected_stress" / "no_data" from the main checkpoint's raw bin scores
+ * vs the sidecar tau with persistence k; `null` = a model-backed flag exists
+ * in the contract but is unavailable (no main checkpoint loaded);
+ * `undefined` = v4 payload (flag concept absent → UI shows "unavailable").
+ */
+export type StressFlag = 'normal' | 'suspected_stress' | 'no_data';
 
-function decodeFieldV4(payload: V4Payload, fid: string): Obs[] {
-  const f = payload.fields[fid];
+/** Split membership tag per observation (contract v5). Train cycles are
+ * in-sample: their scores/flags are optimistic and must be read as such. */
+export type SplitTag = 'train' | 'dev' | 'test' | 'monitoring';
+
+function decodeField(payload: SeriesPayload, fid: string): Obs[] {
+  const f = payload.fields[fid] as SeriesFieldEntry | undefined;
   if (!f) return [];
   const n = payload.axis.length;
   const channelOrder = CHANNEL_NAMES;
+  // v5 payloads carry stressFlag/stressFlagModel/split; v4 payloads do not
+  // (the fields stay undefined → the UI shows the flag as unavailable).
+  const isV5 = payload.contractVersion >= 5;
+  const stressArr = isV5 && f.stressFlag ? expandRle(f.stressFlag as [string, number][], n) : null;
+  const stressModelArr = isV5 && f.stressFlagModel ? expandRle(f.stressFlagModel as [string, number][], n) : null;
+  const splitArr = isV5 && f.split ? expandRle(f.split as [string, number][], n) : null;
+  const scoreFormulas = isV5 ? (payload as V5Payload).scoreFormulas : undefined;
   {
     const chanProv: Record<string, string[]> = {};
     for (const c of channelOrder) chanProv[c] = expandRle(f.channelProvenance[c], n);
@@ -200,10 +222,16 @@ function decodeFieldV4(payload: V4Payload, fid: string): Obs[] {
       for (const k of SCORE_KEYS) {
         scores[k] = f.scores[k][i];
         const st = scoreProv[k][i];
-        scoreProvMap[k] = (st === "model" || st === "proxy" || st === "absent" ? st : "proxy") as ScoreProvenanceState;
-        // Derived from provenance exactly as the exporter records it (v3 rule):
-        // model -> "<model>_490:bin_mse_1mexp", proxy -> cwsi_affine_v1, absent -> null.
-        scoreFormula[k] = st === "model" ? `${payload.checkpoints[k] ?? k}:bin_mse_1mexp` : st === "proxy" ? payload.proxyFormulaId : null;
+        scoreProvMap[k] = (st === "model" || st === "proxy" || st === "absent" ? st : "absent") as ScoreProvenanceState;
+        // Derived from provenance exactly as the exporter records it:
+        // v5 model -> payload.scoreFormulas[k] ("<stem>:causal_bin_mse" for the
+        // causal main checkpoints, "<stem>_490:bin_mse_1mexp" for legacy),
+        // v4 model -> "<model>_490:bin_mse_1mexp", v4 proxy -> proxyFormulaId,
+        // absent -> null.
+        scoreFormula[k] =
+          st === "model"
+            ? scoreFormulas?.[k] ?? `${payload.checkpoints[k] ?? k}:bin_mse_1mexp`
+            : st === "proxy" ? (payload as V4Payload).proxyFormulaId : null;
       }
       const channels = {} as Record<string, number | null>;
       for (const c of channelOrder) channels[c] = f.channels[c][i];
@@ -231,13 +259,16 @@ function decodeFieldV4(payload: V4Payload, fid: string): Obs[] {
         scoreFormulaId: scoreFormula,
         provenance,
         scoreCollinearity: payload.collinearity,
+        stressFlag: stressArr ? (stressArr[i] as StressFlag | null) : undefined,
+        stressFlagModel: stressModelArr ? (stressModelArr[i] as string | null) : undefined,
+        split: splitArr ? (splitArr[i] as SplitTag) : undefined,
       });
     }
     return obs;
   }
 }
 
-export const DATES: string[] = KHU_SERIES_V4.axis;
+export const DATES: string[] = KHU_SERIES.axis;
 export const N = DATES.length;
 /** Last valid index for the shared date axis (0 when empty — never `NaN`). */
 export const LAST_IDX = Math.max(0, N - 1);
@@ -249,23 +280,24 @@ export const clampIdx = (i: number) => Math.max(0, Math.min(LAST_IDX, Math.round
 export const dateAt = (i: number) => DATES[clampIdx(i)] ?? "";
 
 // ── Data provenance ──────────────────────────────────────────────────────────
-// `series_khuzestan.json` (contract v4) samples EVERY Landsat/METRIC
-// acquisition date. STS-Net / Tiny-CNN-Mamba / Time2Agri scores come from
-// trained checkpoints where a cycle bin exists, everything else from the CWSI
-// proxy rule (see scripts/load_model_checkpoints.py and BUG-23).
-// `scoresAreProxy` is derived from the payload so the pipeline-output
-// labelling stays honest.
-const payloadHasModelScores = Object.values(KHU_SERIES_V4.fields).some(f =>
+// `series_khuzestan.json` (contract v5) samples EVERY Landsat/METRIC
+// acquisition date. Scores come ONLY from trained checkpoints where the
+// acquisition maps to a cycle bin (v5 removed the CWSI proxy fallback — see
+// scripts/load_model_checkpoints.py and spec model-output-ingest); everything
+// else is null + "absent". `scoresAreProxy` is derived from the payload so the
+// pipeline-output labelling stays honest.
+const payloadHasModelScores = Object.values(KHU_SERIES.fields).some(f =>
   Object.values(f.scoreProvenance).some(runs => runs.some(([state]) => state === "model")),
 );
 export const DATA_PROVENANCE = {
   /** Series actually rendered by the views. */
   source: "series_khuzestan.json",
   exporter: "scripts/export_platform_data.py",
-  /** True while anomaly scores are proxy formulas rather than model inference. */
+  /** True while NO observation carries a model-backed score (v5: slots are
+   * absent, not proxy — there is no proxy fallback anymore). */
   scoresAreProxy: !payloadHasModelScores,
   /** Number of fields that carry a time series. */
-  fieldCount: Object.keys(KHU_SERIES_V4.fields).length,
+  fieldCount: Object.keys(KHU_SERIES.fields).length,
   /** Observation dates represented by the shared axis. */
   months: N,
   /** First and last date on the axis (ISO). */
@@ -306,12 +338,20 @@ export interface Obs {
   /** Null when no score exists (no acquisition / absent provenance) — never a
    * substituted constant. Charts skip null points. */
   scores: Record<ModelId, number | null>;
-  /** Per-score provenance (contract v3): "model" | "proxy" | "absent". */
+  /** Per-score provenance: "model" | "proxy" | "absent" (v5 payloads only
+   * ever use model|absent — the proxy fallback was removed). */
   scoreProvenance: Record<ModelId, ScoreProvenanceState> | null;
-  /** Per-score formula id: checkpoint id for "model", "cwsi_affine_v1" for proxy. */
+  /** Per-score formula id: checkpoint formula for "model", null otherwise. */
   scoreFormulaId: Record<ModelId, string | null> | null;
   provenance: ObsProvenance | null;
   scoreCollinearity: string | null;
+  /** Causal stress flag (v5): normal | suspected_stress | no_data; null when
+   * no main checkpoint backs the flag; undefined on v4 payloads. */
+  stressFlag?: StressFlag | null;
+  /** Checkpoint id that produced the stress flag (null when unavailable). */
+  stressFlagModel?: string | null;
+  /** Split membership of the observation's cycle (v5); undefined on v4. */
+  split?: SplitTag | null;
 }
 
 const SCORE_KEYS = MODELS.map(m => m.id);
@@ -334,6 +374,48 @@ interface V4Payload {
     channelProvenance: Record<string, [string, number][]>;
     scoreProvenance: Record<string, [string, number][]>;
   }>;
+}
+
+/**
+ * Contract v5 payload: extends v4 with the causal stress-flag fields —
+ * `stressFlag` / `stressFlagModel` / `split` per observation (string-RLE like
+ * the provenance series; null values RLE-encode as `[null, count]`) and
+ * `ladderRung` per field from the main checkpoint sidecar. v5 has no
+ * `proxyFormulaId`: no observation carries the removed CWSI proxy formula.
+ */
+interface V5Payload {
+  contractVersion: number;
+  axis: string[];
+  collinearity: string;
+  checkpoints: Record<string, string>;
+  /** Per score key: the formula id its "model"-provenance observations carry. */
+  scoreFormulas: Record<string, string>;
+  fields: Record<string, {
+    channels: Record<string, (number | null)[]>;
+    scores: Record<string, (number | null)[]>;
+    channelProvenance: Record<string, [string, number][]>;
+    scoreProvenance: Record<string, [string, number][]>;
+    stressFlag: [string | null, number][];
+    stressFlagModel: [string | null, number][];
+    split: [string, number][];
+    ladderRung: string | null;
+  }>;
+}
+
+type SeriesPayload = V4Payload | V5Payload;
+
+/** Field entry as read from either payload version (v5 fields are optional). */
+type SeriesFieldEntry = V4Payload['fields'][string] & Partial<V5Payload['fields'][string]>;
+
+/**
+ * Ladder rung of the main checkpoint sidecar for a field ("L1".."L5"; null
+ * when no main checkpoint backs the payload or the field). Validation-ladder
+ * semantics: every claim the UI makes about stress flags is bounded by this
+ * rung (v5 spec: honest naming until L4).
+ */
+export function ladderRungFor(fieldId: string): string | null {
+  const f = KHU_SERIES.fields[fieldId] as V5Payload['fields'][string] | undefined;
+  return f && 'ladderRung' in f ? (f.ladderRung ?? null) : null;
 }
 
 /** Expand `[state, count]` runs into a per-index state array. */
@@ -373,8 +455,8 @@ const fieldCache = new Map<string, Obs[]>();
 
 /** Fields that actually carry a time series — data-driven replacement for "48 fields" labels. */
 // A field carries a series iff the payload contains it — checked on the raw
-// v4 payload so startup does no per-field decoding at all.
-export const FIELDS_WITH_SERIES: Field[] = FIELDS.filter(f => KHU_SERIES_V4.fields[f.id] !== undefined);
+// parsed payload so startup does no per-field decoding at all.
+export const FIELDS_WITH_SERIES: Field[] = FIELDS.filter(f => KHU_SERIES.fields[f.id] !== undefined);
 
 /**
  * Time series for a field, read from the exported `series_khuzestan.json`.
@@ -384,9 +466,9 @@ export const FIELDS_WITH_SERIES: Field[] = FIELDS.filter(f => KHU_SERIES_V4.fiel
 export function getSeries(fieldId: string): Obs[] {
   const cached = fieldCache.get(fieldId);
   if (cached) return cached;
-  // Lazy per-field decode of the compact v4 payload: a field costs ~1 ms, so
+  // Lazy per-field decode of the compact payload: a field costs ~1 ms, so
   // startup only parses the JSON (no 263k-object construction).
-  const obs = decodeFieldV4(KHU_SERIES_V4, fieldId);
+  const obs = decodeField(KHU_SERIES, fieldId);
   fieldCache.set(fieldId, obs);
   return obs;
 }

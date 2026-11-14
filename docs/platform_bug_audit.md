@@ -307,6 +307,16 @@ tokenizer, not cycle inputs) → proxy formula labelled `proxy`; artifact fails 
 `--no-models` forces the all-proxy path for deterministic tests. `DATA_PROVENANCE.
 scoresAreProxy` is now derived from the payload instead of hard-coded.
 
+**v5 update (change `train-and-finalize-main-architecture`, contract v5):** the proxy
+fallback is fully removed — every score slot resolves `model` or `absent`; the CWSI
+formula `cwsi_affine_v1` appears nowhere in the payload. `masked_transformer`/`gru_ae`
+score causally from `masked_transformer_main`/`gru_ae_main` (+ JSON sidecars) via
+`scripts/load_model_checkpoints.py::LoadedCausalModel` on masked (never-interpolated)
+cycle tensors (`scripts/cycle_inputs.py::build_field_cycles_masked`), and the payload
+adds `stressFlag`/`stressFlagModel`/`split` per observation and `ladderRung` per field;
+without a main checkpoint the flag is `null` everywhere (never fabricated). Current
+provenance semantics: `scripts/platform_channels.py::SCORE_REGISTRY`.
+
 ### BUG-24 — Farm metadata collapse (P1, Fixed — wire-platform-to-real-data)
 
 All 490 records used to share synthesized labels (`farm = "Khuzestan Unit L08"`,

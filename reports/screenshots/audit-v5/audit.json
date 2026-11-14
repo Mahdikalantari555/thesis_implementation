@@ -1,0 +1,190 @@
+{
+  "startedAt": "2026-11-14T11:58:45.603Z",
+  "locale": "en",
+  "tileServerExpectedUp": true,
+  "views": {
+    "overview": {
+      "console": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "screenshot": "01_overview.png"
+    },
+    "map": {
+      "console": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "screenshot": "02_geospatial-explorer.png"
+    },
+    "temporal": {
+      "console": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "screenshot": "03_temporal-analysis.png"
+    },
+    "spectral": {
+      "console": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "screenshot": "04_spectral-temporal.png"
+    },
+    "validation": {
+      "console": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "screenshot": "05_validation-lab.png"
+    },
+    "comparison": {
+      "console": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "screenshot": "06_model-comparison.png"
+    },
+    "spatial": {
+      "console": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "screenshot": "07_spatial-analysis.png"
+    },
+    "reports": {
+      "console": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "screenshot": "08_reports-experiments.png"
+    }
+  },
+  "tileScenario": {
+    "rgbTiles": 12,
+    "ndviTiles": 9,
+    "tileResponses": [
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2596/1676.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2597/1675.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2596/1675.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2597/1677.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2597/1676.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2596/1677.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2598/1677.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2595/1677.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2598/1676.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2595/1676.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2595/1675.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2598/1675.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2599/1676.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2599/1677.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2599/1675.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2597/1674.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2598/1674.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2596/1674.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2599/1674.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/ndvi/12/2597/1676.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/ndvi/12/2597/1675.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/ndvi/12/2598/1676.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/ndvi/12/2597/1677.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/ndvi/12/2596/1676.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/ndvi/12/2596/1675.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/ndvi/12/2596/1677.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/ndvi/12/2598/1675.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/ndvi/12/2598/1677.png",
+        "status": 200
+      }
+    ],
+    "tileFailures": [],
+    "opacityAfterRgb": 0.7,
+    "opacityAfterNdvi": 0.7,
+    "pans": 2,
+    "ok": true,
+    "drivenByDateSlider": true,
+    "opacityAfterPan": 0.7,
+    "hideFields": {
+      "clicked": true,
+      "polygonPaths": 0,
+      "rasterTiles": 9,
+      "basemapTiles": 19
+    },
+    "tileResponsesOk": true,
+    "hideFieldsOk": true
+  },
+  "pass": true,
+  "finishedAt": "2026-11-14T11:59:27.041Z"
+}

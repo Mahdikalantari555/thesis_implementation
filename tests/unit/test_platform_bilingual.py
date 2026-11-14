@@ -202,11 +202,11 @@ def test_selected_field_default_is_guarded():
 
 
 def test_exported_series_matches_platform_expectations():
-    """The exporter and the platform must agree on the payload shape (contract v4)."""
+    """The exporter and the platform must agree on the payload shape (contract v5)."""
     series = json.loads((SRC / "data" / "series_khuzestan.json").read_text(encoding="utf-8"))
     farms = json.loads((SRC / "data" / "farms_khuzestan.json").read_text(encoding="utf-8"))
 
-    assert series["contractVersion"] == 4
+    assert series["contractVersion"] == 5
     fields = series["fields"]
     assert len(fields) == len(farms) > 0, "every farm needs a time series"
     required = {"ndvi", "evi", "savi", "ndmi", "tvdi", "cwsi", "eta", "precip", "temp", "lst"}

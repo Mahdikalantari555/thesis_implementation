@@ -46,12 +46,19 @@ require new views or contract changes.
 - Chart x-axes keep ISO `YYYY-MM` in both locales; registry Persian strings (اداره…, تولید دوم) pass through verbatim.
 - Basemap tiles need network access; the app itself is offline.
 - `masked_transformer` has no checkpoint → stays `proxy` with formula id (honest labelling).
+  *(Superseded by contract v5: `masked_transformer`/`gru_ae` are wired to the causal main
+  checkpoints `masked_transformer_main`/`gru_ae_main` and are `absent` (null score) without
+  the artifacts; the CWSI proxy formula no longer exists for any score slot — see
+  `docs/platform_score_methods.md` §4.3.)*
 
 ## Researcher view (what a committee would ask)
 
 1. "Which model produced these scores?" → after A1, chips answer per score:
    `model` (+ checkpoint id) / `proxy` (+ formula id) / `absent`. Baselines
    B0/B1 are honestly labelled formula-based.
+   *(v5 update: scores are `model` or `absent` only — the proxy state was removed; the
+   stress-flag chip additionally names the checkpoint and the observation's split, with
+   train observations tagged "Train (in-sample)".)*
 2. "Is the weather real?" → ERA5 reanalysis joined on acquisition date (A3).
 3. "Are the field names real?" → registry pass-through (A2), Persian intact.
 4. "What does '—' mean?" → `absent` chip: no acquisition/registry value; never

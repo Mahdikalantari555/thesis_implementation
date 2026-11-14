@@ -1,23 +1,38 @@
 """Discover and load trained anomaly-detector checkpoints for the platform exporter.
 
-The literature checkpoints saved by ``scripts/train_literature_checkpoints.py``
-are ``torch.save`` dicts with the keys ``architecture``/``state_dict``/``center``
-/``scale``/``shape``/``n_bands`` (the MaskedSSL wrapper's normalization stats and
-token shape). This module reconstructs each model from those artifacts and
-exposes a ``LoadedModel.score_cycles`` interface used by
-``scripts/export_platform_data.py`` to produce real anomaly scores.
+Two checkpoint families (contract v5):
 
-Per-score provenance (see ``platform_channels.SCORE_REGISTRY``):
-  - checkpoint found and reconstructed  -> provenance ``"model"``
-  - no artifact for the score key       -> proxy formula (``"proxy"``)
-  - artifact present but load failed    -> ``"absent"`` (never a faked score)
+* **Causal main checkpoints** (``checkpoints/masked_transformer_main.pt`` +
+  ``.json`` sidecar, ``gru_ae_main.pt`` + ``.json``) written by
+  ``scripts/train_main.py`` (format ``causal_monitor_v1``) and frozen by
+  ``scripts/freeze_main_model.py``. They are reconstructed with
+  ``ssl_anomaly.monitor.models.build_model`` + ``DeepCausalScorer`` and score
+  MASKED (never-interpolated) cycle tensors causally; the sidecar carries the
+  robust normalization (median/scale per phase bin x band), the calibrated
+  tau/persistence-k threshold and the ladder rung. These load into
+  :class:`LoadedCausalModel`, whose ``score_cycles`` returns RAW z-space
+  per-bin scores (no squash — thresholds live on the raw axis).
+
+* **Legacy literature checkpoints** (``sts_net_490.pt``, ``tiny_cnn_mamba_490.pt``,
+  ``time2agri_490.pt``) saved by ``scripts/train_literature_checkpoints.py``
+  with keys ``architecture``/``state_dict``/``center``/``scale``/``shape``/
+  ``n_bands``. They load into :class:`LoadedModel` (MaskedSSL wrapper) and
+  score the interpolated cycle tensors exactly as before.
+
+Per-score provenance (see ``platform_channels.SCORE_REGISTRY``), contract v5:
+  - checkpoint found and reconstructed      -> provenance ``"model"``
+  - no artifact (or sidecar missing)        -> slot ``"absent"`` (score null)
+  - artifact present but load failed        -> ``"absent"`` (never a faked score)
+There is NO proxy fallback in v5: the CWSI proxy formula was removed
+(circular with the model inputs; spec model-output-ingest).
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -30,7 +45,7 @@ if str(ROOT_DIR / "src") not in sys.path:
 
 import torch
 
-from platform_channels import SCORE_CHECKPOINTS, SCORE_NAMES  # type: ignore
+from platform_channels import SCORE_CHECKPOINTS  # type: ignore
 
 log = logging.getLogger("load_model_checkpoints")
 
@@ -41,10 +56,41 @@ DEFAULT_CHECKPOINT_DIR = ROOT_DIR / "checkpoints"
 CAUSAL = True
 BATCH_SIZE = 32
 
+# Stems of the causal main checkpoints (format causal_monitor_v1, scored via
+# ssl_anomaly.monitor.models.DeepCausalScorer on masked cycle tensors, raw
+# z-space scores). Formula id "<stem>:causal_bin_mse".
+CAUSAL_MODEL_STEMS = {"masked_transformer_main", "gru_ae_main"}
+
+CAUSAL_FORMULA_SUFFIX = "causal_bin_mse"
+LEGACY_FORMULA_SUFFIX = "bin_mse_1mexp"
+
+
+def is_causal_stem(stem: str) -> bool:
+    """True when the checkpoint stem is a causal main model (v5 scoring path)."""
+    return stem in CAUSAL_MODEL_STEMS
+
+
+def causal_formula_id(stem: str) -> str:
+    """Formula id for observations scored by a causal main checkpoint."""
+    return f"{stem}:{CAUSAL_FORMULA_SUFFIX}"
+
 
 def model_formula_id(model_id: str) -> str:
-    """Formula id recorded on observations scored by a loaded checkpoint."""
-    return f"{model_id}_490:bin_mse_1mexp"
+    """Formula id recorded on observations scored by a loaded LEGACY checkpoint."""
+    return f"{model_id}_490:{LEGACY_FORMULA_SUFFIX}"
+
+
+def score_formula_id(score_key: str) -> Optional[str]:
+    """Formula id a model-backed slot records on its scored observations.
+
+    ``None`` for slots without a registered checkpoint (baseline heuristics).
+    """
+    stem = SCORE_CHECKPOINTS.get(score_key)
+    if stem is None:
+        return None
+    if is_causal_stem(stem):
+        return causal_formula_id(stem)
+    return model_formula_id(score_key)
 
 
 def squash_bin_error(err: float | np.ndarray) -> float | np.ndarray:
@@ -52,6 +98,8 @@ def squash_bin_error(err: float | np.ndarray) -> float | np.ndarray:
 
     Monotone squash ``1 - exp(-err)`` so the platform's 0-1 score display,
     colours and ANOMALY_THRESHOLD stay meaningful; ranking is preserved.
+    DISPLAY ONLY: the causal stress flag compares RAW scores against the
+    sidecar threshold tau (calibrated on the raw axis).
     """
     return 1.0 - np.exp(-err)
 
@@ -81,7 +129,7 @@ def _build_model(architecture: str, n_bands: int, shape: tuple[int, int]):
 
 @dataclass
 class LoadedModel:
-    """A reconstructed checkpoint exposing the MaskedSSL per-bin scoring interface."""
+    """A reconstructed LEGACY checkpoint exposing the MaskedSSL per-bin scoring interface."""
 
     model_id: str
     checkpoint_path: Path
@@ -99,6 +147,56 @@ class LoadedModel:
     @property
     def parameter_count(self) -> int:
         return getattr(self._wrapper, "parameter_count", 0)
+
+
+@dataclass
+class LoadedCausalModel:
+    """A reconstructed causal main checkpoint (v5) with its sidecar metadata.
+
+    Wraps ``ssl_anomaly.monitor.models.DeepCausalScorer``; the robust
+    normalization (median/scale per phase bin x band) comes from the sidecar's
+    ``normalization`` block and is applied INSIDE ``score_cycles`` — callers
+    pass RAW (never-interpolated, NaN-where-unobserved) cycle values plus the
+    observation mask and the harvest days.
+    """
+
+    model_id: str  # checkpoint id, e.g. "masked_transformer_main"
+    score_key: str  # score slot in SCORE_REGISTRY, e.g. "masked_transformer"
+    checkpoint_path: Path
+    sidecar_path: Path
+    sidecar: dict = field(repr=False, default_factory=dict)
+    family: str = ""
+    use_doy: bool = True
+    _scorer: object = None
+    _norm: dict = field(repr=False, default_factory=dict)
+
+    def score_cycles(self, X_raw: np.ndarray, M: np.ndarray, harvest_days: np.ndarray) -> np.ndarray:
+        """RAW per-bin causal scores ``(n_cycles, n_bins)`` (no squash).
+
+        NaN at unobserved bins (mask all-False). Display squash
+        (:func:`squash_bin_error`) is applied by the caller, never here — the
+        sidecar threshold tau is calibrated on the raw axis.
+        """
+        from ssl_anomaly.monitor.inputs import apply_norm, doy_channels
+
+        z = apply_norm(self._norm, np.asarray(X_raw), np.asarray(M, dtype=bool))
+        doy = doy_channels(np.asarray(harvest_days, dtype=np.int64)) if self.use_doy else None
+        scores, _ = self._scorer.loo_batch(z, np.asarray(M, dtype=bool), doy)
+        return np.asarray(scores, dtype=np.float64)
+
+    @property
+    def parameter_count(self) -> int:
+        return int(self.sidecar.get("parameter_count", 0) or 0)
+
+    @property
+    def ladder_rung(self) -> Optional[str]:
+        rung = self.sidecar.get("ladder_rung")
+        return str(rung) if rung else None
+
+    @property
+    def threshold(self) -> Optional[dict]:
+        thr = self.sidecar.get("threshold")
+        return dict(thr) if isinstance(thr, dict) else None
 
 
 def _load_one(model_id: str, path: Path) -> LoadedModel:
@@ -131,30 +229,86 @@ def _load_one(model_id: str, path: Path) -> LoadedModel:
     )
 
 
+def _load_causal_one(score_key: str, stem: str, pt_path: Path, sidecar_path: Path) -> LoadedCausalModel:
+    """Reconstruct a causal main checkpoint (``causal_monitor_v1``) + sidecar."""
+    from ssl_anomaly.monitor.models import DeepCausalScorer, build_model
+
+    sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    ckpt = torch.load(str(pt_path), map_location="cpu", weights_only=False)
+    if str(ckpt.get("format", "")) != "causal_monitor_v1":
+        raise ValueError(f"unexpected checkpoint format {ckpt.get('format')!r} in {pt_path.name}")
+
+    cfg = dict(ckpt["config"])
+    family = str(sidecar.get("family") or ckpt.get("model_id") or stem.replace("_main", ""))
+
+    # Architecture keys fall back to the monitor DEFAULT_CONFIGS when the saved
+    # config lacks them (build_model fills from defaults for missing keys).
+    arch_cfg = {k: cfg[k] for k in ("d_model", "n_layers", "d_ff", "n_heads", "dropout") if k in cfg}
+    torch_model = build_model(family, d_in=int(cfg["d_in"]), n_out=int(cfg["n_out"]), cfg=arch_cfg)
+    torch_model.load_state_dict(ckpt["state_dict"])
+    torch_model.eval()
+    use_doy = bool(cfg.get("use_doy", sidecar.get("use_doy_channels", True)))
+
+    # Normalization lives INSIDE the loaded object (sidecar median/scale).
+    norm_block = sidecar.get("normalization") or {}
+    if "median" not in norm_block or "scale" not in norm_block:
+        raise ValueError(f"sidecar {sidecar_path.name} lacks normalization median/scale")
+    norm = {
+        "median": np.asarray(norm_block["median"], dtype=np.float64),
+        "scale": np.asarray(norm_block["scale"], dtype=np.float64),
+        "robust_range": np.asarray(norm_block.get("robust_range", np.ones(8)), dtype=np.float64),
+    }
+
+    scorer = DeepCausalScorer(family, torch_model, use_doy=use_doy, device="cpu")
+    torch.set_num_threads(1)
+    return LoadedCausalModel(
+        model_id=stem, score_key=score_key, checkpoint_path=pt_path,
+        sidecar_path=sidecar_path, sidecar=sidecar, family=family,
+        use_doy=use_doy, _scorer=scorer, _norm=norm,
+    )
+
+
 def discover_checkpoints(ckpt_dir: Path | str | None = None) -> dict[str, Optional[Path]]:
-    """Map each registered model id to its ``<id>_490.pt`` artifact (or None)."""
+    """Map each registered model id to its artifact (or None).
+
+    A causal main stem requires BOTH ``<stem>.pt`` and the ``<stem>.json``
+    sidecar (normalization + threshold live there); either missing -> None.
+    """
     base = Path(ckpt_dir) if ckpt_dir is not None else DEFAULT_CHECKPOINT_DIR
     found: dict[str, Optional[Path]] = {}
     for model_id, stem in SCORE_CHECKPOINTS.items():
-        path = base / f"{stem}.pt"
-        found[model_id] = path if path.exists() else None
+        pt_path = base / f"{stem}.pt"
+        if not pt_path.exists():
+            found[model_id] = None
+        elif is_causal_stem(stem):
+            sidecar_path = base / f"{stem}.json"
+            found[model_id] = pt_path if sidecar_path.exists() else None
+            if not sidecar_path.exists():
+                log.warning(
+                    "Checkpoint %s.pt has no %s sidecar (normalization/threshold live there); "
+                    "slot %s stays absent", stem, sidecar_path.name, model_id,
+                )
+        else:
+            found[model_id] = pt_path
     return found
 
 
 def load_model_checkpoints(
     ckpt_dir: Path | str | None = None,
     model_ids: tuple[str, ...] | None = None,
-) -> tuple[dict[str, Optional[LoadedModel]], dict[str, str]]:
+) -> tuple[dict[str, Optional[object]], dict[str, str]]:
     """Load every discoverable checkpoint.
 
     Returns ``(models, status)`` where ``models[model_id]`` is a
-    :class:`LoadedModel` or ``None`` and ``status[model_id]`` is one of
-    ``"loaded"`` | ``"missing"`` | ``"failed"``. A failed load is never
-    silently converted into proxy numbers downstream (provenance ``"absent"``).
+    :class:`LoadedModel` (legacy) or :class:`LoadedCausalModel` (v5 causal main)
+    or ``None``, and ``status[model_id]`` is one of ``"loaded"`` | ``"missing"``
+    | ``"failed"``. A missing/failed checkpoint degrades to provenance
+    ``"absent"`` downstream — it NEVER falls back to a proxy formula (v5) and
+    NEVER crashes the exporter.
     """
     wanted = tuple(model_ids) if model_ids is not None else tuple(SCORE_CHECKPOINTS)
     discovered = discover_checkpoints(ckpt_dir)
-    models: dict[str, Optional[LoadedModel]] = {}
+    models: dict[str, Optional[object]] = {}
     status: dict[str, str] = {}
     for model_id in wanted:
         path = discovered.get(model_id)
@@ -162,17 +316,24 @@ def load_model_checkpoints(
             models[model_id] = None
             status[model_id] = "missing"
             log.warning(
-                "No checkpoint for %s under %s (scores will fall back to the proxy formula)",
+                "No checkpoint (pt + sidecar) for %s under %s (slot stays absent)",
                 model_id, Path(ckpt_dir) if ckpt_dir is not None else DEFAULT_CHECKPOINT_DIR,
             )
             continue
         try:
-            models[model_id] = _load_one(model_id, path)
+            stem = SCORE_CHECKPOINTS[model_id]
+            if is_causal_stem(stem):
+                models[model_id] = _load_causal_one(
+                    model_id, stem, path, Path(path).with_suffix(".json"),
+                )
+            else:
+                models[model_id] = _load_one(model_id, path)
             status[model_id] = "loaded"
+            loaded = models[model_id]
             log.info(
-                "Loaded %s (%s, shape %s, %d params) from %s",
-                model_id, models[model_id].architecture, models[model_id].shape,
-                models[model_id].parameter_count, path,
+                "Loaded %s (%s, %d params) from %s",
+                model_id, getattr(loaded, "family", getattr(loaded, "architecture", "?")),
+                loaded.parameter_count, path,
             )
         except Exception as exc:  # noqa: BLE001 - any load failure must degrade gracefully
             models[model_id] = None
@@ -182,7 +343,7 @@ def load_model_checkpoints(
 
 
 __all__ = [
-    "LoadedModel", "DEFAULT_CHECKPOINT_DIR", "CAUSAL", "BATCH_SIZE",
-    "discover_checkpoints", "load_model_checkpoints", "squash_bin_error",
-    "model_formula_id",
+    "LoadedModel", "LoadedCausalModel", "DEFAULT_CHECKPOINT_DIR", "CAUSAL", "BATCH_SIZE",
+    "CAUSAL_MODEL_STEMS", "discover_checkpoints", "load_model_checkpoints", "squash_bin_error",
+    "model_formula_id", "causal_formula_id", "score_formula_id", "is_causal_stem",
 ]

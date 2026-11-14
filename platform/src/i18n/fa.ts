@@ -98,6 +98,9 @@ export const fa = {
   "model.masked_transformer.name": "ترنسفورمر ماسک‌شده SSL",
   "model.masked_transformer.type": "ترنسفورمر",
   "model.masked_transformer.desc": "ترنسفورمر زمانی ماسک‌شده (Presto/MAE)",
+  "model.gru_ae.name": "اتوآنکودر GRU",
+  "model.gru_ae.type": "SSL بازسازی",
+  "model.gru_ae.desc": "اتوآنکودر بازسازی علّی GRU (بین‌های ماسک‌شده)",
   "model.sts_net.name": "STS-Net 3D-CAE",
   "model.sts_net.type": "فضایی-زمانی",
   "model.sts_net.desc": "اتوآنکودر کانولوشنی فضایی-زمانی (Dalal و همکاران ۲۰۲۶)",
@@ -138,6 +141,17 @@ export const fa = {
   "field.code": "قطعه",
   "field.selected": "انتخاب‌شده",
   "field.missing": "(ناموجود)",
+
+  // ── برچسب وضعیت تنش + برچسب‌های دوره (قرارداد نسخه ۵) ────────────────────
+  "stressFlag.label": "برچسب وضعیت تنش",
+  "stressFlag.normal": "عادی",
+  "stressFlag.suspected": "تنش مشکوک",
+  "stressFlag.noData": "بدون داده",
+  "stressFlag.unavailable": "ناموجود",
+  "split.train": "دوره آموزش (درون‌نمونه)",
+  "split.dev": "دوره توسعه",
+  "split.test": "دوره آزمون",
+  "split.monitoring": "پایش جاری",
 
   // ── Overview ─────────────────────────────────────────────────────────────
   "overview.stat.fields": "قطعات",

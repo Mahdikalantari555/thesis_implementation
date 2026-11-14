@@ -2,10 +2,17 @@
 
 Converts Data/Processed/coordinates/farms.geojson to EPSG:4326 (WGS84), merges
 farm attributes from farms.parquet, extracts multi-spectral indices from stats.zarr,
-runs checkpoint-backed anomaly inference (STS-Net, Tiny-CNN-Mamba, Time2Agri) per
-field cycle, and serializes browser-ready JSON for the React/Vite visualization
-platform. Missing/broken checkpoints degrade to the CWSI proxy formula with
-``"provenance": "proxy"`` instead of crashing (``--no-models`` forces that path).
+runs checkpoint-backed anomaly inference per field cycle, and serializes
+browser-ready JSON for the React/Vite visualization platform.
+
+Contract v5: every observation carries a causal ``stressFlag``
+(``normal`` | ``suspected_stress`` | ``no_data`` | null), the checkpoint id
+behind it and its split tag (``train`` | ``dev`` | ``test`` | ``monitoring``);
+every field carries ``ladderRung`` from the main checkpoint sidecar. Scores
+resolve ONLY from real checkpoints (model) or are null + ``absent`` — the v4
+CWSI proxy fallback was removed as circular (spec ``model-output-ingest``).
+Missing/broken checkpoints degrade to ``absent`` instead of crashing
+(``--no-models`` forces that path for every slot).
 """
 
 from __future__ import annotations
@@ -30,9 +37,24 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 log = logging.getLogger("export_platform_data")
 
 sys.path.insert(0, str(SCRIPT_DIR))
-from platform_channels import CONTRACT_VERSION, PROXY_SCORE_FORMULA_ID, SCORE_CHECKPOINTS, SCORE_NAMES, by_name  # type: ignore
-from load_model_checkpoints import load_model_checkpoints, squash_bin_error  # type: ignore
-from cycle_inputs import build_field_cycles, resolve_observation_scores  # type: ignore
+from platform_channels import CONTRACT_VERSION, SCORE_CHECKPOINTS, SCORE_NAMES, by_name  # type: ignore
+from load_model_checkpoints import (  # type: ignore
+    LoadedCausalModel,
+    LoadedModel,
+    load_model_checkpoints,
+    score_formula_id,
+    squash_bin_error,
+)
+from cycle_inputs import (  # type: ignore
+    SPLIT_MONITORING,
+    build_cycle_split_map,
+    build_field_cycles,
+    build_field_cycles_masked,
+    cycle_split_tag,
+    lookup_masked_cycle_bin,
+    resolve_observation_scores_v5,
+    resolve_stress_flag,
+)
 
 REVISIT_DAYS = 9.3  # informational: Landsat revisit cadence (kept for docs)
 
@@ -61,37 +83,39 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--no-models",
         action="store_true",
-        help="Skip checkpoint inference entirely; emit proxy scores with provenance 'proxy'",
+        help="Skip checkpoint inference entirely; every score slot is null with provenance 'absent'",
     )
     p.add_argument(
         "--checkpoints-dir",
         type=Path,
         default=ROOT_DIR / "checkpoints",
-        help="Directory holding the <model>_490.pt checkpoints (default: checkpoints/)",
+        help="Directory holding the model checkpoints + sidecars (default: checkpoints/)",
     )
     return p.parse_args()
 
 
-def to_contract_v4(series_by_field: dict[str, list[dict]]) -> dict:
-    """Compact the per-observation maps into the v4 wire format.
+def to_contract_v5(series_by_field: dict[str, list[dict]], ladder_rung: str | None = None) -> dict:
+    """Compact the per-observation maps into the v5 wire format.
 
-    v3 stored a full object per observation; with the observation axis widened
-    to every acquisition date (490 x 538) that cost ~1.1 kB/obs (292 MB) —
-    dominated by strings repeated thousands of times. v4 keeps every v3 value
-    but stores each series once:
+    v5 extends the v4 compact payload (shared ``axis`` + per-field numeric
+    arrays + RLE provenance) with the causal stress-flag fields:
 
-      - ``axis``: the shared acquisition-date list (first row -> last row);
-      - ``fields.<id>.channels`` / ``.scores``: numeric arrays indexed by the
-        axis (null = absent);
-      - ``channelProvenance`` / ``scoreProvenance``: run-length encoded
-        ``[state, count]`` pairs per series;
-      - everything else is derived on load (``sampleDate``/``acquisitionDate``
-        = the axis date, ``scoreFormulaId`` from the provenance state, ``idx``
-        from position, ``missing`` = NDVI null, ``stalenessReason`` =
-        "invalid acquisition" when missing, ``scoreCollinearity`` shared).
+      - ``stressFlag``: per observation ``normal`` | ``suspected_stress`` |
+        ``no_data`` | null (null = no model-backed flag available), RLE-encoded
+        like the provenance series;
+      - ``stressFlagModel``: checkpoint id per observation (null when absent);
+      - ``split``: ``train`` | ``dev`` | ``test`` | ``monitoring`` per
+        observation — split membership only controls which cycles enter
+        metrics, never what is displayed;
+      - ``ladderRung`` per field from the main checkpoint sidecar
+        (``"L2"``/``"L3"``, null without a checkpoint — the validation-ladder
+        rung every flag claim is bounded by);
+      - ``scoreFormulas``: per score key the formula id its ``model``-provenance
+        observations carry (``<stem>:causal_bin_mse`` for the causal main
+        checkpoints, ``<stem>_490:bin_mse_1mexp`` for the legacy ones).
 
-    The runtime decoder (``platform/src/data/data.ts``) reconstructs the exact
-    v3-shaped observation objects, so the views are unchanged.
+    There is no ``proxyFormulaId`` in v5: no observation ever carries the
+    removed CWSI proxy formula.
     """
 
     def rle(values: list) -> list:
@@ -112,13 +136,17 @@ def to_contract_v4(series_by_field: dict[str, list[dict]]) -> dict:
             "scores": {k: [o["scores"][k] for o in obs_list] for k in SCORE_NAMES},
             "channelProvenance": {c: rle([o["provenance"][c] for o in obs_list]) for c in channels},
             "scoreProvenance": {k: rle([o["scoreProvenance"][k] for o in obs_list]) for k in SCORE_NAMES},
+            "stressFlag": rle([o["stressFlag"] for o in obs_list]),
+            "stressFlagModel": rle([o["stressFlagModel"] for o in obs_list]),
+            "split": rle([o["split"] for o in obs_list]),
+            "ladderRung": ladder_rung,
         }
     return {
-        "contractVersion": 4,
+        "contractVersion": 5,
         "axis": axis,
         "collinearity": next(iter(series_by_field.values()))[0]["scoreCollinearity"],
         "checkpoints": dict(SCORE_CHECKPOINTS),
-        "proxyFormulaId": PROXY_SCORE_FORMULA_ID,
+        "scoreFormulas": {k: fid for k in SCORE_NAMES if (fid := score_formula_id(k)) is not None},
         "fields": fields_out,
     }
 
@@ -152,17 +180,18 @@ def main() -> None:
         log.warning("weather_aligned.parquet not found — precip/temp stay null with provenance 'absent'")
 
     if args.no_models:
-        models: dict = {}
+        models: dict[str, object | None] = {}
         model_status: dict[str, str] = {}
-        log.info("--no-models given: all scores will use the CWSI proxy formula (provenance 'proxy')")
+        log.info("--no-models given: every score slot stays null with provenance 'absent' (no proxy in v5)")
     else:
         models, model_status = load_model_checkpoints(args.checkpoints_dir)
     loaded_ids = sorted(mid for mid, st in model_status.items() if st == "loaded")
     missing_ids = sorted(mid for mid, st in model_status.items() if st == "missing")
     failed_ids = sorted(mid for mid, st in model_status.items() if st == "failed")
     log.info(
-        "Score provenance plan: model=%s proxy=%s absent=%s (proxy formula %s covers b0/b1 baselines and masked_transformer)",
-        loaded_ids or "[]", missing_ids or "[]", failed_ids or "[]", PROXY_SCORE_FORMULA_ID,
+        "Score provenance plan: model=%s missing=%s failed=%s (v5: no proxy fallback — "
+        "unresolved slots are null + 'absent')",
+        loaded_ids or "[]", missing_ids or "[]", failed_ids or "[]",
     )
 
     if gdf.crs != "EPSG:4326":
@@ -196,35 +225,108 @@ def main() -> None:
         len(sample_dates), sample_dates[0].date(), sample_dates[-1].date(),
     )
 
-    # Per-field-cycle tensors (36 phase bins x 8 channels) built exactly like the
-    # training NPZ (scripts/segment_and_export_cycles_490.py), then scored by each
-    # loaded checkpoint with leave-one-time-bin-out masked reconstruction.
     day_times = dates.to_numpy().astype("datetime64[D]")
     time_days = (day_times - day_times[0]).astype(int)
     acq_day_num = time_days  # day number per acquisition index
 
-    cycles_by_field: dict[int, list] = {}
-    cycle_rows: list = []
-    if models:
-        log.info("Building per-field cycle tensors for checkpoint inference...")
+    # Split tagging (contract v5): cycle -> train|dev|test|monitoring from the
+    # locked manifest. Computed in-process; missing files degrade to
+    # "monitoring" for everything (never a fabricated in-sample tag).
+    split_map = build_cycle_split_map(ROOT_DIR)
+
+    # Masked cycle tensors (NO interior-gap interpolation — the exact input
+    # semantics of the causal main checkpoints), censored in-progress cycles
+    # INCLUDED for display + split tagging (they never enter metrics). Built
+    # for every field regardless of checkpoint availability: the split tag of
+    # each observation comes from the cycle containing its acquisition date.
+    masked_cycles_by_field: dict[int, list] = {}
+    masked_rows: list = []
+    log.info("Building masked per-field cycle tensors (no interpolation, censored included)...")
+    for fi, fid in enumerate(reader.fields):
+        built = build_field_cycles_masked(
+            int(fid), time_days, ndvi_cube[fi], valid_cube[fi], cube[fi], reader.band_index,
+            include_censored=True,
+        )
+        masked_cycles_by_field[int(fid)] = built
+        masked_rows.extend(built)
+    log.info(
+        "Built %d masked cycles across %d fields (%d censored kept for display)",
+        len(masked_rows), len(masked_cycles_by_field), sum(1 for c in masked_rows if c.censored),
+    )
+
+    # Causal main checkpoint scoring (v5): RAW z-space per-bin scores.
+    new_raw_errs: dict[str, np.ndarray] = {}
+    causal_keys = [k for k, m in models.items() if isinstance(m, LoadedCausalModel)]
+    if masked_rows and causal_keys:
+        X_masked = np.stack([c.x for c in masked_rows])  # NaN where unobserved
+        M_masked = np.stack([c.mask for c in masked_rows])
+        H_masked = np.array([c.harvest_day for c in masked_rows], dtype=np.int64)
+        for key in causal_keys:
+            loaded = models[key]
+            assert isinstance(loaded, LoadedCausalModel)
+            log.info("Running causal checkpoint inference with %s on %d masked cycles...", key, len(masked_rows))
+            new_raw_errs[key] = loaded.score_cycles(X_masked, M_masked, H_masked)
+
+    # Legacy checkpoints keep their pipeline: interpolated (non-censored) cycle
+    # tensors, squashed per-bin scores.
+    legacy_cycles_by_field: dict[int, list] = {}
+    legacy_squashed_errs: dict[str, np.ndarray] = {}
+    legacy_keys = [k for k, m in models.items() if isinstance(m, LoadedModel)]
+    if legacy_keys:
+        legacy_rows: list = []
+        log.info("Building interpolated per-field cycle tensors for legacy checkpoints...")
         for fi, fid in enumerate(reader.fields):
             built = build_field_cycles(
                 int(fid), time_days, ndvi_cube[fi], valid_cube[fi], cube[fi], reader.band_index,
             )
-            cycles_by_field[int(fid)] = built
-            cycle_rows.extend(built)
-        log.info("Built %d scoreable cycles across %d fields", len(cycle_rows), len(cycles_by_field))
+            legacy_cycles_by_field[int(fid)] = built
+            legacy_rows.extend(built)
+        log.info("Built %d scoreable legacy cycles across %d fields", len(legacy_rows), len(legacy_cycles_by_field))
+        if legacy_rows:
+            X_all = np.stack([c.x for c in legacy_rows])
+            for mid in legacy_keys:
+                loaded = models[mid]
+                assert isinstance(loaded, LoadedModel)
+                log.info("Running checkpoint inference with %s on %d cycles...", mid, len(legacy_rows))
+                legacy_squashed_errs[mid] = squash_bin_error(loaded.score_cycles(X_all))
+    else:
+        log.info("Skipping legacy checkpoint inference (no legacy models loaded)")
 
-    model_errs: dict[str, np.ndarray] = {}
-    if cycle_rows and models:
-        X_all = np.stack([c.x for c in cycle_rows])
-        for mid, loaded in models.items():
-            if loaded is None:
-                continue
-            log.info("Running checkpoint inference with %s on %d cycles...", mid, len(cycle_rows))
-            model_errs[mid] = squash_bin_error(loaded.score_cycles(X_all))
-    elif not models:
-        log.info("Skipping checkpoint inference (no models loaded)")
+    # Main model for the causal stress flag: masked_transformer_main if loaded,
+    # else gru_ae_main; tau/persistence-k come from its sidecar. Without a main
+    # model (or without a calibrated threshold) stressFlag stays null everywhere
+    # — never fabricated, never "normal" by default.
+    main_key: str | None = None
+    for cand in ("masked_transformer", "gru_ae"):
+        if model_status.get(cand) == "loaded" and isinstance(models.get(cand), LoadedCausalModel):
+            main_key = cand
+            break
+    main_errs: np.ndarray | None = new_raw_errs.get(main_key) if main_key else None
+    main_tau: float | None = None
+    main_k: int = 1
+    ladder_rung: str | None = None
+    stress_flag_model: str | None = None
+    if main_key is not None:
+        main_loaded = models[main_key]
+        assert isinstance(main_loaded, LoadedCausalModel)
+        thr = main_loaded.threshold or {}
+        main_tau = thr.get("tau")
+        main_k = int(thr.get("k", main_loaded.sidecar.get("persistence_k") or 1))
+        ladder_rung = main_loaded.ladder_rung
+        stress_flag_model = main_loaded.model_id
+        if main_tau is None:
+            log.warning(
+                "Main checkpoint %s has no calibrated threshold in its sidecar — "
+                "stressFlag stays null for every observation",
+                main_loaded.model_id,
+            )
+        else:
+            log.info(
+                "Stress flag: model=%s tau=%.4f k=%d ladder_rung=%s",
+                stress_flag_model, float(main_tau), main_k, ladder_rung or "n/a",
+            )
+    else:
+        log.info("No causal main checkpoint loaded — stressFlag stays null for every observation")
 
     def clean_text(v) -> str:
         """Registry text verbatim; NaN/None -> "" (never a generated default)."""
@@ -267,6 +369,9 @@ def main() -> None:
 
         field_key = f"F-{fid:03d}"
         fi = fid - 1
+
+        field_masked_cycles = masked_cycles_by_field.get(fid, [])
+        field_legacy_cycles = legacy_cycles_by_field.get(fid, [])
 
         farm_obs = []
         field_ndvi = ndvi_cube[fi]
@@ -317,17 +422,35 @@ def main() -> None:
                 eta = clamp(val_ndvi * 6.5, 0.5, 7.5)
             tvdi = (cwsi * 0.9) if cwsi is not None else None
 
-            # Checkpoint-backed anomaly scores (contract v3): loaded models score
-            # the cycle bin containing the acquisition date; everything else falls
-            # back to the CWSI proxy rule with provenance 'proxy'.
-            scores, score_prov, score_formula = resolve_observation_scores(
-                int(acq_day_num[ai]),
-                cycles_by_field.get(fid, []),
-                model_errs=model_errs,
-                model_status=model_status,
-                cwsi=cwsi,
-                force_proxy=args.no_models,
+            # Checkpoint-backed anomaly scores (contract v5): causal main
+            # checkpoints score the masked cycle bin containing the acquisition
+            # date, legacy checkpoints the interpolated one; everything else is
+            # null + "absent" (no proxy fallback in v5).
+            day_num = int(acq_day_num[ai])
+            scores, score_prov, score_formula = resolve_observation_scores_v5(
+                day_num,
+                field_masked_cycles,
+                field_legacy_cycles,
+                new_raw_errs=new_raw_errs,
+                legacy_squashed_errs=legacy_squashed_errs,
             )
+
+            # Split tag from the masked cycle containing the acquisition date.
+            masked_hit = lookup_masked_cycle_bin(field_masked_cycles, day_num)
+            if masked_hit is not None:
+                split = cycle_split_tag(field_masked_cycles[masked_hit[0]], split_map)
+            else:
+                split = SPLIT_MONITORING
+
+            # Causal stress flag: raw score prefix of the current cycle
+            # (bins <= the acquisition's bin — appending future observations
+            # never changes an issued status), compared against the sidecar
+            # tau with persistence k. Unavailable without a main model.
+            stress_flag = None
+            if main_errs is not None and main_tau is not None and masked_hit is not None:
+                mrow, mbin = masked_hit
+                bin_observed = bool(np.isfinite(main_errs[mrow, mbin]))
+                stress_flag = resolve_stress_flag(main_errs[mrow, : mbin + 1], main_tau, main_k, bin_observed)
 
             ndvi_r = round(val_ndvi, 3) if val_ndvi is not None else None
             evi_r = round(evi, 3) if evi is not None else None
@@ -393,6 +516,9 @@ def main() -> None:
                 "scoreFormulaId": score_formula,
                 "provenance": provenance,
                 "scoreCollinearity": "cwsi",
+                "stressFlag": stress_flag,
+                "stressFlagModel": stress_flag_model,
+                "split": split,
             }
             farm_obs.append(obs)
 
@@ -435,17 +561,25 @@ def main() -> None:
 
     prov_tally: dict[str, int] = {}
     model_tally: dict[str, int] = {}
+    flag_tally: dict[str, int] = {}
+    split_tally: dict[str, int] = {}
     for obs_list in series_by_field.values():
         for o in obs_list:
             for key, st in (o.get("scoreProvenance") or {}).items():
                 prov_tally[st] = prov_tally.get(st, 0) + 1
                 if st == "model":
                     model_tally[key] = model_tally.get(key, 0) + 1
+            fl = o.get("stressFlag")
+            flag_tally[str(fl)] = flag_tally.get(str(fl), 0) + 1
+            sp = o.get("split")
+            split_tally[str(sp)] = split_tally.get(str(sp), 0) + 1
     log.info(
-        "Score provenance tally over observation x score key: model=%d proxy=%d absent=%d",
-        prov_tally.get("model", 0), prov_tally.get("proxy", 0), prov_tally.get("absent", 0),
+        "Score provenance tally over observation x score key: model=%d absent=%d",
+        prov_tally.get("model", 0), prov_tally.get("absent", 0),
     )
     log.info("Model-backed scores per model id: %s", model_tally)
+    log.info("Stress flag tally: %s", flag_tally)
+    log.info("Split tally: %s", split_tally)
 
     def atomic_dump(path, obj):
         tmp = path.with_suffix(path.suffix + ".tmp")
@@ -458,8 +592,8 @@ def main() -> None:
     log.info("Saved %d Khuzestan farm definitions to %s", len(farm_records), farms_json_path)
 
     series_json_path = PLATFORM_DATA_DIR / "series_khuzestan.json"
-    atomic_dump(series_json_path, to_contract_v4(series_by_field))
-    log.info("Saved series for %d farms to %s (contract v4 compact)", len(series_by_field), series_json_path)
+    atomic_dump(series_json_path, to_contract_v5(series_by_field, ladder_rung=ladder_rung))
+    log.info("Saved series for %d farms to %s (contract v5 compact)", len(series_by_field), series_json_path)
     n_missing = sum(1 for obs_list in series_by_field.values() for o in obs_list if o["missing"])
     log.info(
         "Observations: %d (%d fields x %d acquisition dates); %d invalid acquisitions rendered as missing",

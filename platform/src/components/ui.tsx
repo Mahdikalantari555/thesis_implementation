@@ -215,3 +215,69 @@ export function LegacyPayloadNotice(): React.ReactElement {
     </div>
   );
 }
+
+/**
+ * Causal stress-flag chip (contract v5). `flag === undefined` (v4 payload) and
+ * `flag === null` (v5 without a main checkpoint) both render "unavailable" —
+ * the flag is never fabricated as "normal" when no model backs it. The positive
+ * state is "suspected stress (anomaly)" until L4 validation (honest naming).
+ */
+export type StressFlagChipValue = 'normal' | 'suspected_stress' | 'no_data' | null | undefined;
+
+export function StressFlagChip({ flag, title }: { flag: StressFlagChipValue; title?: string }): React.ReactElement {
+  const t = useT();
+  const state: 'normal' | 'suspected_stress' | 'no_data' | 'unavailable' =
+    flag === 'normal' || flag === 'suspected_stress' || flag === 'no_data' ? flag : 'unavailable';
+  const labels: Record<typeof state, string> = {
+    normal: t("stressFlag.normal"),
+    suspected_stress: t("stressFlag.suspected"),
+    no_data: t("stressFlag.noData"),
+    unavailable: t("stressFlag.unavailable"),
+  };
+  const colors: Record<typeof state, string> = {
+    normal: "#15803d",
+    suspected_stress: "#be123c",
+    no_data: "#94a3b8",
+    unavailable: "#64748b",
+  };
+  const color = colors[state];
+  return (
+    <span
+      title={title ?? `${t("stressFlag.label")}: ${labels[state]}`}
+      className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 border"
+      style={{ color: color, borderColor: color + "55", background: color + "12" }}
+    >
+      <span className="w-1.5 h-1.5 rounded-full" style={{ background: color }} aria-hidden="true" />
+      {labels[state]}
+    </span>
+  );
+}
+
+/** Subtle split-membership suffix for an observation (train = in-sample). */
+export const SPLIT_TAG_COLORS: Record<string, string> = {
+  train: "#b45309",
+  dev: "#0284c7",
+  test: "#7c3aed",
+  monitoring: "#64748b",
+};
+
+export function SplitTagChip({ split }: { split: string | null | undefined }): React.ReactElement | null {
+  const t = useT();
+  if (split !== 'train' && split !== 'dev' && split !== 'test' && split !== 'monitoring') return null;
+  const label = {
+    train: t("split.train"),
+    dev: t("split.dev"),
+    test: t("split.test"),
+    monitoring: t("split.monitoring"),
+  }[split];
+  const color = SPLIT_TAG_COLORS[split];
+  return (
+    <span
+      title={`split: ${split}`}
+      className="inline-flex items-center text-[9px] font-medium px-1 py-0.5 border"
+      style={{ color: color, borderColor: color + "55", background: color + "12" }}
+    >
+      {label}
+    </span>
+  );
+}

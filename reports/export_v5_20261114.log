@@ -1,0 +1,35 @@
+2026-11-14 14:22:40,001 [INFO] Loading farm polygons and metadata...
+Warning 3: Cannot find header.dxf (GDAL_DATA is not defined)
+D:\Dev\Miniforge3\envs\geo\Lib\site-packages\pyogrio\core.py:38: RuntimeWarning: Could not detect GDAL data files. Set GDAL_DATA environment variable to the correct path.
+  _init_gdal_data()
+2026-11-14 14:22:40,182 [INFO] Weather aligned: 539 dated rows from weather_aligned.parquet
+2026-11-14 14:22:40,182 [WARNING] No checkpoint (pt + sidecar) for masked_transformer under D:\RS\Thesis\thesis_implementation\checkpoints (slot stays absent)
+2026-11-14 14:22:41,116 [INFO] Loaded gru_ae (gru_ae, 174008 params) from D:\RS\Thesis\thesis_implementation\checkpoints\gru_ae_main.pt
+2026-11-14 14:22:44,289 [INFO] Loaded sts_net (sts_net, 24449 params) from D:\RS\Thesis\thesis_implementation\checkpoints\sts_net_490.pt
+2026-11-14 14:22:44,298 [INFO] Loaded tiny_cnn_mamba (tiny_cnn_mamba, 74785 params) from D:\RS\Thesis\thesis_implementation\checkpoints\tiny_cnn_mamba_490.pt
+2026-11-14 14:22:44,308 [INFO] Loaded time2agri (time2agri, 20433 params) from D:\RS\Thesis\thesis_implementation\checkpoints\time2agri_490.pt
+2026-11-14 14:22:44,308 [INFO] Score provenance plan: model=['gru_ae', 'sts_net', 'time2agri', 'tiny_cnn_mamba'] missing=['masked_transformer'] failed=[] (v5: no proxy fallback — unresolved slots are null + 'absent')
+2026-11-14 14:22:44,426 [INFO] Observation axis: 538 acquisition dates 2013-03-30 → 2026-09-10 (all cube dates, no monthly resampling)
+2026-11-14 14:22:44,441 [INFO] Split map: 1755 cycles (train/dev/test/monitoring = 447/69/171/1068)
+2026-11-14 14:22:44,441 [INFO] Building masked per-field cycle tensors (no interpolation, censored included)...
+2026-11-14 14:26:42,208 [INFO] Built 1754 masked cycles across 490 fields (955 censored kept for display)
+2026-11-14 14:26:42,208 [INFO] Running causal checkpoint inference with gru_ae on 1754 masked cycles...
+2026-11-14 14:27:05,179 [INFO] Building interpolated per-field cycle tensors for legacy checkpoints...
+D:\RS\Thesis\thesis_implementation\scripts\cycle_inputs.py:151: RuntimeWarning: All-NaN slice encountered
+  x_cycle[int(b), 0] = np.nanmedian(ndvi_obs[b_mask])
+D:\RS\Thesis\thesis_implementation\scripts\cycle_inputs.py:153: RuntimeWarning: All-NaN slice encountered
+  x_cycle[int(b), 1 + band_index[bname]] = np.nanmedian(cube_obs[b_mask, band_index[bname]])
+2026-11-14 14:29:49,417 [INFO] Built 799 scoreable legacy cycles across 490 fields
+2026-11-14 14:29:49,417 [INFO] Running checkpoint inference with sts_net on 799 cycles...
+2026-11-14 14:29:53,896 [INFO] Running checkpoint inference with tiny_cnn_mamba on 799 cycles...
+2026-11-14 14:30:30,421 [INFO] Running checkpoint inference with time2agri on 799 cycles...
+2026-11-14 14:30:34,708 [INFO] Stress flag: model=gru_ae_main tau=6.0555 k=1 ladder_rung=L2
+2026-11-14 14:30:34,708 [INFO] Building farm records...
+2026-11-14 15:03:52,473 [INFO] Score provenance tally over observation x score key: model=164517 absent=1944443
+2026-11-14 15:03:52,473 [INFO] Model-backed scores per model id: {'gru_ae': 71100, 'sts_net': 31139, 'tiny_cnn_mamba': 31139, 'time2agri': 31139}
+2026-11-14 15:03:52,473 [INFO] Stress flag tally: {'suspected_stress': 1437, 'normal': 69663, 'None': 170805, 'no_data': 21715}
+2026-11-14 15:03:52,473 [INFO] Split tally: {'monitoring': 236267, 'train': 14131, 'test': 10073, 'dev': 3149}
+2026-11-14 15:03:52,504 [INFO] Saved 490 Khuzestan farm definitions to D:\RS\Thesis\thesis_implementation\platform\src\data\farms_khuzestan.json
+2026-11-14 15:03:59,328 [INFO] Saved series for 490 farms to D:\RS\Thesis\thesis_implementation\platform\src\data\series_khuzestan.json (contract v5 compact)
+2026-11-14 15:03:59,376 [INFO] Observations: 263620 (490 fields x 538 acquisition dates); 1769 invalid acquisitions rendered as missing
+2026-11-14 15:03:59,376 [INFO] Weather join coverage: 263620/263620 dated observations matched weather_aligned.parquet (100.0%); non-null fraction precip=1.000 temp=1.000

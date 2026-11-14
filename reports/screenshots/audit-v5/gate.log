@@ -1,0 +1,22 @@
+[capture] serving platform\dist on 127.0.0.1:54808
+[capture] mounted · dir=ltr · lang=en · nav=8 buttons · font=Inter
+[capture] .tmp\audit-v5\01_overview.png  (1680×1616 css)
+[capture] .tmp\audit-v5\02_geospatial-explorer.png  (1680×1500 css)
+[capture] .tmp\audit-v5\03_temporal-analysis.png  (1680×1500 css)
+[capture] .tmp\audit-v5\04_spectral-temporal.png  (1680×1620 css)
+[capture] .tmp\audit-v5\05_validation-lab.png  (1680×1731 css)
+[capture] .tmp\audit-v5\06_model-comparison.png  (1680×2037 css)
+[capture] .tmp\audit-v5\07_spatial-analysis.png  (1680×1640 css)
+[capture] .tmp\audit-v5\08_reports-experiments.png  (1680×1500 css)
+[capture] running Map Explorer tile scenario…
+[capture] tile scenario · rgb=12 ndvi=9 responses=28 failures=0 opacity rgb→ndvi: 0.7→0.7 (pan: 0.7)
+[gate] overview: OK (console=0 page=0 tileFails=0 shot=yes)
+[gate] map: OK (console=0 page=0 tileFails=0 shot=yes)
+[gate] temporal: OK (console=0 page=0 tileFails=0 shot=yes)
+[gate] spectral: OK (console=0 page=0 tileFails=0 shot=yes)
+[gate] validation: OK (console=0 page=0 tileFails=0 shot=yes)
+[gate] comparison: OK (console=0 page=0 tileFails=0 shot=yes)
+[gate] spatial: OK (console=0 page=0 tileFails=0 shot=yes)
+[gate] reports: OK (console=0 page=0 tileFails=0 shot=yes)
+[gate] tile-scenario: OK
+[capture] GATE PASSED → .tmp\audit-v5
