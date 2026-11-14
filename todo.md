@@ -149,6 +149,17 @@ two experiments.
      subset + injections; MDM80 + event-FAR + waterfall. Success = non-censored MDM80 ≤ S5 on
      persistent/ndvi → path C justified with a measured target floor; all censored → honest negative.
      → finding 21.
+     **OUTCOME (2026-11-14, run complete): honest negative — ALL FOUR ARMS censored ">S6" on
+     persistent/ndvi** (persist/med3/trend4 + B1 reference recomputed in-harness; B1 crosscheck
+     vs finding-18 = 0 mismatches). Mechanism: the clean one-step residual scale is NOT small —
+     σ_forecast ≈ 0.23 NDVI (≈1.3× the across-cycle spread; the design's 0.01–0.02 estimate was
+     ~10× off) — so the S6 drop is only 1.2–1.7 forecast-σ vs a ~3.6–4.0σ per-bin requirement;
+     no untrained arm even reaches gru_ae's requirement ratio (best persist 0.44 vs gru_ae 0.48);
+     carry-forward forecasters absorb the level (A ≈ 0.75–0.81) — the naive-forecaster unit
+     upside is disproven. Evidence: `docs/findings/21_forecast_unit_probe.md`,
+     `reports/dev/forecast_probe_20261114/probe_summary.json`. The trained `gru_pred` trial
+     below still runs with its own five gates (a trained model could shrink σ_forecast); weight
+     shifts toward path B unless it passes.
   2. **`predictive-ssl-controlled-trial`** (trains ONE new arm `gru_pred` — same trunk/inputs/budget
      as gru_ae_main, one-step-ahead objective only; seeds {13,42,2026}; user runs training from
      agent-provided commands): four parts — A natural-data FAR behavior, B the unchanged finding-18

@@ -1,0 +1,478 @@
+{
+  "type": "forecast_unit_probe_summary",
+  "created": "2026-11-14 22:34:21",
+  "wall_time_s": 66.5,
+  "run_id": "forecast_probe_20261114",
+  "frozen_seed": 2026,
+  "smoke": false,
+  "rounds": 2,
+  "eval_subset_sha256": "6186edf8a06f82d3",
+  "severity_table_sha256": "9d720e3b40160dd07c9f564cd0d6848211756ab65212d235c63657e3a474c1b5",
+  "splits_locked_sha256": "9aa5eb111b31e73ba1ab30ebed52d7e9ef22c7e9e1de7cbd799e99ccf22e8565",
+  "git_sha": "a1882d78",
+  "ladder_rung": "L2",
+  "claim_noun": "synthetic anomaly",
+  "sidecar_byte_identical": true,
+  "outputs": {
+    "persist": "reports\\dev\\forecast_probe_20261114\\probe_persist_seed2026.json",
+    "med3": "reports\\dev\\forecast_probe_20261114\\probe_med3_seed2026.json",
+    "trend4": "reports\\dev\\forecast_probe_20261114\\probe_trend4_seed2026.json",
+    "b1": "reports\\dev\\forecast_probe_20261114\\probe_b1_seed2026.json"
+  },
+  "mdm80_per_arm": {
+    "persist": {
+      "acute/ndvi": {
+        "value": ">S6",
+        "sentinel": 7,
+        "censored": true,
+        "level_cell": null,
+        "median_delay_days": NaN
+      },
+      "acute/savi": {
+        "value": ">S6",
+        "sentinel": 7,
+        "censored": true,
+        "level_cell": null,
+        "median_delay_days": NaN
+      },
+      "persistent/ndvi": {
+        "value": ">S6",
+        "sentinel": 7,
+        "censored": true,
+        "level_cell": null,
+        "median_delay_days": NaN
+      },
+      "persistent/savi": {
+        "value": ">S6",
+        "sentinel": 7,
+        "censored": true,
+        "level_cell": null,
+        "median_delay_days": NaN
+      }
+    },
+    "med3": {
+      "acute/ndvi": {
+        "value": ">S6",
+        "sentinel": 7,
+        "censored": true,
+        "level_cell": null,
+        "median_delay_days": NaN
+      },
+      "acute/savi": {
+        "value": ">S6",
+        "sentinel": 7,
+        "censored": true,
+        "level_cell": null,
+        "median_delay_days": NaN
+      },
+      "persistent/ndvi": {
+        "value": ">S6",
+        "sentinel": 7,
+        "censored": true,
+        "level_cell": null,
+        "median_delay_days": NaN
+      },
+      "persistent/savi": {
+        "value": ">S6",
+        "sentinel": 7,
+        "censored": true,
+        "level_cell": null,
+        "median_delay_days": NaN
+      }
+    },
+    "trend4": {
+      "acute/ndvi": {
+        "value": ">S6",
+        "sentinel": 7,
+        "censored": true,
+        "level_cell": null,
+        "median_delay_days": NaN
+      },
+      "acute/savi": {
+        "value": ">S6",
+        "sentinel": 7,
+        "censored": true,
+        "level_cell": null,
+        "median_delay_days": NaN
+      },
+      "persistent/ndvi": {
+        "value": ">S6",
+        "sentinel": 7,
+        "censored": true,
+        "level_cell": null,
+        "median_delay_days": NaN
+      },
+      "persistent/savi": {
+        "value": ">S6",
+        "sentinel": 7,
+        "censored": true,
+        "level_cell": null,
+        "median_delay_days": NaN
+      }
+    },
+    "b1": {
+      "acute/ndvi": {
+        "value": ">S6",
+        "sentinel": 7,
+        "censored": true,
+        "level_cell": null,
+        "median_delay_days": NaN
+      },
+      "acute/savi": {
+        "value": ">S6",
+        "sentinel": 7,
+        "censored": true,
+        "level_cell": null,
+        "median_delay_days": NaN
+      },
+      "persistent/ndvi": {
+        "value": ">S6",
+        "sentinel": 7,
+        "censored": true,
+        "level_cell": null,
+        "median_delay_days": NaN
+      },
+      "persistent/savi": {
+        "value": ">S6",
+        "sentinel": 7,
+        "censored": true,
+        "level_cell": null,
+        "median_delay_days": NaN
+      }
+    }
+  },
+  "calibration_per_arm": {
+    "persist": {
+      "tau": 14.183668024140529,
+      "k": 2,
+      "far_achieved": 0.02857142857142857,
+      "event_far_clean_eval": {
+        "event_far": 0.0,
+        "n_events": 0,
+        "n_false_events": 0,
+        "n_scored_bins": 720,
+        "gap_bins": 2
+      },
+      "event_far_clean_calibration": {
+        "event_far": 0.00535475234270415,
+        "n_events": 4,
+        "n_false_events": 4,
+        "n_scored_bins": 747,
+        "gap_bins": 2
+      }
+    },
+    "med3": {
+      "tau": 12.652809198183547,
+      "k": 1,
+      "far_achieved": 0.02857142857142857,
+      "event_far_clean_eval": {
+        "event_far": 0.001388888888888889,
+        "n_events": 1,
+        "n_false_events": 1,
+        "n_scored_bins": 720,
+        "gap_bins": 2
+      },
+      "event_far_clean_calibration": {
+        "event_far": 0.0013386880856760374,
+        "n_events": 1,
+        "n_false_events": 1,
+        "n_scored_bins": 747,
+        "gap_bins": 2
+      }
+    },
+    "trend4": {
+      "tau": 15.874513893678817,
+      "k": 1,
+      "far_achieved": 0.02857142857142857,
+      "event_far_clean_eval": {
+        "event_far": 0.0,
+        "n_events": 0,
+        "n_false_events": 0,
+        "n_scored_bins": 545,
+        "gap_bins": 2
+      },
+      "event_far_clean_calibration": {
+        "event_far": 0.0017574692442882249,
+        "n_events": 1,
+        "n_false_events": 1,
+        "n_scored_bins": 569,
+        "gap_bins": 2
+      }
+    },
+    "b1": {
+      "tau": 9.152414351659438,
+      "k": 2,
+      "far_achieved": 0.02857142857142857,
+      "event_far_clean_eval": {
+        "event_far": 0.0012626262626262627,
+        "n_events": 1,
+        "n_false_events": 1,
+        "n_scored_bins": 792,
+        "gap_bins": 2
+      },
+      "event_far_clean_calibration": {
+        "event_far": 0.0036855036855036856,
+        "n_events": 3,
+        "n_false_events": 3,
+        "n_scored_bins": 814,
+        "gap_bins": 2
+      }
+    }
+  },
+  "onset_residual_fsigma_persistent_ndvi": {
+    "persist": {
+      "S1": {
+        "median": 0.20526757927750636,
+        "iqr": [
+          0.0809755793205424,
+          0.3431967186917029
+        ],
+        "n": 40
+      },
+      "S2": {
+        "median": 0.2855488009979947,
+        "iqr": [
+          0.1588953987637653,
+          0.5190673351589666
+        ],
+        "n": 40
+      },
+      "S3": {
+        "median": 0.4866244734319246,
+        "iqr": [
+          0.24943948425125612,
+          0.6710781417358587
+        ],
+        "n": 40
+      },
+      "S4": {
+        "median": 0.8356011530888339,
+        "iqr": [
+          0.5788921807788822,
+          1.329122611564764
+        ],
+        "n": 40
+      },
+      "S5": {
+        "median": 1.2885149871958528,
+        "iqr": [
+          1.03180594210612,
+          2.5390257835611942
+        ],
+        "n": 40
+      },
+      "S6": {
+        "median": 1.7414288269013163,
+        "iqr": [
+          1.4847199049773667,
+          3.7489290899202974
+        ],
+        "n": 40
+      }
+    },
+    "med3": {
+      "S1": {
+        "median": 0.13133005773325573,
+        "iqr": [
+          0.05479641095815743,
+          0.22791787673116637
+        ],
+        "n": 40
+      },
+      "S2": {
+        "median": 0.17381385120594012,
+        "iqr": [
+          0.08198721062830286,
+          0.2815069942362556
+        ],
+        "n": 40
+      },
+      "S3": {
+        "median": 0.2623030534060701,
+        "iqr": [
+          0.15668466396099034,
+          0.3770374893238915
+        ],
+        "n": 40
+      },
+      "S4": {
+        "median": 0.5170513111143892,
+        "iqr": [
+          0.405036512587293,
+          0.6317857470322106
+        ],
+        "n": 40
+      },
+      "S5": {
+        "median": 0.8779341414945225,
+        "iqr": [
+          0.758291904193442,
+          1.0139081241479002
+        ],
+        "n": 40
+      },
+      "S6": {
+        "median": 1.217644945427372,
+        "iqr": [
+          1.0980027081262913,
+          1.3960304445828546
+        ],
+        "n": 40
+      }
+    },
+    "trend4": {
+      "S1": {
+        "median": 0.18881833094811548,
+        "iqr": [
+          0.09328629333661556,
+          0.2824481318691906
+        ],
+        "n": 39
+      },
+      "S2": {
+        "median": 0.2000361461891454,
+        "iqr": [
+          0.11537024390951474,
+          0.32964402390055847
+        ],
+        "n": 39
+      },
+      "S3": {
+        "median": 0.28965506956098785,
+        "iqr": [
+          0.1771105394405296,
+          0.4742978289034053
+        ],
+        "n": 39
+      },
+      "S4": {
+        "median": 0.5660307861034375,
+        "iqr": [
+          0.3944663443249972,
+          0.9708516597842253
+        ],
+        "n": 39
+      },
+      "S5": {
+        "median": 0.9245068518035435,
+        "iqr": [
+          0.7529423745762713,
+          1.6926720550930012
+        ],
+        "n": 39
+      },
+      "S6": {
+        "median": 1.2829829175036496,
+        "iqr": [
+          1.1114184757252095,
+          2.491427617686244
+        ],
+        "n": 39
+      }
+    },
+    "b1": {
+      "S1": {
+        "median": 0.07149620044028307,
+        "iqr": [
+          0.0,
+          0.2150948331566337
+        ],
+        "n": 68
+      },
+      "S2": {
+        "median": 0.08145029161760821,
+        "iqr": [
+          0.0,
+          0.1807274979488523
+        ],
+        "n": 68
+      },
+      "S3": {
+        "median": 0.05001274102024117,
+        "iqr": [
+          0.0,
+          0.21224933202597157
+        ],
+        "n": 68
+      },
+      "S4": {
+        "median": 0.15499022872862492,
+        "iqr": [
+          0.0,
+          0.3867524171173783
+        ],
+        "n": 68
+      },
+      "S5": {
+        "median": 0.4432177489615281,
+        "iqr": [
+          0.0,
+          0.6726860899555458
+        ],
+        "n": 68
+      },
+      "S6": {
+        "median": 0.7304006964216787,
+        "iqr": [
+          0.0,
+          0.9601629168507994
+        ],
+        "n": 68
+      }
+    }
+  },
+  "b1_crosscheck_vs_finding18": {
+    "reference": "reports\\dev\\b1_20261114\\metrics_b1_sev_recon_only.json",
+    "reference_seed": 2026,
+    "mismatches": [],
+    "n_cells_compared": 24,
+    "pass": true
+  },
+  "decision_rule": {
+    "rule": "SUCCESS = \u22651 untrained arm non-censored MDM80 \u2264 S5 on persistent/ndvi with clean cycle- and event-FAR within the 5% budget; NEGATIVE = all arms censored >S6 on persistent/ndvi",
+    "per_arm": {
+      "persist": {
+        "mdm80_persistent_ndvi": ">S6",
+        "far_achieved_cycle": 0.02857142857142857,
+        "clean_event_far_eval": 0.0,
+        "conditions": {
+          "non_censored_mdm80_persistent_ndvi": false,
+          "mdm80_le_S5": false,
+          "calibrated_cycle_far_within_budget": true,
+          "clean_event_far_eval_within_budget": true
+        },
+        "success": false
+      },
+      "med3": {
+        "mdm80_persistent_ndvi": ">S6",
+        "far_achieved_cycle": 0.02857142857142857,
+        "clean_event_far_eval": 0.001388888888888889,
+        "conditions": {
+          "non_censored_mdm80_persistent_ndvi": false,
+          "mdm80_le_S5": false,
+          "calibrated_cycle_far_within_budget": true,
+          "clean_event_far_eval_within_budget": true
+        },
+        "success": false
+      },
+      "trend4": {
+        "mdm80_persistent_ndvi": ">S6",
+        "far_achieved_cycle": 0.02857142857142857,
+        "clean_event_far_eval": 0.0,
+        "conditions": {
+          "non_censored_mdm80_persistent_ndvi": false,
+          "mdm80_le_S5": false,
+          "calibrated_cycle_far_within_budget": true,
+          "clean_event_far_eval_within_budget": true
+        },
+        "success": false
+      }
+    },
+    "outcome": "negative_all_censored",
+    "verdict_text": "honest negative: the realistic severity ladder is below the information floor of these statistics at 5% cycle-FAR; path C retraining upside is unproven; weight shifts to path B (anomaly definition) and/or event-level accumulation analysis",
+    "successful_arms": [],
+    "target_floor_arm": null,
+    "all_censored": true
+  },
+  "notes": ""
+}
