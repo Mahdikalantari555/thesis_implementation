@@ -1,0 +1,29 @@
+[skip-train] masked_transformer_seed13.pt exists (masked_transformer_20261114)
+[skip-train] masked_transformer_seed42.pt exists (masked_transformer_20261114)
+[skip-train] masked_transformer_seed2026.pt exists (masked_transformer_20261114)
+[eval] D:\Dev\Miniforge3\envs\geo\python.exe -X utf8 D:\RS\Thesis\thesis_implementation\scripts\eval_dev.py --run-id masked_transformer_20261114 --model masked_transformer --seeds 13,42,2026 --rounds 10
+[seed 13] det@1MAD=0.022 delay=165d tau=5.5494 k=2 far=0.041 aucpr50=0.389
+[seed 42] det@1MAD=0.019 delay=165d tau=7.4535 k=2 far=0.041 aucpr50=0.414
+[seed 2026] det@1MAD=0.020 delay=0d tau=8.0532 k=2 far=0.041 aucpr50=0.397
+[dev_log] appended row for masked_transformer_20261114:masked_transformer
+[done] metrics → D:\RS\Thesis\thesis_implementation\reports\dev\masked_transformer_20261114\metrics_masked_transformer.json (wall 2.0s)
+[skip-train] gru_ae_seed13.pt exists (gru_ae_20261114)
+[skip-train] gru_ae_seed42.pt exists (gru_ae_20261114)
+[skip-train] gru_ae_seed2026.pt exists (gru_ae_20261114)
+[eval] D:\Dev\Miniforge3\envs\geo\python.exe -X utf8 D:\RS\Thesis\thesis_implementation\scripts\eval_dev.py --run-id gru_ae_20261114 --model gru_ae --seeds 13,42,2026 --rounds 10
+[seed 13] det@1MAD=0.000 delay=nand tau=18.5661 k=1 far=0.041 aucpr50=0.396
+[seed 42] det@1MAD=0.038 delay=195d tau=20.4934 k=1 far=0.041 aucpr50=0.418
+[seed 2026] det@1MAD=0.020 delay=15d tau=19.1125 k=1 far=0.041 aucpr50=0.406
+[dev_log] appended row for gru_ae_20261114:gru_ae
+[done] metrics → D:\RS\Thesis\thesis_implementation\reports\dev\gru_ae_20261114\metrics_gru_ae.json (wall 2.0s)
+[skip-train] b1_phasez_causal_seed13.npz exists (b1_20261114)
+[skip-train] b1_phasez_causal_seed42.npz exists (b1_20261114)
+[skip-train] b1_phasez_causal_seed2026.npz exists (b1_20261114)
+[eval] D:\Dev\Miniforge3\envs\geo\python.exe -X utf8 D:\RS\Thesis\thesis_implementation\scripts\eval_dev.py --run-id b1_20261114 --model b1 --seeds 13,42,2026 --rounds 10
+[seed 13] det@1MAD=0.043 delay=188d tau=29.9376 k=1 far=0.041 aucpr50=0.382
+[seed 42] det@1MAD=0.019 delay=195d tau=29.9376 k=1 far=0.041 aucpr50=0.463
+[seed 2026] det@1MAD=0.020 delay=15d tau=29.9376 k=1 far=0.041 aucpr50=0.415
+[dev_log] appended row for b1_20261114:b1
+[done] metrics → D:\RS\Thesis\thesis_implementation\reports\dev\b1_20261114\metrics_b1.json (wall 0.1s)
+
+Matrix complete

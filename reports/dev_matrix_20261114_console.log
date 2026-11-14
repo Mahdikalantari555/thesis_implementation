@@ -1,0 +1,358 @@
+[train] D:\Dev\Miniforge3\envs\geo\python.exe -X utf8 D:\RS\Thesis\thesis_implementation\scripts\train_main.py --model masked_transformer --seed 13 --run-id masked_transformer_20261114
+[protocol] train cycles=462, dev cycles=73, device=cpu
+[model] masked_transformer params=165,128 d_in=18 doy=True
+epoch 1/60 | train 0.4581 | dev 0.3308 | 0.77s/ep | ETA 146.8s
+epoch 2/60 | train 0.4061 | dev 0.2760 | 0.8s/ep | ETA 95.8s
+epoch 3/60 | train 0.3616 | dev 0.2555 | 0.88s/ep | ETA 79.5s
+epoch 4/60 | train 0.3504 | dev 0.2384 | 0.78s/ep | ETA 69.7s
+epoch 5/60 | train 0.3579 | dev 0.2263 | 0.81s/ep | ETA 63.9s
+epoch 6/60 | train 0.3235 | dev 0.2315 | 0.8s/ep | ETA 59.6s
+epoch 7/60 | train 0.3246 | dev 0.2207 | 0.74s/ep | ETA 55.9s
+epoch 8/60 | train 0.3003 | dev 0.2083 | 0.78s/ep | ETA 53.2s
+epoch 9/60 | train 0.2976 | dev 0.2133 | 0.85s/ep | ETA 51.2s
+epoch 10/60 | train 0.3018 | dev 0.2086 | 0.74s/ep | ETA 49.0s
+epoch 11/60 | train 0.2965 | dev 0.2024 | 0.77s/ep | ETA 47.1s
+epoch 12/60 | train 0.2924 | dev 0.2073 | 0.74s/ep | ETA 45.3s
+epoch 13/60 | train 0.2839 | dev 0.2038 | 0.8s/ep | ETA 43.9s
+epoch 14/60 | train 0.2915 | dev 0.1957 | 0.83s/ep | ETA 42.7s
+epoch 15/60 | train 0.2968 | dev 0.1983 | 0.75s/ep | ETA 41.2s
+epoch 16/60 | train 0.2869 | dev 0.2007 | 0.83s/ep | ETA 40.1s
+epoch 17/60 | train 0.2844 | dev 0.1931 | 0.86s/ep | ETA 39.1s
+epoch 18/60 | train 0.2800 | dev 0.1899 | 0.88s/ep | ETA 38.2s
+epoch 19/60 | train 0.2930 | dev 0.1942 | 0.93s/ep | ETA 37.3s
+epoch 20/60 | train 0.2939 | dev 0.1896 | 0.94s/ep | ETA 36.5s
+epoch 21/60 | train 0.2663 | dev 0.1897 | 0.85s/ep | ETA 35.5s
+epoch 22/60 | train 0.2839 | dev 0.1860 | 0.82s/ep | ETA 34.5s
+epoch 23/60 | train 0.2681 | dev 0.1886 | 0.84s/ep | ETA 33.5s
+epoch 24/60 | train 0.2741 | dev 0.1858 | 0.74s/ep | ETA 32.3s
+epoch 25/60 | train 0.2865 | dev 0.1850 | 0.83s/ep | ETA 31.4s
+epoch 26/60 | train 0.2578 | dev 0.1902 | 0.88s/ep | ETA 30.5s
+epoch 27/60 | train 0.2711 | dev 0.1902 | 0.76s/ep | ETA 29.4s
+epoch 28/60 | train 0.2581 | dev 0.1922 | 0.87s/ep | ETA 28.5s
+epoch 29/60 | train 0.2651 | dev 0.1891 | 0.76s/ep | ETA 27.5s
+epoch 30/60 | train 0.2784 | dev 0.1906 | 0.85s/ep | ETA 26.6s
+epoch 31/60 | train 0.2879 | dev 0.1970 | 0.79s/ep | ETA 25.6s
+epoch 32/60 | train 0.2756 | dev 0.1916 | 0.73s/ep | ETA 24.6s
+epoch 33/60 | train 0.2609 | dev 0.1878 | 0.87s/ep | ETA 23.7s
+[early-stop] no dev improvement for 8 epochs
+[done] masked_transformer seed 13: best dev loss 0.1850, wall 29.0s
+[done] checkpoint: D:\RS\Thesis\thesis_implementation\checkpoints\dev\masked_transformer_20261114\masked_transformer_seed13.pt
+[train] D:\Dev\Miniforge3\envs\geo\python.exe -X utf8 D:\RS\Thesis\thesis_implementation\scripts\train_main.py --model masked_transformer --seed 42 --run-id masked_transformer_20261114
+[protocol] train cycles=462, dev cycles=73, device=cpu
+[model] masked_transformer params=165,128 d_in=18 doy=True
+epoch 1/60 | train 0.4550 | dev 0.4282 | 0.86s/ep | ETA 152.7s
+epoch 2/60 | train 0.3952 | dev 0.3708 | 0.81s/ep | ETA 99.3s
+epoch 3/60 | train 0.3505 | dev 0.3363 | 0.73s/ep | ETA 79.1s
+epoch 4/60 | train 0.3498 | dev 0.3162 | 0.84s/ep | ETA 70.3s
+epoch 5/60 | train 0.3350 | dev 0.3117 | 0.83s/ep | ETA 64.6s
+epoch 6/60 | train 0.3140 | dev 0.2948 | 0.85s/ep | ETA 60.7s
+epoch 7/60 | train 0.3103 | dev 0.2958 | 0.87s/ep | ETA 57.8s
+epoch 8/60 | train 0.3233 | dev 0.3005 | 0.86s/ep | ETA 55.3s
+epoch 9/60 | train 0.3272 | dev 0.2886 | 0.8s/ep | ETA 52.9s
+epoch 10/60 | train 0.3083 | dev 0.2866 | 0.89s/ep | ETA 51.2s
+epoch 11/60 | train 0.3048 | dev 0.2854 | 0.9s/ep | ETA 49.7s
+epoch 12/60 | train 0.3088 | dev 0.2738 | 0.87s/ep | ETA 48.2s
+epoch 13/60 | train 0.2871 | dev 0.2754 | 0.87s/ep | ETA 46.8s
+epoch 14/60 | train 0.2853 | dev 0.2640 | 0.79s/ep | ETA 45.2s
+epoch 15/60 | train 0.2924 | dev 0.2593 | 0.89s/ep | ETA 44.0s
+epoch 16/60 | train 0.2824 | dev 0.2610 | 0.84s/ep | ETA 42.7s
+epoch 17/60 | train 0.2828 | dev 0.2570 | 0.79s/ep | ETA 41.3s
+epoch 18/60 | train 0.2925 | dev 0.2615 | 0.78s/ep | ETA 39.9s
+epoch 19/60 | train 0.2928 | dev 0.2530 | 0.86s/ep | ETA 38.8s
+epoch 20/60 | train 0.2814 | dev 0.2430 | 0.84s/ep | ETA 37.7s
+epoch 21/60 | train 0.2695 | dev 0.2345 | 0.81s/ep | ETA 36.5s
+epoch 22/60 | train 0.2811 | dev 0.2462 | 0.8s/ep | ETA 35.4s
+epoch 23/60 | train 0.2798 | dev 0.2418 | 0.82s/ep | ETA 34.3s
+epoch 24/60 | train 0.2647 | dev 0.2428 | 0.9s/ep | ETA 33.3s
+epoch 25/60 | train 0.2794 | dev 0.2455 | 0.79s/ep | ETA 32.2s
+epoch 26/60 | train 0.2666 | dev 0.2422 | 0.87s/ep | ETA 31.3s
+epoch 27/60 | train 0.2635 | dev 0.2405 | 0.88s/ep | ETA 30.3s
+epoch 28/60 | train 0.2614 | dev 0.2434 | 0.78s/ep | ETA 29.3s
+epoch 29/60 | train 0.2660 | dev 0.2303 | 0.84s/ep | ETA 28.3s
+epoch 30/60 | train 0.2782 | dev 0.2381 | 0.85s/ep | ETA 27.3s
+epoch 31/60 | train 0.2713 | dev 0.2375 | 0.89s/ep | ETA 26.4s
+epoch 32/60 | train 0.2842 | dev 0.2275 | 0.92s/ep | ETA 25.5s
+epoch 33/60 | train 0.2705 | dev 0.2432 | 0.87s/ep | ETA 24.6s
+epoch 34/60 | train 0.2736 | dev 0.2251 | 0.86s/ep | ETA 23.7s
+epoch 35/60 | train 0.2737 | dev 0.2237 | 0.87s/ep | ETA 22.7s
+epoch 36/60 | train 0.2604 | dev 0.2226 | 0.82s/ep | ETA 21.8s
+epoch 37/60 | train 0.2533 | dev 0.2258 | 0.9s/ep | ETA 20.9s
+epoch 38/60 | train 0.2641 | dev 0.2429 | 0.77s/ep | ETA 19.9s
+epoch 39/60 | train 0.2553 | dev 0.2321 | 0.82s/ep | ETA 18.9s
+epoch 40/60 | train 0.2666 | dev 0.2275 | 0.85s/ep | ETA 18.0s
+epoch 41/60 | train 0.2639 | dev 0.2140 | 0.71s/ep | ETA 17.0s
+epoch 42/60 | train 0.2684 | dev 0.2364 | 0.79s/ep | ETA 16.1s
+epoch 43/60 | train 0.2654 | dev 0.2323 | 0.81s/ep | ETA 15.2s
+epoch 44/60 | train 0.2656 | dev 0.2240 | 0.81s/ep | ETA 14.3s
+epoch 45/60 | train 0.2611 | dev 0.2257 | 0.78s/ep | ETA 13.3s
+epoch 46/60 | train 0.2453 | dev 0.2173 | 0.82s/ep | ETA 12.4s
+epoch 47/60 | train 0.2579 | dev 0.2286 | 0.94s/ep | ETA 11.6s
+epoch 48/60 | train 0.2537 | dev 0.2246 | 0.83s/ep | ETA 10.7s
+epoch 49/60 | train 0.2470 | dev 0.2231 | 0.84s/ep | ETA 9.8s
+[early-stop] no dev improvement for 8 epochs
+[done] masked_transformer seed 42: best dev loss 0.2140, wall 43.5s
+[done] checkpoint: D:\RS\Thesis\thesis_implementation\checkpoints\dev\masked_transformer_20261114\masked_transformer_seed42.pt
+[train] D:\Dev\Miniforge3\envs\geo\python.exe -X utf8 D:\RS\Thesis\thesis_implementation\scripts\train_main.py --model masked_transformer --seed 2026 --run-id masked_transformer_20261114
+[protocol] train cycles=462, dev cycles=73, device=cpu
+[model] masked_transformer params=165,128 d_in=18 doy=True
+epoch 1/60 | train 0.4652 | dev 0.3792 | 0.89s/ep | ETA 152.5s
+epoch 2/60 | train 0.4102 | dev 0.3417 | 0.85s/ep | ETA 100.2s
+epoch 3/60 | train 0.3683 | dev 0.3105 | 0.83s/ep | ETA 81.9s
+epoch 4/60 | train 0.3445 | dev 0.2854 | 0.84s/ep | ETA 72.3s
+epoch 5/60 | train 0.3234 | dev 0.2715 | 0.84s/ep | ETA 66.2s
+epoch 6/60 | train 0.3433 | dev 0.2720 | 0.81s/ep | ETA 61.6s
+epoch 7/60 | train 0.3298 | dev 0.2562 | 0.82s/ep | ETA 58.1s
+epoch 8/60 | train 0.3159 | dev 0.2458 | 0.76s/ep | ETA 54.9s
+epoch 9/60 | train 0.3036 | dev 0.2546 | 0.69s/ep | ETA 51.9s
+epoch 10/60 | train 0.3016 | dev 0.2390 | 0.87s/ep | ETA 50.2s
+epoch 11/60 | train 0.2911 | dev 0.2454 | 0.81s/ep | ETA 48.4s
+epoch 12/60 | train 0.2958 | dev 0.2368 | 0.92s/ep | ETA 47.2s
+epoch 13/60 | train 0.3124 | dev 0.2352 | 0.75s/ep | ETA 45.4s
+epoch 14/60 | train 0.2989 | dev 0.2317 | 0.72s/ep | ETA 43.7s
+epoch 15/60 | train 0.2791 | dev 0.2258 | 0.93s/ep | ETA 42.7s
+epoch 16/60 | train 0.2853 | dev 0.2269 | 0.9s/ep | ETA 41.7s
+epoch 17/60 | train 0.2916 | dev 0.2298 | 0.89s/ep | ETA 40.6s
+epoch 18/60 | train 0.2716 | dev 0.2227 | 0.87s/ep | ETA 39.5s
+epoch 19/60 | train 0.3052 | dev 0.2211 | 0.77s/ep | ETA 38.3s
+epoch 20/60 | train 0.2843 | dev 0.2224 | 0.82s/ep | ETA 37.2s
+epoch 21/60 | train 0.2755 | dev 0.2228 | 0.86s/ep | ETA 36.1s
+epoch 22/60 | train 0.2657 | dev 0.2228 | 0.78s/ep | ETA 35.0s
+epoch 23/60 | train 0.2742 | dev 0.2260 | 0.86s/ep | ETA 34.0s
+epoch 24/60 | train 0.2973 | dev 0.2153 | 0.85s/ep | ETA 33.0s
+epoch 25/60 | train 0.2689 | dev 0.2229 | 0.71s/ep | ETA 31.8s
+epoch 26/60 | train 0.2886 | dev 0.2275 | 0.75s/ep | ETA 30.7s
+epoch 27/60 | train 0.2625 | dev 0.2191 | 0.88s/ep | ETA 29.8s
+epoch 28/60 | train 0.2716 | dev 0.2150 | 0.8s/ep | ETA 28.8s
+epoch 29/60 | train 0.2686 | dev 0.2147 | 0.78s/ep | ETA 27.8s
+epoch 30/60 | train 0.2807 | dev 0.2165 | 0.79s/ep | ETA 26.8s
+epoch 31/60 | train 0.2623 | dev 0.2174 | 0.88s/ep | ETA 25.9s
+epoch 32/60 | train 0.2637 | dev 0.2198 | 0.74s/ep | ETA 24.9s
+epoch 33/60 | train 0.2623 | dev 0.2129 | 0.79s/ep | ETA 23.9s
+epoch 34/60 | train 0.2633 | dev 0.2110 | 0.81s/ep | ETA 23.0s
+epoch 35/60 | train 0.2656 | dev 0.2190 | 0.9s/ep | ETA 22.1s
+epoch 36/60 | train 0.2684 | dev 0.2120 | 0.8s/ep | ETA 21.2s
+epoch 37/60 | train 0.2509 | dev 0.2170 | 0.79s/ep | ETA 20.3s
+epoch 38/60 | train 0.2665 | dev 0.2238 | 0.81s/ep | ETA 19.4s
+epoch 39/60 | train 0.2624 | dev 0.2172 | 0.85s/ep | ETA 18.5s
+epoch 40/60 | train 0.2574 | dev 0.2264 | 0.77s/ep | ETA 17.5s
+epoch 41/60 | train 0.2668 | dev 0.2251 | 0.78s/ep | ETA 16.6s
+epoch 42/60 | train 0.2613 | dev 0.2094 | 0.91s/ep | ETA 15.8s
+epoch 43/60 | train 0.2748 | dev 0.2188 | 0.9s/ep | ETA 14.9s
+epoch 44/60 | train 0.2634 | dev 0.2164 | 0.76s/ep | ETA 14.0s
+epoch 45/60 | train 0.2562 | dev 0.2137 | 0.73s/ep | ETA 13.1s
+epoch 46/60 | train 0.2602 | dev 0.2136 | 0.89s/ep | ETA 12.2s
+epoch 47/60 | train 0.2488 | dev 0.2173 | 0.65s/ep | ETA 11.3s
+epoch 48/60 | train 0.2558 | dev 0.2181 | 0.79s/ep | ETA 10.4s
+epoch 49/60 | train 0.2550 | dev 0.2086 | 0.73s/ep | ETA 9.5s
+epoch 50/60 | train 0.2470 | dev 0.2131 | 0.87s/ep | ETA 8.6s
+epoch 51/60 | train 0.2528 | dev 0.2139 | 0.82s/ep | ETA 7.8s
+epoch 52/60 | train 0.2554 | dev 0.2256 | 0.74s/ep | ETA 6.9s
+epoch 53/60 | train 0.2556 | dev 0.2115 | 0.64s/ep | ETA 6.0s
+epoch 54/60 | train 0.2470 | dev 0.2135 | 0.75s/ep | ETA 5.1s
+epoch 55/60 | train 0.2562 | dev 0.2076 | 0.77s/ep | ETA 4.3s
+epoch 56/60 | train 0.2525 | dev 0.2122 | 0.75s/ep | ETA 3.4s
+epoch 57/60 | train 0.2637 | dev 0.2073 | 0.76s/ep | ETA 2.6s
+epoch 58/60 | train 0.2438 | dev 0.2100 | 0.68s/ep | ETA 1.7s
+epoch 59/60 | train 0.2541 | dev 0.2143 | 0.68s/ep | ETA 0.8s
+epoch 60/60 | train 0.2506 | dev 0.2101 | 0.77s/ep | ETA 0.8s
+[done] masked_transformer seed 2026: best dev loss 0.2073, wall 50.8s
+[done] checkpoint: D:\RS\Thesis\thesis_implementation\checkpoints\dev\masked_transformer_20261114\masked_transformer_seed2026.pt
+[train] D:\Dev\Miniforge3\envs\geo\python.exe -X utf8 D:\RS\Thesis\thesis_implementation\scripts\train_main.py --model gru_ae --seed 13 --run-id gru_ae_20261114
+[protocol] train cycles=462, dev cycles=73, device=cpu
+[model] gru_ae params=174,008 d_in=18 doy=True
+epoch 1/60 | train 0.4217 | dev 0.3787 | 0.47s/ep | ETA 126.6s
+epoch 2/60 | train 0.3622 | dev 0.3358 | 0.37s/ep | ETA 73.0s
+epoch 3/60 | train 0.3410 | dev 0.3432 | 0.44s/ep | ETA 56.3s
+epoch 4/60 | train 0.3384 | dev 0.3353 | 0.37s/ep | ETA 46.8s
+epoch 5/60 | train 0.3554 | dev 0.3120 | 0.55s/ep | ETA 43.0s
+epoch 6/60 | train 0.3223 | dev 0.3099 | 0.45s/ep | ETA 39.3s
+epoch 7/60 | train 0.3199 | dev 0.3054 | 0.45s/ep | ETA 36.8s
+epoch 8/60 | train 0.3045 | dev 0.2966 | 0.39s/ep | ETA 34.2s
+epoch 9/60 | train 0.3010 | dev 0.2946 | 0.48s/ep | ETA 32.6s
+epoch 10/60 | train 0.3069 | dev 0.2916 | 0.33s/ep | ETA 30.4s
+epoch 11/60 | train 0.2997 | dev 0.2872 | 0.34s/ep | ETA 28.6s
+epoch 12/60 | train 0.2953 | dev 0.2798 | 0.41s/ep | ETA 27.4s
+epoch 13/60 | train 0.2860 | dev 0.2790 | 0.37s/ep | ETA 26.1s
+epoch 14/60 | train 0.2945 | dev 0.2854 | 0.39s/ep | ETA 25.0s
+epoch 15/60 | train 0.3045 | dev 0.2819 | 0.41s/ep | ETA 24.1s
+epoch 16/60 | train 0.2945 | dev 0.2799 | 0.47s/ep | ETA 23.4s
+epoch 17/60 | train 0.2866 | dev 0.2800 | 0.46s/ep | ETA 22.7s
+epoch 18/60 | train 0.2806 | dev 0.2749 | 0.5s/ep | ETA 22.1s
+epoch 19/60 | train 0.2928 | dev 0.2797 | 0.46s/ep | ETA 21.4s
+epoch 20/60 | train 0.2925 | dev 0.2699 | 0.37s/ep | ETA 20.6s
+epoch 21/60 | train 0.2665 | dev 0.2755 | 0.39s/ep | ETA 19.9s
+epoch 22/60 | train 0.2866 | dev 0.2672 | 0.36s/ep | ETA 19.1s
+epoch 23/60 | train 0.2683 | dev 0.2693 | 0.36s/ep | ETA 18.4s
+epoch 24/60 | train 0.2775 | dev 0.2708 | 0.41s/ep | ETA 17.8s
+epoch 25/60 | train 0.2889 | dev 0.2682 | 0.46s/ep | ETA 17.2s
+epoch 26/60 | train 0.2528 | dev 0.2621 | 0.53s/ep | ETA 16.8s
+epoch 27/60 | train 0.2701 | dev 0.2711 | 0.43s/ep | ETA 16.2s
+epoch 28/60 | train 0.2561 | dev 0.2638 | 0.44s/ep | ETA 15.7s
+epoch 29/60 | train 0.2637 | dev 0.2630 | 0.43s/ep | ETA 15.1s
+epoch 30/60 | train 0.2858 | dev 0.2641 | 0.47s/ep | ETA 14.6s
+epoch 31/60 | train 0.2848 | dev 0.2666 | 0.39s/ep | ETA 14.1s
+epoch 32/60 | train 0.2708 | dev 0.2622 | 0.38s/ep | ETA 13.5s
+epoch 33/60 | train 0.2556 | dev 0.2618 | 0.37s/ep | ETA 12.9s
+epoch 34/60 | train 0.2523 | dev 0.2631 | 0.39s/ep | ETA 12.4s
+epoch 35/60 | train 0.2544 | dev 0.2536 | 0.37s/ep | ETA 11.8s
+epoch 36/60 | train 0.2588 | dev 0.2530 | 0.55s/ep | ETA 11.4s
+epoch 37/60 | train 0.2587 | dev 0.2579 | 0.42s/ep | ETA 10.9s
+epoch 38/60 | train 0.2644 | dev 0.2549 | 0.4s/ep | ETA 10.4s
+epoch 39/60 | train 0.2631 | dev 0.2628 | 0.46s/ep | ETA 9.9s
+epoch 40/60 | train 0.2539 | dev 0.2552 | 0.41s/ep | ETA 9.4s
+epoch 41/60 | train 0.2494 | dev 0.2563 | 0.41s/ep | ETA 8.9s
+epoch 42/60 | train 0.2414 | dev 0.2561 | 0.32s/ep | ETA 8.4s
+epoch 43/60 | train 0.2486 | dev 0.2526 | 0.36s/ep | ETA 7.9s
+epoch 44/60 | train 0.2489 | dev 0.2532 | 0.33s/ep | ETA 7.4s
+epoch 45/60 | train 0.2610 | dev 0.2583 | 0.37s/ep | ETA 6.9s
+epoch 46/60 | train 0.2560 | dev 0.2514 | 0.34s/ep | ETA 6.4s
+epoch 47/60 | train 0.2441 | dev 0.2529 | 0.42s/ep | ETA 5.9s
+epoch 48/60 | train 0.2550 | dev 0.2522 | 0.37s/ep | ETA 5.4s
+epoch 49/60 | train 0.2471 | dev 0.2453 | 0.36s/ep | ETA 5.0s
+epoch 50/60 | train 0.2500 | dev 0.2553 | 0.37s/ep | ETA 4.5s
+epoch 51/60 | train 0.2508 | dev 0.2599 | 0.43s/ep | ETA 4.1s
+epoch 52/60 | train 0.2334 | dev 0.2503 | 0.44s/ep | ETA 3.6s
+epoch 53/60 | train 0.2345 | dev 0.2488 | 0.43s/ep | ETA 3.2s
+epoch 54/60 | train 0.2351 | dev 0.2570 | 0.37s/ep | ETA 2.7s
+epoch 55/60 | train 0.2486 | dev 0.2469 | 0.38s/ep | ETA 2.2s
+epoch 56/60 | train 0.2377 | dev 0.2477 | 0.41s/ep | ETA 1.8s
+epoch 57/60 | train 0.2551 | dev 0.2629 | 0.42s/ep | ETA 1.3s
+[early-stop] no dev improvement for 8 epochs
+[done] gru_ae seed 13: best dev loss 0.2453, wall 25.4s
+[done] checkpoint: D:\RS\Thesis\thesis_implementation\checkpoints\dev\gru_ae_20261114\gru_ae_seed13.pt
+[train] D:\Dev\Miniforge3\envs\geo\python.exe -X utf8 D:\RS\Thesis\thesis_implementation\scripts\train_main.py --model gru_ae --seed 42 --run-id gru_ae_20261114
+[protocol] train cycles=462, dev cycles=73, device=cpu
+[model] gru_ae params=174,008 d_in=18 doy=True
+epoch 1/60 | train 0.4166 | dev 0.4616 | 0.37s/ep | ETA 122.4s
+epoch 2/60 | train 0.3490 | dev 0.4161 | 0.42s/ep | ETA 72.6s
+epoch 3/60 | train 0.3336 | dev 0.4048 | 0.39s/ep | ETA 55.0s
+epoch 4/60 | train 0.3373 | dev 0.3967 | 0.42s/ep | ETA 46.5s
+epoch 5/60 | train 0.3321 | dev 0.3917 | 0.34s/ep | ETA 40.3s
+epoch 6/60 | train 0.3127 | dev 0.3800 | 0.38s/ep | ETA 36.4s
+epoch 7/60 | train 0.3149 | dev 0.3784 | 0.51s/ep | ETA 34.5s
+epoch 8/60 | train 0.3250 | dev 0.3803 | 0.4s/ep | ETA 32.3s
+epoch 9/60 | train 0.3259 | dev 0.3682 | 0.45s/ep | ETA 30.7s
+epoch 10/60 | train 0.3023 | dev 0.3645 | 0.6s/ep | ETA 30.2s
+epoch 11/60 | train 0.2991 | dev 0.3608 | 0.54s/ep | ETA 29.3s
+epoch 12/60 | train 0.3100 | dev 0.3530 | 0.35s/ep | ETA 27.8s
+epoch 13/60 | train 0.2903 | dev 0.3548 | 0.47s/ep | ETA 26.9s
+epoch 14/60 | train 0.2944 | dev 0.3533 | 0.36s/ep | ETA 25.6s
+epoch 15/60 | train 0.3023 | dev 0.3534 | 0.45s/ep | ETA 24.7s
+epoch 16/60 | train 0.2861 | dev 0.3466 | 0.44s/ep | ETA 23.9s
+epoch 17/60 | train 0.2888 | dev 0.3421 | 0.39s/ep | ETA 23.0s
+epoch 18/60 | train 0.2998 | dev 0.3472 | 0.47s/ep | ETA 22.3s
+epoch 19/60 | train 0.3036 | dev 0.3434 | 0.4s/ep | ETA 21.5s
+epoch 20/60 | train 0.2855 | dev 0.3387 | 0.42s/ep | ETA 20.8s
+epoch 21/60 | train 0.2748 | dev 0.3350 | 0.33s/ep | ETA 19.9s
+epoch 22/60 | train 0.2820 | dev 0.3356 | 0.48s/ep | ETA 19.4s
+epoch 23/60 | train 0.2887 | dev 0.3324 | 0.45s/ep | ETA 18.8s
+epoch 24/60 | train 0.2741 | dev 0.3299 | 0.43s/ep | ETA 18.2s
+epoch 25/60 | train 0.2811 | dev 0.3315 | 0.32s/ep | ETA 17.4s
+epoch 26/60 | train 0.2718 | dev 0.3295 | 0.32s/ep | ETA 16.7s
+epoch 27/60 | train 0.2694 | dev 0.3265 | 0.41s/ep | ETA 16.1s
+epoch 28/60 | train 0.2659 | dev 0.3317 | 0.48s/ep | ETA 15.6s
+epoch 29/60 | train 0.2720 | dev 0.3294 | 0.51s/ep | ETA 15.2s
+epoch 30/60 | train 0.2764 | dev 0.3248 | 0.44s/ep | ETA 14.6s
+epoch 31/60 | train 0.2714 | dev 0.3363 | 0.45s/ep | ETA 14.1s
+epoch 32/60 | train 0.2867 | dev 0.3258 | 0.39s/ep | ETA 13.5s
+epoch 33/60 | train 0.2750 | dev 0.3279 | 0.35s/ep | ETA 13.0s
+epoch 34/60 | train 0.2732 | dev 0.3307 | 0.38s/ep | ETA 12.4s
+epoch 35/60 | train 0.2721 | dev 0.3262 | 0.49s/ep | ETA 11.9s
+epoch 36/60 | train 0.2569 | dev 0.3241 | 0.54s/ep | ETA 11.5s
+epoch 37/60 | train 0.2548 | dev 0.3312 | 0.45s/ep | ETA 11.0s
+epoch 38/60 | train 0.2704 | dev 0.3248 | 0.4s/ep | ETA 10.5s
+epoch 39/60 | train 0.2605 | dev 0.3209 | 0.32s/ep | ETA 9.9s
+epoch 40/60 | train 0.2681 | dev 0.3194 | 0.36s/ep | ETA 9.4s
+epoch 41/60 | train 0.2635 | dev 0.3237 | 0.33s/ep | ETA 8.9s
+epoch 42/60 | train 0.2717 | dev 0.3194 | 0.49s/ep | ETA 8.4s
+epoch 43/60 | train 0.2601 | dev 0.3180 | 0.49s/ep | ETA 8.0s
+epoch 44/60 | train 0.2619 | dev 0.3138 | 0.47s/ep | ETA 7.5s
+epoch 45/60 | train 0.2593 | dev 0.3148 | 0.53s/ep | ETA 7.1s
+epoch 46/60 | train 0.2427 | dev 0.3132 | 0.55s/ep | ETA 6.6s
+epoch 47/60 | train 0.2566 | dev 0.3108 | 0.45s/ep | ETA 6.1s
+epoch 48/60 | train 0.2548 | dev 0.3097 | 0.35s/ep | ETA 5.6s
+epoch 49/60 | train 0.2455 | dev 0.3145 | 0.47s/ep | ETA 5.2s
+epoch 50/60 | train 0.2592 | dev 0.3200 | 0.49s/ep | ETA 4.7s
+epoch 51/60 | train 0.2503 | dev 0.3189 | 0.46s/ep | ETA 4.2s
+epoch 52/60 | train 0.2475 | dev 0.3135 | 0.55s/ep | ETA 3.8s
+epoch 53/60 | train 0.2622 | dev 0.3183 | 0.37s/ep | ETA 3.3s
+epoch 54/60 | train 0.2462 | dev 0.3050 | 0.38s/ep | ETA 2.8s
+epoch 55/60 | train 0.2438 | dev 0.3138 | 0.44s/ep | ETA 2.3s
+epoch 56/60 | train 0.2484 | dev 0.2995 | 0.56s/ep | ETA 1.9s
+epoch 57/60 | train 0.2517 | dev 0.3143 | 0.43s/ep | ETA 1.4s
+epoch 58/60 | train 0.2483 | dev 0.2905 | 0.49s/ep | ETA 0.9s
+epoch 59/60 | train 0.2403 | dev 0.2986 | 0.54s/ep | ETA 0.5s
+epoch 60/60 | train 0.2505 | dev 0.2992 | 0.48s/ep | ETA 0.5s
+[done] gru_ae seed 42: best dev loss 0.2905, wall 28.2s
+[done] checkpoint: D:\RS\Thesis\thesis_implementation\checkpoints\dev\gru_ae_20261114\gru_ae_seed42.pt
+[train] D:\Dev\Miniforge3\envs\geo\python.exe -X utf8 D:\RS\Thesis\thesis_implementation\scripts\train_main.py --model gru_ae --seed 2026 --run-id gru_ae_20261114
+[protocol] train cycles=462, dev cycles=73, device=cpu
+[model] gru_ae params=174,008 d_in=18 doy=True
+epoch 1/60 | train 0.4381 | dev 0.4260 | 0.41s/ep | ETA 123.7s
+epoch 2/60 | train 0.3747 | dev 0.3834 | 0.38s/ep | ETA 72.1s
+epoch 3/60 | train 0.3309 | dev 0.3681 | 0.43s/ep | ETA 55.6s
+epoch 4/60 | train 0.3259 | dev 0.3575 | 0.49s/ep | ETA 47.8s
+epoch 5/60 | train 0.3163 | dev 0.3546 | 0.4s/ep | ETA 42.0s
+epoch 6/60 | train 0.3343 | dev 0.3516 | 0.49s/ep | ETA 38.8s
+epoch 7/60 | train 0.3273 | dev 0.3451 | 0.36s/ep | ETA 35.4s
+epoch 8/60 | train 0.3155 | dev 0.3426 | 0.4s/ep | ETA 33.0s
+epoch 9/60 | train 0.3009 | dev 0.3368 | 0.44s/ep | ETA 31.3s
+epoch 10/60 | train 0.3048 | dev 0.3339 | 0.46s/ep | ETA 30.0s
+epoch 11/60 | train 0.2982 | dev 0.3273 | 0.45s/ep | ETA 28.7s
+epoch 12/60 | train 0.2975 | dev 0.3314 | 0.47s/ep | ETA 27.7s
+epoch 13/60 | train 0.3127 | dev 0.3248 | 0.41s/ep | ETA 26.6s
+epoch 14/60 | train 0.3045 | dev 0.3226 | 0.4s/ep | ETA 25.5s
+epoch 15/60 | train 0.2762 | dev 0.3217 | 0.41s/ep | ETA 24.5s
+epoch 16/60 | train 0.2928 | dev 0.3193 | 0.46s/ep | ETA 23.7s
+epoch 17/60 | train 0.2923 | dev 0.3157 | 0.44s/ep | ETA 23.0s
+epoch 18/60 | train 0.2787 | dev 0.3155 | 0.35s/ep | ETA 22.0s
+epoch 19/60 | train 0.3078 | dev 0.3089 | 0.42s/ep | ETA 21.3s
+epoch 20/60 | train 0.2947 | dev 0.3088 | 0.34s/ep | ETA 20.4s
+epoch 21/60 | train 0.2820 | dev 0.3043 | 0.4s/ep | ETA 19.7s
+epoch 22/60 | train 0.2657 | dev 0.3018 | 0.39s/ep | ETA 19.0s
+epoch 23/60 | train 0.2763 | dev 0.2978 | 0.39s/ep | ETA 18.3s
+epoch 24/60 | train 0.2976 | dev 0.3077 | 0.34s/ep | ETA 17.6s
+epoch 25/60 | train 0.2708 | dev 0.3071 | 0.45s/ep | ETA 17.1s
+epoch 26/60 | train 0.2931 | dev 0.3010 | 0.44s/ep | ETA 16.5s
+epoch 27/60 | train 0.2651 | dev 0.2974 | 0.49s/ep | ETA 16.1s
+epoch 28/60 | train 0.2734 | dev 0.2987 | 0.44s/ep | ETA 15.5s
+epoch 29/60 | train 0.2664 | dev 0.2974 | 0.41s/ep | ETA 15.0s
+epoch 30/60 | train 0.2856 | dev 0.3044 | 0.52s/ep | ETA 14.5s
+epoch 31/60 | train 0.2687 | dev 0.2989 | 0.54s/ep | ETA 14.1s
+epoch 32/60 | train 0.2621 | dev 0.2882 | 0.51s/ep | ETA 13.6s
+epoch 33/60 | train 0.2620 | dev 0.2915 | 0.43s/ep | ETA 13.1s
+epoch 34/60 | train 0.2619 | dev 0.2922 | 0.4s/ep | ETA 12.6s
+epoch 35/60 | train 0.2649 | dev 0.2951 | 0.41s/ep | ETA 12.0s
+epoch 36/60 | train 0.2685 | dev 0.2900 | 0.4s/ep | ETA 11.5s
+epoch 37/60 | train 0.2510 | dev 0.2841 | 0.43s/ep | ETA 11.0s
+epoch 38/60 | train 0.2661 | dev 0.2905 | 0.37s/ep | ETA 10.4s
+epoch 39/60 | train 0.2608 | dev 0.2821 | 0.39s/ep | ETA 9.9s
+epoch 40/60 | train 0.2611 | dev 0.2899 | 0.42s/ep | ETA 9.4s
+epoch 41/60 | train 0.2570 | dev 0.2829 | 0.48s/ep | ETA 9.0s
+epoch 42/60 | train 0.2567 | dev 0.2797 | 0.39s/ep | ETA 8.5s
+epoch 43/60 | train 0.2754 | dev 0.2867 | 0.49s/ep | ETA 8.0s
+epoch 44/60 | train 0.2609 | dev 0.2853 | 0.47s/ep | ETA 7.5s
+epoch 45/60 | train 0.2488 | dev 0.2795 | 0.45s/ep | ETA 7.1s
+epoch 46/60 | train 0.2623 | dev 0.2760 | 0.36s/ep | ETA 6.6s
+epoch 47/60 | train 0.2452 | dev 0.2829 | 0.36s/ep | ETA 6.1s
+epoch 48/60 | train 0.2522 | dev 0.2829 | 0.37s/ep | ETA 5.6s
+epoch 49/60 | train 0.2470 | dev 0.2841 | 0.37s/ep | ETA 5.1s
+epoch 50/60 | train 0.2394 | dev 0.2797 | 0.41s/ep | ETA 4.6s
+epoch 51/60 | train 0.2411 | dev 0.2837 | 0.41s/ep | ETA 4.1s
+epoch 52/60 | train 0.2476 | dev 0.2784 | 0.42s/ep | ETA 3.7s
+epoch 53/60 | train 0.2427 | dev 0.2811 | 0.4s/ep | ETA 3.2s
+epoch 54/60 | train 0.2438 | dev 0.2837 | 0.41s/ep | ETA 2.7s
+[early-stop] no dev improvement for 8 epochs
+[done] gru_ae seed 2026: best dev loss 0.2760, wall 24.7s
+[done] checkpoint: D:\RS\Thesis\thesis_implementation\checkpoints\dev\gru_ae_20261114\gru_ae_seed2026.pt
+[train] D:\Dev\Miniforge3\envs\geo\python.exe -X utf8 D:\RS\Thesis\thesis_implementation\scripts\train_main.py --model b1 --seed 13 --run-id b1_20261114
+[protocol] train cycles=462, dev cycles=73, device=cpu
+[b1] fitted train statistics in 0.1s → D:\RS\Thesis\thesis_implementation\checkpoints\dev\b1_20261114
+[train] D:\Dev\Miniforge3\envs\geo\python.exe -X utf8 D:\RS\Thesis\thesis_implementation\scripts\train_main.py --model b1 --seed 42 --run-id b1_20261114
+[protocol] train cycles=462, dev cycles=73, device=cpu
+[b1] fitted train statistics in 0.1s → D:\RS\Thesis\thesis_implementation\checkpoints\dev\b1_20261114
+[train] D:\Dev\Miniforge3\envs\geo\python.exe -X utf8 D:\RS\Thesis\thesis_implementation\scripts\train_main.py --model b1 --seed 2026 --run-id b1_20261114
+[protocol] train cycles=462, dev cycles=73, device=cpu
+[b1] fitted train statistics in 0.1s → D:\RS\Thesis\thesis_implementation\checkpoints\dev\b1_20261114
+
+Matrix complete
