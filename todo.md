@@ -37,6 +37,7 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
 ## Queued — openspec candidates (one change each, user-approved direction)
 
 1. **`visualize-metric-products`** — wire METRIC products into the platform:
+   - ✅ Interim visualization DONE (user, 2026-11-10): `data/interim/metric_interpolation_timeseries.png` — ticked 2026-11-14; platform wiring still pending
    - `Data/Metric/products/ETaDaily/` — 271 scene rasters (mm/day, 30 m, UTM39N, AOI 496×472)
    - `Data/Metric/products/interpolation/{ETaDaily,CWSI_ET}/` — **4,375 daily interpolated rasters each** (2013-03-31 → …)
    - Zonal stats per field per date → new payload channels (ETa_METRIC, CWSI_ET) → Temporal/Map views + raster tile layers
@@ -78,13 +79,14 @@ Full evidence: `D:\RS\Thesis\research\ssl-stress-advantage\REPORT.md` (27 source
   salinity, waterlogging, pests/disease, early ripening, lodging; sub-questions from findings 13 §3.3:
   pre-harvest irrigation cut-off timing/magnitude; pre-harvest burning NDVI/LST signature; transient vs
   chronic disturbances; typical mid-season NDVI drop; waterlogging occurrence/months).
-  **Now has a concrete proposal to react to** (deep-research 2026-11-14): severity table in absolute
-  literature-grounded units (LST +2/+5/+10 K; NDVI −0.05…−0.25; ETa −10/−25/−35 %), also reported in
-  MAD units, + a minimum-detectable-magnitude curve at fixed FAR. Local grounding: real stress =
-  **0.5–2.5× across-field MAD** vs measured detection floor **6–8×MAD** — the current protocol tests
-  steps 2–4× larger than real stress. **Blocks:** D6 perturbation-set update; task 6.2 tuning
-  resumption; final severity-scale decision (across-field MAD vs model-residual) and FAR level
-  (cycle vs event vs bin).
+  **PARTIALLY ANSWERED 2026-11-14 (user): vegetation-index drops (NDVI, SAVI) are the signals that
+  matter — other signature categories (LST rise, waterlogging, burning, …) the user cannot answer.**
+  Remaining sub-question = drop MAGNITUDE + duration. Fallback if the advisor is also silent (recorded):
+  use the deep-research literature table as the interim default — NDVI/SAVI drops −0.05/−0.10/−0.15/−0.25
+  (2–6 bins duration), labelled interim/literature-derived in D6 + model card; severity table is config,
+  advisor can adjust later without invalidating infrastructure.
+  **Blocks:** D6 perturbation-set update; task 6.2 tuning resumption; final severity-scale decision
+  (across-field MAD vs model-residual) and FAR level (cycle vs event vs bin).
 - **A2. L4 evidence availability** — can irrigation records, per-field yield, rootzone-ECe/salinity
   surveys, or expert review be obtained for even a subset of the 490 fields? **Blocks:** any L4
   validation plan; without it the thesis caps at L2/L3 + proxy agreement (published SSL-EO norm,
@@ -97,10 +99,11 @@ Full evidence: `D:\RS\Thesis\research\ssl-stress-advantage\REPORT.md` (27 source
 ### B. User-gated (repo / product / workflow decisions)
 
 - **B1.** METRIC products: which interpolated product is authoritative for daily values (item 1) —
-  scene rasters vs `interpolation/` semantics. [existing] **Blocks:** `visualize-metric-products`.
+  scene rasters vs `interpolation/` semantics. **Visualization step DONE (user, 2026-11-10):
+  `data/interim/metric_interpolation_timeseries.png`**; platform wiring + the authoritative-product
+  decision still open. **Blocks:** `visualize-metric-products` (platform part).
 - **B2.** Full-archive axis: keep the completeness-stat semantics (invalid acquisitions = missing) as-is? [existing]
 - **B3.** `rust/` crate (added by coding-agent commits; `32.7×` claim unreproduced) — keep+verify or remove? [existing]
-- **B4.** Date count: METRIC 539 scenes vs `stats.zarr` 538 dates — which date is missing and why? [existing]
 - **B5.** Tasks 11.1–11.6 (skill adoption: scholar-evaluation, literature-review/citation-management,
   scientific-writing, benchmark-methodology/eval-harness, mle-workflow; 11.6 installs skills locally) — approval pending. [existing]
 
@@ -129,6 +132,16 @@ Full evidence: `D:\RS\Thesis\research\ssl-stress-advantage\REPORT.md` (27 source
 
 ### Resolved
 
+- **2026-11-14 — OQ5 / B4 (date count) RESOLVED (user):** one date's metadata was corrupted —
+  `data/DATA_SUMMARY.md` §5 names it: **2022-08-07 metadata GeoJSON missing** → **538 usable dates is
+  the canonical count** (539 scene files on disk). Counts updated in data/README.md,
+  data/DATA_SUMMARY.md, docs/KNOWLEDGE_BASE.md §13, docs/findings/01, docs/findings/14,
+  docs/final_plan.md, and the data-and-phenology-readiness change notes (archived change docs left as
+  historical record).
+- **2026-11-14 — product vision recorded (user):** the pipeline must accept newly added data
+  (future acquisitions/fields) without redesign — new data will be reserved for validation; keep the
+  current 538-date archive fixed. Any future openspec change must keep the ingest path
+  data-refresh-friendly (manifest-driven, no hard-coded date counts).
 - **2026-11-14 — desk implemented + archived:** `add-halqeh-anomaly-desk` implemented as the ninth
   platform view (commits 136028c / 9fbde4f / 871e0f1 / a0b1dfb incl. payload export + gate evidence)
   and archived (7e00f17, spec `platform-anomaly-desk`); the working branch was merged — history now on

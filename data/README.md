@@ -10,7 +10,7 @@ Data/
 ├── README.md              # This file
 ├── Metric/                # Landsat 8/9 METRIC ET pipeline
 │   ├── scenes/            # 607 raw Landsat scenes (2013-03-30 → 2026-09-10)
-│   └── products/          # 539 processed scenes × 35 raster types (30 m, EPSG:32639)
+│   └── products/          # 539 scene files × 35 raster types (30 m, EPSG:32639) — 538 usable dates (2022-08-07 metadata corrupted)
 │       └── interpolation/ # Daily gap-filled ETaDaily + CWSI_ET (4,375 files each)
 ├── RoI/                   # Study area + 490 farm polygons + 32-farm validation subset
 ├── Processed/             # Farm-level standardized dataset (PRD V1.0)

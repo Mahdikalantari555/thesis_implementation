@@ -229,7 +229,7 @@ Binding (`AGENTS.md` §1–2, §7):
 ## 13. Open questions & known discrepancies
 
 - Rust crate `32.7×` speedup claim is **unreproduced** — verify or remove (todo OQ4).
-- METRIC **539 scenes vs `stats.zarr` 538 dates** — which date is missing (OQ5).
+- **RESOLVED 2026-11-14 (was OQ5):** METRIC **539 scene files vs `stats.zarr` 538 dates** — the 2022-08-07 metadata GeoJSON is missing/corrupted → **538 usable dates is the canonical count** (user-confirmed).
 - **1704 non-censored cycles** (findings 02) vs **799 cycles** (`splits_490.json`) — recount
   before the 10%/25% segmentation rule (OQ7).
 - Final perturbation set awaits advisor (Dr. Hamzeh) input on realistic Amirkabir stress

@@ -24,7 +24,7 @@ ingest روی subset با باندهای خام + weather + std اجرا شد. P
 ### داده (canonical)
 
 - `Data/Processed/satellite/stats.zarr`: 490 fields × 538 acquisition dates × 7 bands (SR_B2/SR_B3/SR_B4/SR_B5/SR_B6/SR_B7/ST_B10 → blue, green, red, nir, swir1, swir2, lst), 8 distribution stats + `valid_frac`. Date range: 2013-03-30 → 2026-09-10. Read via `ssl_anomaly.io.stats_zarr.load_stats_zarr`.
-- **Date-count reconciliation (task 1.1):** `stats.zarr` has 538 dates vs 539 in the 32-farm `fields.zarr` / stated METRIC processed-scene count. The specific missing acquisition was not identified from available manifests in this pass; `stats.zarr` is treated as the canonical 490-field archive and provenance reports `n_dates=538`.
+- **Date-count reconciliation (task 1.1; RESOLVED 2026-11-14):** `stats.zarr` has 538 dates vs 539 scene files in METRIC products — the **2022-08-07 metadata GeoJSON is missing/corrupted** (see `data/DATA_SUMMARY.md` §5). **538 usable dates is the canonical count** (user-confirmed); `stats.zarr` remains the canonical 490-field archive and provenance reports `n_dates=538`.
 
 ### چرخه‌ها (cycles_490, task 1.2)
 

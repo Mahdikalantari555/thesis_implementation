@@ -43,7 +43,7 @@ The output is one document, `docs/findings/13_literature_phenology_and_perturbat
   - LST values outside 15–55 °C
   - bands with NaN fraction
   - acquisitions with `valid_frac` below 0.5
-- **Count check**: confirms the 538-vs-539 date discrepancy (todo OQ5).
+- **Count check**: confirms the 538-vs-539 date discrepancy (todo OQ5) — **resolved 2026-11-14**: the 2022-08-07 metadata GeoJSON is missing/corrupted → 538 usable dates is canonical.
 
 ## D4. Decision record
 

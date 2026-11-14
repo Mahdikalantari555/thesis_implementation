@@ -163,5 +163,5 @@ away from any trough.
    `docs/findings/15_cycle_segmentation_method.md` §7), then re-run
    `audit_cycles.py --all`.
 3. `data_quality.json` full re-run recorded the recount (800) — OQ7 resolved;
-   OQ5 (538 vs 539 scenes) remains open in todo.md.
+   OQ5 resolved 2026-11-14 (2022-08-07 metadata corrupted → 538 usable dates canonical).
 4. Method write-up for the advisor: `docs/findings/15_cycle_segmentation_method.md`.

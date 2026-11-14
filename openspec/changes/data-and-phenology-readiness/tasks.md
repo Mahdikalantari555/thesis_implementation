@@ -15,7 +15,7 @@
 - [ ] 2.4 If planting/harvest records become available: segmentation error in days (optional, non-blocking)
 
 ## 3. Data quality
-- [x] 3.1 `scripts/data_quality_report.py` → `reports/data_quality.json` (observation density, valid fraction, LST range, NaN fractions, 538 vs 539 dates)
+- [x] 3.1 `scripts/data_quality_report.py` → `reports/data_quality.json` (observation density, valid fraction, LST range, NaN fractions, 538 vs 539 dates — discrepancy resolved 2026-11-14: 2022-08-07 metadata corrupted, 538 canonical)
 
 ## 4. Decision record (gate)
 - [x] 4.1 Add the decision record to `train-and-finalize-main-architecture/design.md` (D11: time axis, segmentation params, perturbation set, exclusion rule, stage-conditioned anomaly detection), citing sections of 13/14

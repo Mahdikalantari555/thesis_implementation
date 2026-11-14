@@ -72,13 +72,13 @@ Generated from `D:\RS\Thesis\Data`. Remote-sensing METRIC ET pipeline outputs + 
 
 ## 5. METRIC products (`Metric/products`)
 
-- Processed scenes in products: **539** (of 607 downloaded).
+- Processed scenes in products: **539 files (of 607 downloaded)** — **538 usable dates** (2022-08-07 metadata corrupted; user-confirmed 2026-11-14; 538 is the canonical count everywhere).
 - Excluded scenes: **68** (present in `scenes/` but absent from products). Their MTL land cloud cover is higher on average (mean 11.8% vs 2.0% for kept; range 0.0–37.8%); 26 of 68 have ≤5% land cloud, so exclusion is not purely cloud-threshold based (likely pipeline failures/data gaps).
 - Product date range: 2013-03-30 → 2026-09-10.
 - Raster product types: **35**, each with **539** GeoTIFFs (30 m, EPSG:32639, 496×472, float32):
   Albedo, CWSI_ET, CWSI_LST, Emissivity, ETaClassified, ETaDaily, ETinst, ETqualityClass, ETrF, EVI, FVC, G, GCI, H, LAI, LE, LST, MNDWI, MSI, NDMI, NDSI, NDVI, NIRv, NMDI, RGB, RlDown, RlUp, Rn, Rnl, Rns, RsDown, SAVI, SI_T, TVDI, VSWI.
 - Total raster product files: 35 × 539 = **18,865**.
-- Metadata GeoJSON: **538** (one missing for 2022-08-07).
+- Metadata GeoJSON: **538** (one missing for 2022-08-07 — **this is the whole 538-vs-539 discrepancy; OQ5 RESOLVED 2026-11-14, user-confirmed: 538 usable dates is canonical**).
 - Visualizations: 1,077 PNGs (≈2 per scene: overview + ET map).
 - Interpolation (`products/interpolation/`): daily interpolated ETaDaily and CWSI_ET rasters — **4,375 files each** (gap-filled daily series between overpasses).
 
@@ -105,7 +105,7 @@ Generated from `D:\RS\Thesis\Data`. Remote-sensing METRIC ET pipeline outputs + 
 ## 7. Thesis-relevant notes
 
 - Study area: 142.29 km² sugarcane-dominated irrigation district, Khuzestan, Iran; 490 management units.
-- Temporal coverage of RS products: 13.5 years (Mar 2013 – Sep 2026), 539 clear-sky Landsat overpasses (8/9), ~16-day revisit; 4,375 daily interpolated ETa/CWSI rasters for time-series analysis.
+- Temporal coverage of RS products: 13.5 years (Mar 2013 – Sep 2026), **538 usable** clear-sky Landsat overpasses (8/9; 539 files, 2022-08-07 metadata corrupted), ~16-day revisit; 4,375 daily interpolated ETa/CWSI rasters for time-series analysis.
 - Spatial resolution 30 m aligns with farm blocks (~25 ha ≈ 278 pixels), suitable for field-scale ET and water-stress studies.
 - Key target variables available: ETaDaily, ETinst, ETrF, LE, H, G, LST, CWSI_ET, CWSI_LST, TVDI, SI_T, VSWI, NDVI/EVI/SAVI and many spectral indices, plus weather/soil-moisture features.
 - Data-quality caveats to report: (a) 68 scenes excluded from products; (b) all scenes classified LOW_QUALITY by METRIC with frequent cold-pixel dT warnings; (c) metadata missing for 2022-08-07; (d) one malformed variety label; (e) 87 fallow farms (no age/variety).
