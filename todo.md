@@ -67,28 +67,97 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
 10. **`literature-benchmark-view`** — surface `reports/literature_models_benchmark.json` (exists, no view).
 11. **`registry-aware-neighbors`** — neighbour graphs from block/office/management instead of centroid kNN.
 
-## Open questions (waiting on user)
+## Open questions & blockers (restructured 2026-11-14 after the severity/objective deep-research)
 
-1. **Validation ladder full write-up** (the 5 levels) — send whenever ready; blocks item 5's spec.
-2. METRIC products: confirm which interpolated product is authoritative for daily values (item 1) — scene rasters vs `interpolation/` semantics.
-3. For the full-archive axis: keep the completeness stat semantics (invalid acquisitions count as missing) as-is?
-4. `rust/` crate was added by coding-agent commits, not by the user; its `32.7×` claim is unreproduced. Keep (and verify) or remove?
-5. Date count: METRIC 539 scenes vs `stats.zarr` 538 dates — which date is missing and why?
-6. **For the advisor (Dr. Hamzeh):** which stress signatures and magnitudes are realistic for Amirkabir sugarcane in Landsat time series (water deficit, salinity, waterlogging, pests/disease, early ripening, lodging)? Decides the final perturbation set of `train-and-finalize-main-architecture` (design D6; interim set used until then). Five sub-questions from findings 13 §3.3:
-   - pre-harvest irrigation cut-off — timing and magnitude?
-   - pre-harvest burning — does it occur and what is its NDVI/LST signature?
-   - which disturbances are transient vs chronic?
-   - typical NDVI drop magnitude in mid-season water stress?
-   - waterlogging occurrence and which months?
-   Literature review task 0.3 runs in parallel.
-7. **RESOLVED 2026-11-14 (was: 1704 vs 799 cycle-count discrepancy):** recount (fixed `data_quality_report.py --all`) = 800 non-censored cycles, matching the archive 799 within 1 trailing-censoring cycle; findings-02 count is stale. Segmentation decision rule applied via the cycle audit — see finding 14 (exclusion list `reports/cycle_audit/exclusion_cycles.csv`) and finding 15 (method write-up). Remaining open follow-up: optional winter-harvest tuning.
+Full evidence: `D:\RS\Thesis\research\ssl-stress-advantage\REPORT.md` (27 sources) +
+`docs/findings/16_development_protocol_results.md`. Blockers grouped by who unblocks them.
+
+### A. Advisor-gated (Dr. Hamzeh) — blocks the model/protocol track (finding-16 follow-ups)
+
+- **A1. OQ6 — realistic stress signatures & magnitudes for Amirkabir sugarcane** (water deficit,
+  salinity, waterlogging, pests/disease, early ripening, lodging; sub-questions from findings 13 §3.3:
+  pre-harvest irrigation cut-off timing/magnitude; pre-harvest burning NDVI/LST signature; transient vs
+  chronic disturbances; typical mid-season NDVI drop; waterlogging occurrence/months).
+  **Now has a concrete proposal to react to** (deep-research 2026-11-14): severity table in absolute
+  literature-grounded units (LST +2/+5/+10 K; NDVI −0.05…−0.25; ETa −10/−25/−35 %), also reported in
+  MAD units, + a minimum-detectable-magnitude curve at fixed FAR. Local grounding: real stress =
+  **0.5–2.5× across-field MAD** vs measured detection floor **6–8×MAD** — the current protocol tests
+  steps 2–4× larger than real stress. **Blocks:** D6 perturbation-set update; task 6.2 tuning
+  resumption; final severity-scale decision (across-field MAD vs model-residual) and FAR level
+  (cycle vs event vs bin).
+- **A2. L4 evidence availability** — can irrigation records, per-field yield, rootzone-ECe/salinity
+  surveys, or expert review be obtained for even a subset of the 490 fields? **Blocks:** any L4
+  validation plan; without it the thesis caps at L2/L3 + proxy agreement (published SSL-EO norm,
+  cf. SAED-ViT SPEI r=−0.909; STS-Net's imposed treatments = the gold standard we don't have).
+- **A3. Sign-off on the honest-negative framing + the 3-move plan** (M1 severity protocol /
+  M2 normal-bank scorer / M3 event-FAR + POT declustering) — **blocks** committing the normal-bank
+  arm as the official task-6.2 direction (more reconstruction tuning would optimize noise, finding 16).
+- **A4. Validation-ladder full write-up** (5 levels + criteria) — user will send; blocks item 5's spec. [existing]
+
+### B. User-gated (repo / product / workflow decisions)
+
+- **B1.** METRIC products: which interpolated product is authoritative for daily values (item 1) —
+  scene rasters vs `interpolation/` semantics. [existing] **Blocks:** `visualize-metric-products`.
+- **B2.** Full-archive axis: keep the completeness-stat semantics (invalid acquisitions = missing) as-is? [existing]
+- **B3.** `rust/` crate (added by coding-agent commits; `32.7×` claim unreproduced) — keep+verify or remove? [existing]
+- **B4.** Date count: METRIC 539 scenes vs `stats.zarr` 538 dates — which date is missing and why? [existing]
+- **B5.** Tasks 11.1–11.6 (skill adoption: scholar-evaluation, literature-review/citation-management,
+  scientific-writing, benchmark-methodology/eval-harness, mle-workflow; 11.6 installs skills locally) — approval pending. [existing]
+
+### C. Technical ambiguities (agent-resolvable; decision recorded here)
+
+- **C1. Severity-unit computation (pairs with A1):** full per-band model-residual distribution
+  (residual MAD vs across-field MAD) on the 490-field archive — agent can compute on request; the
+  deep-research conversion used sidecar medians only (first-order). **Blocks:** final severity-scale choice.
+- **C2. Threshold rule:** adopt SHAZAM's per-DOY score-climatology threshold (fitted mean + 1.64 SD,
+  circular DOY regression) as a second calibrated rule alongside the per-(bin,channel) q95 — testable
+  in ~1 day; needs a protocol decision.
+- **C3. Sugarcane-specific spectral magnitudes:** NDVI/SAVI drop under controlled water stress and
+  NDVI-vs-ECe salinity slopes not retrievable from the open web (MDPI/S2 blocked) — row-crop analogues
+  (maize/cotton/wheat) + FAO 29 used meanwhile; institutional access to Gómez Flores 2022
+  (Remote Sensing 14:3389) would fill the salinity side. **Blocks:** exact salinity-side severity anchoring only.
+- **C4. TSB-AD-S injection amplitudes unread** (OpenReview bot-gated; CATS repo 404) — nice-to-have,
+  blocks nothing critical.
+- **C5. M2 design details** (bank granularity: per-bin vs per-window latents; distance metric;
+  fusion rule with the channel-max alarm statistic) — agent's call inside the M2 openspec change,
+  flagged here as a recorded decision point.
+- **C6. Legacy adapter for deleted `fields.zarr`** (test_ablation) — user-paused 2026-11-07;
+  pre-existing failure documented.
+- **C7. Environmental 0xc06d007f crashes** (test_daily_anomaly_map / test_eval /
+  test_baseline_comparators / test_data_scarcity) — environment/load-order, not code; suite runs with
+  `--ignore` for these 5 files → 203 passed 1 failed (=real_archive data-state, C6 family).
+
+### Resolved
+
+- **2026-11-14 — desk implemented + archived:** `add-halqeh-anomaly-desk` implemented as the ninth
+  platform view (commits 136028c / 9fbde4f / 871e0f1 / a0b1dfb incl. payload export + gate evidence)
+  and archived (7e00f17, spec `platform-anomaly-desk`); the working branch was merged — history now on
+  `main`.
+- **2026-11-14 — `wire-platform-to-real-data` archived** (ff3ccd6; specs: `platform-real-data` created,
+  `platform-visualization` updated). Carried reminder cleared.
+- **2026-11-14 — pushed:** `main` == `origin/main` (0 ahead / 0 behind); the 2026-11-13/14 session
+  commits (contract v5, finding 16, archive, desk) are all on origin. GitHub default branch: verify
+  `main` is default after the push (was `kilo/noble-drum-b7o`).
+- **2026-11-14 (was: 1704 vs 799 cycle-count discrepancy):** recount (fixed `data_quality_report.py
+  --all`) = 800 non-censored cycles, matching the archive 799 within 1 trailing-censoring cycle;
+  findings-02 count is stale. Segmentation decision rule applied via the cycle audit — see finding 14
+  (exclusion list `reports/cycle_audit/exclusion_cycles.csv`) and finding 15 (method write-up).
+  Remaining follow-up: optional winter-harvest segmentation tuning.
+
+### Not blocked (startable on user approval alone)
+
+- M2 normal-bank scorer as an *experimental* arm (openspec change; final adoption gated on A1/A3).
+- M3 event-FAR + POT declustering re-computation of finding-16 metrics (analysis-only, no retraining).
+- Items 1–3, 6–11 openspec candidates once their user-gated questions (B1) are answered.
 
 ## Thesis-level reminders
 
 - Platform = research validation dashboard for pipeline output; claims must match the validation-ladder rung.
 - Models must detect **phenology-phase anomalies** — the proxy rule is magnitude-only (CWSI affine); only checkpoint models are phase-aware. Keep this distinction in every validation claim.
-- `openspec archive wire-platform-to-real-data` pending after item 1 lands.
+- ~~`openspec archive wire-platform-to-real-data` pending~~ — archived 2026-11-14 (ff3ccd6).
 8. **After the OQ6 advisor answer (carried over from the archived `2026-11-14-train-and-finalize-main-architecture`):**
+   — the authoritative, expanded list of open questions/blockers now lives in
+   **"Open questions & blockers" above (A1–A4 / B1–B8 / C1–C7)**; this item tracks the execution side only.
    - Update the interim perturbation set (design D6) per the answer; the extended-severity diagnostic in finding 16 says detectable anomalies start at ~6–8×MAD at cycle-level FAR 5% — decide severity scale (across-field MAD vs model-residual scale) and whether FAR stays cycle-level or moves to bin-level.
    - Resume task 6.2 (single-change model tuning until plateau) — paused because the primary metric had no dynamic range at 1×MAD; tuning on it optimizes noise.
    - Tasks 11.1–11.6 (skill adoption: scholar-evaluation, literature-review/citation-management, scientific-writing, benchmark-methodology/eval-harness, mle-workflow) — pending user approval (11.6 installs skills locally).
