@@ -44,6 +44,7 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from ssl_anomaly.monitor import inputs as minputs  # noqa: E402
 from ssl_anomaly.monitor import models as mmodels  # noqa: E402
+from ssl_anomaly.monitor import normal_bank as nbank  # noqa: E402
 from ssl_anomaly.monitor import perturbations as mpert  # noqa: E402
 from ssl_anomaly.monitor import protocol as mproto  # noqa: E402
 from ssl_anomaly.monitor import scoring as mscoring  # noqa: E402
@@ -213,7 +214,7 @@ def arm_paths(
 
 
 def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, seeds: list[str],
-                          device: str) -> tuple[dict, list]:
+                          device: str, data: dict | None = None) -> tuple[dict, list]:
     """The literature-grounded severity sweep + MDM80 (one run, all seeds)."""
     X, M = sel["X"], sel["M"]
     doy = minputs.doy_channels(sel["harvest_days"])
@@ -254,6 +255,19 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
                  for fam in (sev.ACUTE_FAMILY, sev.PERSISTENT_FAMILY)
                  for idx in ("ndvi", "savi")]
 
+    # ---- Bank arm setup (Phase B, normal-bank-novelty-scoring) -----------
+    bank = None
+    emb_fn = None
+    if args.scorer != "recon_only":
+        if args.model != "gru_ae":
+            raise SystemExit(
+                "--scorer bank/fused_* is defined on the gru_ae encoder only "
+                "(change normal-bank-novelty-scoring); re-run with --model gru_ae."
+            )
+        sel_train = mproto.select_splits(data, manifest, splits=("train",))
+        print(f"[severity] bank arm: building bank from {len(sel_train['cycle_keys'])} train cycles "
+              f"(k={args.bank_k}, distance={args.bank_distance}, min_class_count=8)")
+
     norm_path = mproto.DEV_DIR / args.run_id
     progress_path = norm_path / f"progress_eval_{args.model}_sev_{args.scorer}{'_smoke' if args.smoke else ''}.jsonl"
     norm_path.mkdir(parents=True, exist_ok=True)
@@ -275,12 +289,51 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
     for seed in seeds:
         scorer, params, _ = load_scorer(args.model, seed, args.run_id, device)
 
+        # ---- Bank build (train cycles only, manifest-gated) -----------------
+        if args.scorer != "recon_only":
+            sel_train = mproto.select_splits(data, manifest, splits=("train",))
+            Xtr, Mtr = sel_train["X"], sel_train["M"]
+            if Mtr.shape[2] != M.shape[2]:
+                Xtr, Mtr = Xtr[:, :, :M.shape[2]], Mtr[:, :, :M.shape[2]]
+            doytr = minputs.doy_channels(sel_train["harvest_days"])
+            emb_fn = nbank.gru_embedding_fn(scorer)
+            ztr = minputs.apply_norm(norm, Xtr, Mtr)
+            emb_tr = emb_fn(ztr, Mtr, doytr)
+            import hashlib as _h
+
+            ckpt_sha = _h.sha256(
+                (mproto.CHECKPOINTS_DEV_DIR / args.run_id / f"{args.model}_seed{seed}.pt").read_bytes()
+            ).hexdigest()
+            bank = nbank.build_bank(
+                emb_tr, Mtr, list(sel_train["cycle_keys"]), manifest,
+                min_class_count=8, k=args.bank_k, distance=args.bank_distance,
+                encoder_sha256=ckpt_sha,
+            )
+            bank_manifest_path = (mproto.DEV_DIR / args.run_id /
+                                  f"bank_{args.bank_distance}{args.bank_k}_seed{seed}.json")
+            bank_manifest_path.write_text(json.dumps(bank.manifest(), indent=2), encoding="utf-8")
+            bm = bank.manifest()
+            print(f"[severity] bank built: {bm['n_entries']} entries / {bm['n_cycles']} cycles, "
+                  f"{bm['n_cells_direct']} direct cells, splits={bm['splits_present']} "
+                  f"(manifest {bank_manifest_path.name})")
+
+        def paths_for_batch(Xb: np.ndarray, Mb: np.ndarray, doyb: np.ndarray,
+                            z2b: np.ndarray) -> np.ndarray:
+            """Alarm paths of the selected arm for one scored batch."""
+            recon = mscoring.cumulative_channel_max(z2b, Mb, cell_q95)
+            if args.scorer == "recon_only":
+                return recon
+            zb = minputs.apply_norm(norm, Xb, Mb)
+            emb_q = emb_fn(zb, Mb, doyb)
+            bank_scores, _fb = bank.score_batch(emb_q, Mb)
+            return arm_paths(args, recon, bank_scores)
+
         # ---- Clean scores (calibration + evaluation) -----------------------
         clean = score_cycles(scorer, X, M, doy, norm)
         # Per-cell normalizer from the CALIBRATION subset only — the
         # evaluation subset stays independent of every statistic input.
         cell_q95 = mscoring.cell_q95_normalizer(clean["z2"][calib_idx], M[calib_idx])
-        clean_paths_all = mscoring.cumulative_channel_max(clean["z2"], M, cell_q95)
+        clean_paths_all = paths_for_batch(X, M, doy, clean["z2"])
 
         # ---- Threshold (τ, k) on the CALIBRATION subset ---------------------
         ksel = mpert.inject_index_drop_dataset(
@@ -291,10 +344,10 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
         Mk = np.stack([r.m for r in ksel])
         doyk = doy[calib_idx][[r.source_row for r in ksel]]
         ksel_scores = score_cycles(scorer, Xk, Mk, doyk, norm)
-        ksel_paths = mscoring.cumulative_channel_max(ksel_scores["z2"], Mk, cell_q95)
+        ksel_paths = paths_for_batch(Xk, Mk, doyk, ksel_scores["z2"])
         threshold, per_k = mscoring.choose_threshold(
             [clean_paths_all[i] for i in calib_idx],
-            [arm_paths(args, p, None) for p in ksel_paths],
+            [ksel_paths[j] for j in range(len(ksel))],
             [r.onset_bin for r in ksel],
             far_target=args.far,
         )
@@ -303,7 +356,7 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
 
         # ---- Severity sweep on the INDEPENDENT evaluation subset ------------
         Xe, Me, doye = X[eval_idx], M[eval_idx], doy[eval_idx]
-        clean_eval_paths = arm_paths(args, clean_paths_all[eval_idx], None)
+        clean_eval_paths = clean_paths_all[eval_idx]
         cells: dict[str, dict] = {}
         det_pools: dict[str, list[int]] = {}
         delay_pools: dict[str, list[float]] = {}
@@ -325,9 +378,7 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
                         Minj = np.stack([r.m for r in results])
                         doy_inj = doye[[r.source_row for r in results]]
                         s_inj = score_cycles(scorer, Xinj, Minj, doy_inj, norm)
-                        inj_paths = arm_paths(
-                            args, mscoring.cumulative_channel_max(s_inj["z2"], Minj, cell_q95), None,
-                        )
+                        inj_paths = paths_for_batch(Xinj, Minj, doy_inj, s_inj["z2"])
                         for j, r in enumerate(results):
                             fb = mscoring.first_alarm_bin(inj_paths[j], tau, k, r.onset_bin)
                             det_flags.append(1 if fb >= 0 else 0)
@@ -412,7 +463,7 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
             clean_eval_paths, [None] * n_eval, tau, gap=2,
         )
         clean_efar_calib = mscoring.event_far_from_paths(
-            arm_paths(args, clean_paths_all[calib_idx], None), [None] * n_calib, tau, gap=2,
+            clean_paths_all[calib_idx], [None] * n_calib, tau, gap=2,
         )
 
         # Masked NRMSE per band on clean dev (descriptive; not part of the
@@ -516,7 +567,7 @@ def main(argv: list[str] | None = None) -> int:
     sel = mproto.select_splits(data, manifest, splits=("dev",))
 
     if args.protocol == "severity":
-        sev_metrics, per_seed = run_severity_protocol(args, manifest, sel, seeds, device)
+        sev_metrics, per_seed = run_severity_protocol(args, manifest, sel, seeds, device, data=data)
 
         # ---- Aggregate over seeds -------------------------------------------
         wall = time.time() - t0
@@ -528,6 +579,7 @@ def main(argv: list[str] | None = None) -> int:
             "model_id": args.model,
             "protocol": sev_metrics["protocol"],
             "scorer": args.scorer,
+            "bank_variant": (f"{args.bank_distance}{args.bank_k}" if args.scorer == "bank" else None),
             "severity_table_sha256": sev_metrics["severity_table_sha256"],
             "eval_subset_sha256": sev_metrics["eval_subset_sha256"],
             "ladder_rung": "L2",
@@ -555,7 +607,11 @@ def main(argv: list[str] | None = None) -> int:
         }
         out_dir = mproto.DEV_DIR / args.run_id
         out_dir.mkdir(parents=True, exist_ok=True)
-        suffix = f"_sev_{args.scorer}{'_smoke' if args.smoke else ''}"
+        suffix = f"_sev_{args.scorer}"
+        if args.scorer == "bank":
+            suffix += f"_{args.bank_distance}{args.bank_k}"
+        if args.smoke:
+            suffix += "_smoke"
         out_path = out_dir / f"metrics_{args.model}{suffix}.json"
         out_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
 
@@ -564,8 +620,9 @@ def main(argv: list[str] | None = None) -> int:
             mdm_vals = [r["mdm80"][primary_key]["sentinel"] for r in per_seed]
             mdm_mean, mdm_std = mproto.mean_std([float(v) for v in mdm_vals])
             far_max = max(r["far_achieved"] for r in per_seed)
+            variant = f"_{args.bank_distance}{args.bank_k}" if args.scorer == "bank" else ""
             row = {
-                "run_id": f"{args.run_id}:{args.model}:sev_{args.scorer}",
+                "run_id": f"{args.run_id}:{args.model}:sev_{args.scorer}{variant}",
                 "date": time.strftime("%Y-%m-%d"),
                 "model_id": args.model,
                 "parent_run_id": "",

@@ -1,0 +1,21 @@
+{
+  "name": "normal_bank_v1",
+  "n_entries": 8815,
+  "n_cycles": 447,
+  "embedding_dim": 200,
+  "k": 5,
+  "distance": "mahalanobis",
+  "min_class_count": 8,
+  "encoder_checkpoint_sha256": "4685ba1ab307418822caab69a18682efb3b2ca8a02f60ea347c1d4ecc95ea597",
+  "split_hash": "ed2ba78c45025bbf",
+  "splits_present": [
+    "train"
+  ],
+  "class_counts": {
+    "11111111": 8815
+  },
+  "n_cells_direct": 32,
+  "n_classes_pooled": 1,
+  "row_subsample_cap": 512,
+  "manifest_sha256": "ba1eaf6815e5c316a31056c5a620b4aac80f43668ed1d75557412911d6d0751c"
+}

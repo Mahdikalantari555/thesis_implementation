@@ -1,0 +1,21 @@
+{
+  "name": "normal_bank_v1",
+  "n_entries": 8815,
+  "n_cycles": 447,
+  "embedding_dim": 200,
+  "k": 5,
+  "distance": "knn",
+  "min_class_count": 8,
+  "encoder_checkpoint_sha256": "d725cb6a8626035253ff61aac7a9e5b89b0a017668258d84f64429b712149792",
+  "split_hash": "ed2ba78c45025bbf",
+  "splits_present": [
+    "train"
+  ],
+  "class_counts": {
+    "11111111": 8815
+  },
+  "n_cells_direct": 32,
+  "n_classes_pooled": 1,
+  "row_subsample_cap": 512,
+  "manifest_sha256": "4038799df12075bf310ef9ff7633f168e59086f23d162a630d4ed4330a0d54c3"
+}
