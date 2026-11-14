@@ -130,23 +130,33 @@ Full evidence: `D:\RS\Thesis\research\ssl-stress-advantage\REPORT.md` (27 source
   test_baseline_comparators / test_data_scarcity) — environment/load-order, not code; suite runs with
   `--ignore` for these 5 files → 203 passed 1 failed (=real_archive data-state, C6 family).
 
-### D. Follow-up research paths from finding 20 (user-directed; gated on explicit approval before any openspec change)
+### D. Follow-up research paths from finding 20 (user-directed; changes CREATED 2026-11-14, awaiting execution)
 
 Evidence: `docs/findings/20_reconstruction_invariance.md` (signal-path decomposition + absorption,
-2026-11-14). Both paths are DESIGN-ONLY until the user approves; no implementation, no retraining,
-no architecture edits may start from them without a new openspec change.
+2026-11-14). Owner approval 2026-11-14: both changes below were written and validated; execution is
+the next step. Owner prohibitions recorded verbatim: do NOT re-develop Normal Bank, do NOT bring
+foundation models into the main path, do NOT trial multiple architectures in parallel — only these
+two experiments.
 
 - **D1. Path B — re-examine the anomaly definition:** multivariate/relational and phenology-shape
   injection families (the current single-index absolute-drop family is the finding-20 scope limit).
-  Design must be informed by the diagnostic (which stages pass/fail there is unknown for relational
-  families). User priority: A > B > C (A = behavior analysis = finding 20 itself, now DONE).
-- **D2. Path C — forecasting/predictive-coding objective arm (finding-20 decision-matrix remedy):**
-  stage-1 dominance in 24/24 cells (signal born at 0.36–2.68σ in train-per-bin-σ units vs τ needing
-  ≈3.5–4.9σ per bin) + measured absorption (gru_ae prediction tracks ≈half of persistent drops,
-  α≈0.38–0.50 at S4–S6, while frozen B1 absorbs nothing) point at the objective/unit change, not at
-  scoring fixes or an architecture swap. A forecasting objective re-anchors σ to temporal
-  predictability and makes sustained level shifts structurally unpredictable. Advisor OQ6/A3 sign-off
-  still applies before any retraining decision.
+  Decided as the FALLBACK path: taken only if the predictive trial's synthetic-detection gate fails
+  (see `predictive-ssl-controlled-trial` decision gates). No implementation exists yet.
+- **D2. Path C — forecasting/predictive-coding objective (finding-20 decision-matrix remedy).**
+  Two changes created and validated 2026-11-14, to run in order:
+  1. **`forecast-unit-probe`** (zero-training, agent-runnable in minutes): pre-registered untrained
+     causal forecasters (persist/med3/trend4) inside the exact production statistic; same eval
+     subset + injections; MDM80 + event-FAR + waterfall. Success = non-censored MDM80 ≤ S5 on
+     persistent/ndvi → path C justified with a measured target floor; all censored → honest negative.
+     → finding 21.
+  2. **`predictive-ssl-controlled-trial`** (trains ONE new arm `gru_pred` — same trunk/inputs/budget
+     as gru_ae_main, one-step-ahead objective only; seeds {13,42,2026}; user runs training from
+     agent-provided commands): four parts — A natural-data FAR behavior, B the unchanged finding-18
+     severity protocol vs B1+gru_ae_main, C the absorption experiment (error at three checkpoints +
+     A ratio vs gru_ae's α≈0.45), D agreement with independent indicators (CWSI/ETa/ETrF/TVDI —
+     proxy evidence, never stress proof; unavailable sources = `absent`). Pre-registered decision
+     gates decide: predictive = main path, or fall back to D1. → finding 22.
+  Advisor OQ6/A3 sign-off still applies before any retraining decision beyond this trial's scope.
 
 ### Resolved
 
