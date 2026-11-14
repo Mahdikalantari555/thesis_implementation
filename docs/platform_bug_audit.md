@@ -576,3 +576,28 @@ build green; screenshot/console/network gate green for all 8 views with the
 server up (evidence: `reports/screenshots/audit/`) and gracefully degraded with
 it stopped (`reports/screenshots/audit-serverdown/`). Presentation-focused
 findings: `docs/platform_presentation_audit.md`.
+
+---
+
+## Addendum — add-halqeh-anomaly-desk (2026-11-14)
+
+Audit outcome for the ninth view (`AnomalyDesk.tsx` + `SeasonRing` / `SeasonChart` /
+`DeskMap`, data `desk_khuzestan.json`): one defect surfaced by the screenshot
+gate and fixed before commit.
+
+- **Fixed — unbounded case list on the full replay.** The source Halqeh build
+  rendered its 12 hand-picked cases as a plain column; the desk payload replays
+  all 799 cases, so the desktop aside stacked ~53 k px of chips and the
+  09_anomaly-desk.png gate capture measured a 58,208 px page. The case list is
+  now internally scrollable on desktop (`lg:max-h-[38rem] lg:overflow-y-auto`),
+  which also cut the gate run under the watchdog.
+- **Fixed — bin-date label truncated to month.** `DeskMap` reused `fmtDate`
+  (YYYY-MM, designed for the monthly axis) for the scene-vs-bin label; bin dates
+  are now shown at full ISO precision because the label exists to expose
+  scene-vs-bin day drift.
+
+No other console/page errors across the 9 views (server-up and `--no-tile-server`
+runs); the desk degrades to basemap + polygon + explicit "scene absent" copy with
+the tile server stopped, reusing the transparent-PNG 404 contract unchanged.
+Evidence: `reports/screenshots/audit/` (EN server-up, 9 views + desk scenarios) —
+see the run's `audit.json` for per-view tallies.

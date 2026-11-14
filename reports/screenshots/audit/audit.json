@@ -1,5 +1,5 @@
 {
-  "startedAt": "2026-11-07T13:30:07.112Z",
+  "startedAt": "2026-11-14T13:45:36.286Z",
   "locale": "en",
   "tileServerExpectedUp": true,
   "views": {
@@ -50,22 +50,89 @@
       "pageErrors": [],
       "failedRequests": [],
       "screenshot": "08_reports-experiments.png"
+    },
+    "desk": {
+      "console": [],
+      "pageErrors": [],
+      "failedRequests": [
+        {
+          "url": "https://c.tile.openstreetmap.org/11/1298/837.png",
+          "errorText": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://a.tile.openstreetmap.org/11/1299/837.png",
+          "errorText": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://b.tile.openstreetmap.org/11/1297/837.png",
+          "errorText": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://b.tile.openstreetmap.org/11/1300/837.png",
+          "errorText": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://c.tile.openstreetmap.org/11/1297/838.png",
+          "errorText": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://c.tile.openstreetmap.org/11/1300/838.png",
+          "errorText": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://a.tile.openstreetmap.org/11/1298/838.png",
+          "errorText": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://b.tile.openstreetmap.org/11/1299/838.png",
+          "errorText": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://c.tile.openstreetmap.org/11/1298/837.png",
+          "errorText": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://a.tile.openstreetmap.org/11/1299/837.png",
+          "errorText": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://b.tile.openstreetmap.org/11/1297/837.png",
+          "errorText": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://b.tile.openstreetmap.org/11/1300/837.png",
+          "errorText": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://c.tile.openstreetmap.org/11/1297/838.png",
+          "errorText": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://c.tile.openstreetmap.org/11/1300/838.png",
+          "errorText": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://c.tile.openstreetmap.org/14/10393/6709.png",
+          "errorText": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://b.tile.openstreetmap.org/14/10389/6709.png",
+          "errorText": "net::ERR_ABORTED"
+        },
+        {
+          "url": "https://a.tile.openstreetmap.org/14/10393/6707.png",
+          "errorText": "net::ERR_ABORTED"
+        }
+      ],
+      "screenshot": "09_anomaly-desk.png"
     }
   },
   "tileScenario": {
     "rgbTiles": 12,
-    "ndviTiles": 4,
+    "ndviTiles": 9,
     "tileResponses": [
       {
         "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2596/1676.png",
-        "status": 200
-      },
-      {
-        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2597/1676.png",
-        "status": 200
-      },
-      {
-        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2596/1675.png",
         "status": 200
       },
       {
@@ -73,23 +140,11 @@
         "status": 200
       },
       {
-        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2595/1675.png",
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2596/1675.png",
         "status": 200
       },
       {
-        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2595/1677.png",
-        "status": 200
-      },
-      {
-        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2598/1677.png",
-        "status": 200
-      },
-      {
-        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2598/1676.png",
-        "status": 200
-      },
-      {
-        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2595/1676.png",
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2597/1676.png",
         "status": 200
       },
       {
@@ -101,11 +156,31 @@
         "status": 200
       },
       {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2595/1677.png",
+        "status": 200
+      },
+      {
         "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2597/1677.png",
         "status": 200
       },
       {
-        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2599/1676.png",
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2595/1675.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2595/1676.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2598/1676.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2598/1677.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2599/1675.png",
         "status": 200
       },
       {
@@ -113,7 +188,7 @@
         "status": 200
       },
       {
-        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2599/1675.png",
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2599/1676.png",
         "status": 200
       },
       {
@@ -125,15 +200,11 @@
         "status": 200
       },
       {
-        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2596/1674.png",
-        "status": 200
-      },
-      {
         "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2599/1674.png",
         "status": 200
       },
       {
-        "url": "http://127.0.0.1:8765/tiles/2013-06-26/ndvi/12/2597/1676.png",
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/rgb/12/2596/1674.png",
         "status": 200
       },
       {
@@ -141,11 +212,11 @@
         "status": 200
       },
       {
-        "url": "http://127.0.0.1:8765/tiles/2013-06-26/ndvi/12/2597/1675.png",
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/ndvi/12/2597/1676.png",
         "status": 200
       },
       {
-        "url": "http://127.0.0.1:8765/tiles/2013-06-26/ndvi/12/2598/1676.png",
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/ndvi/12/2597/1675.png",
         "status": 200
       },
       {
@@ -153,11 +224,15 @@
         "status": 200
       },
       {
-        "url": "http://127.0.0.1:8765/tiles/2013-06-26/ndvi/12/2598/1675.png",
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/ndvi/12/2596/1675.png",
         "status": 200
       },
       {
-        "url": "http://127.0.0.1:8765/tiles/2013-06-26/ndvi/12/2596/1675.png",
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/ndvi/12/2598/1676.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/ndvi/12/2596/1677.png",
         "status": 200
       },
       {
@@ -165,13 +240,13 @@
         "status": 200
       },
       {
-        "url": "http://127.0.0.1:8765/tiles/2013-06-26/ndvi/12/2596/1677.png",
+        "url": "http://127.0.0.1:8765/tiles/2013-06-26/ndvi/12/2598/1675.png",
         "status": 200
       }
     ],
     "tileFailures": [],
     "opacityAfterRgb": 0.7,
-    "opacityAfterNdvi": 0.424,
+    "opacityAfterNdvi": 0.665,
     "pans": 2,
     "ok": true,
     "drivenByDateSlider": true,
@@ -185,6 +260,16 @@
     "tileResponsesOk": true,
     "hideFieldsOk": true
   },
+  "deskScenario": {
+    "slipFilterClicked": true,
+    "slipChipClicked": true,
+    "chips": 506,
+    "naiveClicked": true,
+    "sceneLabelOk": true,
+    "deskRasterTiles": 15,
+    "absentStateOk": false,
+    "ok": true
+  },
   "pass": true,
-  "finishedAt": "2026-11-07T13:31:02.375Z"
+  "finishedAt": "2026-11-14T13:46:36.290Z"
 }

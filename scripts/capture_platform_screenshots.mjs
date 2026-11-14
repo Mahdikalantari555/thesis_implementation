@@ -72,6 +72,7 @@ const PAGES = [
   { id: "comparison", file: "06_model-comparison.png" },
   { id: "spatial", file: "07_spatial-analysis.png" },
   { id: "reports", file: "08_reports-experiments.png" },
+  { id: "desk", file: "09_anomaly-desk.png" },
 ];
 
 // ── Browser discovery ────────────────────────────────────────────────────────
@@ -212,6 +213,7 @@ const audit = {
   tileServerExpectedUp: !args.noTileServer,
   views: {},
   tileScenario: null,
+  deskScenario: null,
 };
 let currentView = null;
 
@@ -524,6 +526,103 @@ async function runTileScenario(send, outDir) {
   return scenario;
 }
 
+/**
+ * Anomaly Desk scenario (add-halqeh-anomaly-desk task 5.1): select a slip case,
+ * verify the review surface renders from the desk payload, capture envelope +
+ * naive modes, and (server-up only) the desk raster overlay. With
+ * --no-tile-server the scenario instead captures the explicit "scene absent"
+ * degradation state (task 4.2).
+ */
+async function runDeskScenario(send, outDir) {
+  const scenario = {
+    slipFilterClicked: false,
+    slipChipClicked: false,
+    chips: 0,
+    naiveClicked: false,
+    sceneLabelOk: false,
+    deskRasterTiles: 0,
+    absentStateOk: false,
+    ok: false,
+  };
+  currentView = "desk";
+  await activateView(send, args.locale, "desk");
+  await sleep(1500);
+
+  const deskRoot = await evaluateJson(send, `!!document.querySelector('.desk-root')`);
+  if (!deskRoot) throw new Error("desk view did not mount (.desk-root missing)");
+  const slipLabel = args.locale === "fa" ? "لغزش" : "Slips";
+  scenario.slipFilterClicked = await evaluateJson(
+    send,
+    `(() => {
+      const b = [...document.querySelectorAll('main button')].find(x => (x.textContent || '').trim().startsWith(${JSON.stringify(slipLabel)}));
+      if (!b) return false;
+      b.click();
+      return true;
+    })()`
+  );
+  await sleep(400);
+  scenario.chips = (await evaluateJson(send, `document.querySelectorAll('main aside button').length`)) ?? 0;
+  scenario.slipChipClicked = await evaluateJson(
+    send,
+    `(() => {
+      const chip = document.querySelector('main aside button');
+      if (!chip) return false;
+      chip.click();
+      return true;
+    })()`
+  );
+  await sleep(1200);
+
+  if (args.noTileServer) {
+    // Degradation evidence (task 4.2): explicit absent copy, no broken tiles.
+    const absentText = args.locale === "fa" ? "کارساز کاشی روشن نیست" : "Tile server not running";
+    for (let i = 0; i < 20; i++) {
+      scenario.absentStateOk = (await evaluateJson(
+        send,
+        `document.body.innerText.includes(${JSON.stringify(absentText)})`
+      )) ?? false;
+      if (scenario.absentStateOk) break;
+      await sleep(300);
+    }
+    fs.writeFileSync(path.join(outDir, "desk_absent.png"), await screenshot(send));
+    scenario.ok = scenario.slipFilterClicked && scenario.slipChipClicked && scenario.absentStateOk;
+    return scenario;
+  }
+
+  // Server-up: the opened slip case should resolve a nearby scene and render
+  // raster tiles inside the desk map.
+  await waitForRasterTiles(send, "/tiles/");
+  scenario.deskRasterTiles = (await evaluateJson(
+    send,
+    `[...document.querySelectorAll('img.leaflet-tile-loaded')].filter(i => i.src.includes(':8765/tiles/')).length`
+  )) ?? 0;
+  const sceneWord = args.locale === "fa" ? "دورنگار" : "Scene";
+  scenario.sceneLabelOk = (await evaluateJson(
+    send,
+    `document.body.innerText.includes(${JSON.stringify(sceneWord)})`
+  )) ?? false;
+  fs.writeFileSync(path.join(outDir, "desk_tile_rgb.png"), await screenshot(send));
+
+  // Naive (blunt NDVI cut) mode capture.
+  const naiveLabel = args.locale === "fa" ? "برش خام NDVI" : "Blunt NDVI cut";
+  scenario.naiveClicked = await evaluateJson(
+    send,
+    `(() => {
+      const b = [...document.querySelectorAll('main button')].find(x => (x.textContent || '').trim() === ${JSON.stringify(naiveLabel)});
+      if (!b) return false;
+      b.click();
+      return true;
+    })()`
+  );
+  await sleep(800);
+  fs.writeFileSync(path.join(outDir, "desk_naive.png"), await screenshot(send));
+
+  scenario.ok =
+    scenario.slipFilterClicked && scenario.slipChipClicked && scenario.chips > 0 &&
+    scenario.deskRasterTiles > 0 && scenario.sceneLabelOk && scenario.naiveClicked;
+  return scenario;
+}
+
 async function screenshot(send) {
   const { data } = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
   return Buffer.from(data, "base64");
@@ -692,6 +791,16 @@ async function main() {
       );
     }
 
+    // Anomaly Desk scenario — slip case, envelope + naive modes, raster
+    // evidence (server-up) or the explicit absent state (--no-tile-server).
+    console.log("[capture] running Anomaly Desk scenario…");
+    audit.deskScenario = await runDeskScenario(send, args.out);
+    console.log(
+      `[capture] desk scenario · chips=${audit.deskScenario.chips} slip=${audit.deskScenario.slipChipClicked} ` +
+        `rasterTiles=${audit.deskScenario.deskRasterTiles} sceneLabel=${audit.deskScenario.sceneLabelOk} ` +
+        `naive=${audit.deskScenario.naiveClicked} absentState=${audit.deskScenario.absentStateOk}`
+    );
+
     // ── Gate evaluation ──────────────────────────────────────────────────────
     // In the server-down run (--no-tile-server) the <img> requests to
     // 127.0.0.1:8765 fail with ERR_CONNECTION_REFUSED: that noise is the
@@ -720,6 +829,10 @@ async function main() {
       if (!ok) pass = false;
       console.log(`[gate] tile-scenario: ${ok ? "OK" : "FAIL"}`);
     }
+    const ds = audit.deskScenario;
+    const deskOk = ds && ds.ok;
+    if (!deskOk) pass = false;
+    console.log(`[gate] desk-scenario: ${deskOk ? "OK" : "FAIL"}`);
     audit.pass = pass;
     audit.finishedAt = new Date().toISOString();
     fs.writeFileSync(path.join(args.out, "audit.json"), JSON.stringify(audit, null, 2));
@@ -758,6 +871,7 @@ const NAV_LABELS_EN = {
   comparison: "Model Comparison",
   spatial: "Spatial Analysis",
   reports: "Reports & Experiments",
+  desk: "Anomaly Desk",
 };
 
 const NAV_LABELS_FA = {
@@ -769,6 +883,7 @@ const NAV_LABELS_FA = {
   comparison: "مقایسه مدل‌ها",
   spatial: "تحلیل فضایی",
   reports: "گزارش‌ها و آزمایش‌ها",
+  desk: "میز ناهنجاری",
 };
 
 const navLabels = locale => (locale === "fa" ? NAV_LABELS_FA : NAV_LABELS_EN);
@@ -779,10 +894,11 @@ Generated by \`node scripts/capture_platform_screenshots.mjs --locale ${a.locale
   a.noTileServer ? " **with --no-tile-server (server-down degradation run)**" : " with the tile server running (tile scenario included)"
 }.
 
-- \`01…08_*.png\` — the eight views, viewport ${a.width}×${a.height} CSS px at deviceScaleFactor 2.
+- \`01…09_*.png\` — the nine views, viewport ${a.width}×${a.height} CSS px at deviceScaleFactor 2.
 - \`tile_rgb.png\` / \`tile_ndvi.png\` — Map Explorer raster-overlay evidence (only in server-up runs).
-- \`audit.json\` — per-view console errors / page exceptions / failed requests and the tile-scenario result.
-- Gate: zero console errors, zero page errors, tiles render with the server up (wire-platform-to-real-data).
+- \`desk_tile_rgb.png\` / \`desk_naive.png\` — Anomaly Desk slip-case review, envelope + naive modes (server-up); \`desk_absent.png\` — the explicit scene-absent degradation state (--no-tile-server runs).
+- \`audit.json\` — per-view console errors / page exceptions / failed requests and the tile- + desk-scenario results.
+- Gate: zero console errors, zero page errors, tiles render with the server up (wire-platform-to-real-data + add-halqeh-anomaly-desk).
 `;
 
 main().catch(err => {
