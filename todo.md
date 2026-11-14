@@ -130,6 +130,24 @@ Full evidence: `D:\RS\Thesis\research\ssl-stress-advantage\REPORT.md` (27 source
   test_baseline_comparators / test_data_scarcity) — environment/load-order, not code; suite runs with
   `--ignore` for these 5 files → 203 passed 1 failed (=real_archive data-state, C6 family).
 
+### D. Follow-up research paths from finding 20 (user-directed; gated on explicit approval before any openspec change)
+
+Evidence: `docs/findings/20_reconstruction_invariance.md` (signal-path decomposition + absorption,
+2026-11-14). Both paths are DESIGN-ONLY until the user approves; no implementation, no retraining,
+no architecture edits may start from them without a new openspec change.
+
+- **D1. Path B — re-examine the anomaly definition:** multivariate/relational and phenology-shape
+  injection families (the current single-index absolute-drop family is the finding-20 scope limit).
+  Design must be informed by the diagnostic (which stages pass/fail there is unknown for relational
+  families). User priority: A > B > C (A = behavior analysis = finding 20 itself, now DONE).
+- **D2. Path C — forecasting/predictive-coding objective arm (finding-20 decision-matrix remedy):**
+  stage-1 dominance in 24/24 cells (signal born at 0.36–2.68σ in train-per-bin-σ units vs τ needing
+  ≈3.5–4.9σ per bin) + measured absorption (gru_ae prediction tracks ≈half of persistent drops,
+  α≈0.38–0.50 at S4–S6, while frozen B1 absorbs nothing) point at the objective/unit change, not at
+  scoring fixes or an architecture swap. A forecasting objective re-anchors σ to temporal
+  predictability and makes sustained level shifts structurally unpredictable. Advisor OQ6/A3 sign-off
+  still applies before any retraining decision.
+
 ### Resolved
 
 - **2026-11-14 — OQ5 / B4 (date count) RESOLVED (user):** one date's metadata was corrupted —

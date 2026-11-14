@@ -38,11 +38,12 @@ counterfactual natural tensor be the pre-injection X.
    - path value at o, o+1, o+2 vs τ; report max path over the injection
      window and SNR₂ = path/τ; detection = SNR₂ > 1 (cross-checks the sweep).
 5. **Absorption (post-onset, persistent family)**
-   - For injected bins b in (o, o_end): MAE(pred_z(b,c), z_injected(b,c)) vs
-     MAE(pred_z(b,c), z_natural(b,c)). Absorption ratio
-     A = MAE(pred, natural) − MAE(pred, injected) normalized by
-     |z_injected − z_natural|: A ≈ 1 → prediction fully tracks the injected
-     level (absorbed); A ≈ 0 → prediction stays at the natural level.
+   - For injected bins b in (o, o_end): the absorption ratio, a convex weight
+     on [0, 1]:
+       A = MAE(pred, natural) / (MAE(pred, natural) + MAE(pred, injected))
+     A ≈ 1 → prediction fully tracks the injected level (absorbed);
+     A ≈ 0 → prediction stays at the natural level; 0.5 → halfway. The
+     counterfactual is exact by construction (the pre-injection tensor).
 6. **Ranking power before vs after normalization**
    - AUC-PR of onset residuals |r| (stage 1, raw) vs clean baselines, and of
      the final paths — the gap localizes loss introduced by stages 2–4.

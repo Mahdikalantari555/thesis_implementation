@@ -1,0 +1,1896 @@
+{
+  "type": "reconstruction_invariance_diagnostic",
+  "model_id": "gru_ae",
+  "run_id": "gru_ae_20261114",
+  "frozen_seed": 2026,
+  "protocol": "severity_sweep_v1",
+  "scorer_metrics_name": "recon_only",
+  "severity_table_sha256": "9d720e3b40160dd07c9f564cd0d6848211756ab65212d235c63657e3a474c1b5",
+  "eval_subset_sha256": "6186edf8a06f82d3",
+  "tau": 11.683615214124151,
+  "k": 1,
+  "n_eval_cycles": 34,
+  "rounds": 2,
+  "ladder_rung": "L2",
+  "claim_noun": "synthetic anomaly",
+  "data_source": "real490 (masked rebuild from stats.zarr)",
+  "splits_locked_sha256": "9aa5eb111b31e73ba1ab30ebed52d7e9ef22c7e9e1de7cbd799e99ccf22e8565",
+  "git_sha": "f6585c72",
+  "device": "cpu",
+  "wall_time_s": 34.9,
+  "date_range": {
+    "first": "2021-03-03",
+    "last": "2024-12-24"
+  },
+  "cells": {
+    "S1/acute/ndvi": {
+      "n": 68,
+      "detection_rate": 0.0,
+      "onset_residual_sigma": {
+        "median": 0.35695306956768036,
+        "iqr": [
+          0.16368146985769272,
+          0.5429495871067047
+        ],
+        "n": 68
+      },
+      "offset_subtraction": {
+        "median": 0.2496379315853119,
+        "iqr": [
+          0.12588396668434143,
+          0.37703991681337357
+        ],
+        "n": 68
+      },
+      "normalized_contribution": {
+        "median": 0.004055267219137195,
+        "iqr": [
+          0.0,
+          0.025543298081651806
+        ],
+        "n": 68
+      },
+      "snr1": {
+        "median": 0.000347090103946152,
+        "iqr": [
+          0.0,
+          0.0021862495138296654
+        ],
+        "n": 68
+      },
+      "path_max_window": {
+        "median": 0.5779834433318259,
+        "iqr": [
+          0.3284349776669492,
+          0.922884221917214
+        ],
+        "n": 47
+      },
+      "snr2": {
+        "median": 0.04946957193806847,
+        "iqr": [
+          0.02811073213622347,
+          0.07898961109242564
+        ],
+        "n": 47
+      },
+      "absorption_ratio": null,
+      "attributed_stage": "stage1_residual",
+      "attribution_counts": {
+        "stage1_residual": 67,
+        "stage3_normalization": 1
+      },
+      "aucpr": {
+        "stage1_residual": 0.4987472968378892,
+        "stage3_contribution": 0.5225329620589676,
+        "stage4_path": 0.5120050742716152
+      }
+    },
+    "S1/acute/savi": {
+      "n": 68,
+      "detection_rate": 0.0,
+      "onset_residual_sigma": {
+        "median": 0.48154400289058685,
+        "iqr": [
+          0.26039353758096695,
+          0.6864225268363953
+        ],
+        "n": 68
+      },
+      "offset_subtraction": {
+        "median": 0.2640710026025772,
+        "iqr": [
+          0.13367101550102234,
+          0.4684808552265167
+        ],
+        "n": 68
+      },
+      "normalized_contribution": {
+        "median": 0.041646765313987255,
+        "iqr": [
+          0.0,
+          0.21808200618955106
+        ],
+        "n": 68
+      },
+      "snr1": {
+        "median": 0.0035645444111888492,
+        "iqr": [
+          0.0,
+          0.018665627221779345
+        ],
+        "n": 68
+      },
+      "path_max_window": {
+        "median": 0.5452905296319575,
+        "iqr": [
+          0.33718094048607505,
+          0.9113136044425567
+        ],
+        "n": 47
+      },
+      "snr2": {
+        "median": 0.046671387206655326,
+        "iqr": [
+          0.028859298625177415,
+          0.07799928256289056
+        ],
+        "n": 47
+      },
+      "absorption_ratio": null,
+      "attributed_stage": "stage1_residual",
+      "attribution_counts": {
+        "stage1_residual": 67,
+        "stage3_normalization": 1
+      },
+      "aucpr": {
+        "stage1_residual": 0.5249042844208028,
+        "stage3_contribution": 0.5250432877629678,
+        "stage4_path": 0.5022931851747333
+      }
+    },
+    "S1/persistent/ndvi": {
+      "n": 68,
+      "detection_rate": 0.0,
+      "onset_residual_sigma": {
+        "median": 0.35695306956768036,
+        "iqr": [
+          0.16368146985769272,
+          0.5429495871067047
+        ],
+        "n": 68
+      },
+      "offset_subtraction": {
+        "median": 0.2496379315853119,
+        "iqr": [
+          0.12588396668434143,
+          0.37703991681337357
+        ],
+        "n": 68
+      },
+      "normalized_contribution": {
+        "median": 0.004055267219137195,
+        "iqr": [
+          0.0,
+          0.025543298081651806
+        ],
+        "n": 68
+      },
+      "snr1": {
+        "median": 0.000347090103946152,
+        "iqr": [
+          0.0,
+          0.0021862495138296654
+        ],
+        "n": 68
+      },
+      "path_max_window": {
+        "median": 0.9084762949566944,
+        "iqr": [
+          0.555248945739763,
+          1.5316793355921061
+        ],
+        "n": 47
+      },
+      "snr2": {
+        "median": 0.07775643739605963,
+        "iqr": [
+          0.04752372750760661,
+          0.1310963522438227
+        ],
+        "n": 47
+      },
+      "absorption_ratio": {
+        "median": 0.4893481965757213,
+        "iqr": [
+          0.4331277778191008,
+          0.5471162803365599
+        ],
+        "n": 45
+      },
+      "attributed_stage": "stage1_residual",
+      "attribution_counts": {
+        "stage1_residual": 67,
+        "stage3_normalization": 1
+      },
+      "aucpr": {
+        "stage1_residual": 0.4987472968378892,
+        "stage3_contribution": 0.5225329620589676,
+        "stage4_path": 0.5154105162806583
+      }
+    },
+    "S1/persistent/savi": {
+      "n": 68,
+      "detection_rate": 0.0,
+      "onset_residual_sigma": {
+        "median": 0.48154400289058685,
+        "iqr": [
+          0.26039353758096695,
+          0.6864225268363953
+        ],
+        "n": 68
+      },
+      "offset_subtraction": {
+        "median": 0.2640710026025772,
+        "iqr": [
+          0.13367101550102234,
+          0.4684808552265167
+        ],
+        "n": 68
+      },
+      "normalized_contribution": {
+        "median": 0.041646765313987255,
+        "iqr": [
+          0.0,
+          0.21808200618955106
+        ],
+        "n": 68
+      },
+      "snr1": {
+        "median": 0.0035645444111888492,
+        "iqr": [
+          0.0,
+          0.018665627221779345
+        ],
+        "n": 68
+      },
+      "path_max_window": {
+        "median": 0.8629395006024962,
+        "iqr": [
+          0.5365273327524224,
+          1.5376022204538327
+        ],
+        "n": 47
+      },
+      "snr2": {
+        "median": 0.07385894560780308,
+        "iqr": [
+          0.0459213456553946,
+          0.13160329164170417
+        ],
+        "n": 47
+      },
+      "absorption_ratio": {
+        "median": 0.49409403215661324,
+        "iqr": [
+          0.4468523811578014,
+          0.5168732030137917
+        ],
+        "n": 45
+      },
+      "attributed_stage": "stage1_residual",
+      "attribution_counts": {
+        "stage1_residual": 67,
+        "stage3_normalization": 1
+      },
+      "aucpr": {
+        "stage1_residual": 0.5249042844208028,
+        "stage3_contribution": 0.5250432877629678,
+        "stage4_path": 0.503979082708626
+      }
+    },
+    "S2/acute/ndvi": {
+      "n": 68,
+      "detection_rate": 0.0,
+      "onset_residual_sigma": {
+        "median": 0.3518735468387604,
+        "iqr": [
+          0.19919175654649734,
+          0.7000220715999603
+        ],
+        "n": 68
+      },
+      "offset_subtraction": {
+        "median": 0.2496379315853119,
+        "iqr": [
+          0.12588399648666382,
+          0.37703991681337357
+        ],
+        "n": 68
+      },
+      "normalized_contribution": {
+        "median": 0.01259166794201988,
+        "iqr": [
+          0.0,
+          0.07927466646355817
+        ],
+        "n": 68
+      },
+      "snr1": {
+        "median": 0.0010777201843140123,
+        "iqr": [
+          0.0,
+          0.006785114453934104
+        ],
+        "n": 68
+      },
+      "path_max_window": {
+        "median": 0.571989994200173,
+        "iqr": [
+          0.3305891332485458,
+          0.8791679705296966
+        ],
+        "n": 47
+      },
+      "snr2": {
+        "median": 0.048956592948105886,
+        "iqr": [
+          0.02829510619700154,
+          0.07524793947911632
+        ],
+        "n": 47
+      },
+      "absorption_ratio": null,
+      "attributed_stage": "stage1_residual",
+      "attribution_counts": {
+        "stage1_residual": 67,
+        "stage3_normalization": 1
+      },
+      "aucpr": {
+        "stage1_residual": 0.5193515502567644,
+        "stage3_contribution": 0.5622973052546117,
+        "stage4_path": 0.5138539167343311
+      }
+    },
+    "S2/acute/savi": {
+      "n": 68,
+      "detection_rate": 0.0,
+      "onset_residual_sigma": {
+        "median": 0.5682342052459717,
+        "iqr": [
+          0.30046723037958145,
+          0.8509636223316193
+        ],
+        "n": 68
+      },
+      "offset_subtraction": {
+        "median": 0.24561449885368347,
+        "iqr": [
+          0.1380750834941864,
+          0.45219825208187103
+        ],
+        "n": 68
+      },
+      "normalized_contribution": {
+        "median": 0.09911186760314285,
+        "iqr": [
+          0.0,
+          0.3121315738974088
+        ],
+        "n": 68
+      },
+      "snr1": {
+        "median": 0.008482979436307348,
+        "iqr": [
+          0.0,
+          0.0267153246813604
+        ],
+        "n": 68
+      },
+      "path_max_window": {
+        "median": 0.5698281646345457,
+        "iqr": [
+          0.36385549818107477,
+          0.8815951760878054
+        ],
+        "n": 47
+      },
+      "snr2": {
+        "median": 0.048771562071445895,
+        "iqr": [
+          0.03114237258868429,
+          0.07545568387275009
+        ],
+        "n": 47
+      },
+      "absorption_ratio": null,
+      "attributed_stage": "stage1_residual",
+      "attribution_counts": {
+        "stage1_residual": 67,
+        "stage3_normalization": 1
+      },
+      "aucpr": {
+        "stage1_residual": 0.5899359227092684,
+        "stage3_contribution": 0.570370949011161,
+        "stage4_path": 0.5035533174283588
+      }
+    },
+    "S2/persistent/ndvi": {
+      "n": 68,
+      "detection_rate": 0.0,
+      "onset_residual_sigma": {
+        "median": 0.3518735468387604,
+        "iqr": [
+          0.19919175654649734,
+          0.7000220715999603
+        ],
+        "n": 68
+      },
+      "offset_subtraction": {
+        "median": 0.2496379315853119,
+        "iqr": [
+          0.12588399648666382,
+          0.37703991681337357
+        ],
+        "n": 68
+      },
+      "normalized_contribution": {
+        "median": 0.01259166794201988,
+        "iqr": [
+          0.0,
+          0.07927466646355817
+        ],
+        "n": 68
+      },
+      "snr1": {
+        "median": 0.0010777201843140123,
+        "iqr": [
+          0.0,
+          0.006785114453934104
+        ],
+        "n": 68
+      },
+      "path_max_window": {
+        "median": 0.909978509036186,
+        "iqr": [
+          0.5543780127645515,
+          1.5088314108852983
+        ],
+        "n": 47
+      },
+      "snr2": {
+        "median": 0.07788501181861299,
+        "iqr": [
+          0.047449184400935415,
+          0.12914079959268893
+        ],
+        "n": 47
+      },
+      "absorption_ratio": {
+        "median": 0.4685399371587375,
+        "iqr": [
+          0.3497315234070501,
+          0.5939954209741464
+        ],
+        "n": 45
+      },
+      "attributed_stage": "stage1_residual",
+      "attribution_counts": {
+        "stage1_residual": 67,
+        "stage3_normalization": 1
+      },
+      "aucpr": {
+        "stage1_residual": 0.5193515502567644,
+        "stage3_contribution": 0.5622973052546117,
+        "stage4_path": 0.5177361592879602
+      }
+    },
+    "S2/persistent/savi": {
+      "n": 68,
+      "detection_rate": 0.0,
+      "onset_residual_sigma": {
+        "median": 0.5682342052459717,
+        "iqr": [
+          0.30046723037958145,
+          0.8509636223316193
+        ],
+        "n": 68
+      },
+      "offset_subtraction": {
+        "median": 0.24561449885368347,
+        "iqr": [
+          0.1380750834941864,
+          0.45219825208187103
+        ],
+        "n": 68
+      },
+      "normalized_contribution": {
+        "median": 0.09911186760314285,
+        "iqr": [
+          0.0,
+          0.3121315738974088
+        ],
+        "n": 68
+      },
+      "snr1": {
+        "median": 0.008482979436307348,
+        "iqr": [
+          0.0,
+          0.0267153246813604
+        ],
+        "n": 68
+      },
+      "path_max_window": {
+        "median": 0.8748414441498462,
+        "iqr": [
+          0.6206638283953054,
+          1.4916972366755261
+        ],
+        "n": 47
+      },
+      "snr2": {
+        "median": 0.07487763231814269,
+        "iqr": [
+          0.053122583808220075,
+          0.1276742865403711
+        ],
+        "n": 47
+      },
+      "absorption_ratio": {
+        "median": 0.49949125360725255,
+        "iqr": [
+          0.406707397178227,
+          0.5650927767401344
+        ],
+        "n": 45
+      },
+      "attributed_stage": "stage1_residual",
+      "attribution_counts": {
+        "stage1_residual": 67,
+        "stage3_normalization": 1
+      },
+      "aucpr": {
+        "stage1_residual": 0.5899359227092684,
+        "stage3_contribution": 0.570370949011161,
+        "stage4_path": 0.5094229703346889
+      }
+    },
+    "S3/acute/ndvi": {
+      "n": 68,
+      "detection_rate": 0.0,
+      "onset_residual_sigma": {
+        "median": 0.45926880836486816,
+        "iqr": [
+          0.22385964915156364,
+          0.8509315848350525
+        ],
+        "n": 68
+      },
+      "offset_subtraction": {
+        "median": 0.2496379315853119,
+        "iqr": [
+          0.12588399648666382,
+          0.37703991681337357
+        ],
+        "n": 68
+      },
+      "normalized_contribution": {
+        "median": 0.040225485944771974,
+        "iqr": [
+          0.0,
+          0.16525242830351936
+        ],
+        "n": 68
+      },
+      "snr1": {
+        "median": 0.003442897186150394,
+        "iqr": [
+          0.0,
+          0.014143946481885857
+        ],
+        "n": 68
+      },
+      "path_max_window": {
+        "median": 0.7811022306492806,
+        "iqr": [
+          0.4495161987893742,
+          1.3041919451654245
+        ],
+        "n": 47
+      },
+      "snr2": {
+        "median": 0.06685449805853051,
+        "iqr": [
+          0.03847406736281084,
+          0.11162571868926374
+        ],
+        "n": 47
+      },
+      "absorption_ratio": {
+        "median": 0.4283033051163221,
+        "iqr": [
+          0.22465305071789443,
+          0.7887794899691141
+        ],
+        "n": 39
+      },
+      "attributed_stage": "stage1_residual",
+      "attribution_counts": {
+        "stage1_residual": 66,
+        "stage3_normalization": 2
+      },
+      "aucpr": {
+        "stage1_residual": 0.5717908050420937,
+        "stage3_contribution": 0.6267631914932433,
+        "stage4_path": 0.5189807763493649
+      }
+    },
+    "S3/acute/savi": {
+      "n": 68,
+      "detection_rate": 0.0,
+      "onset_residual_sigma": {
+        "median": 0.7416508793830872,
+        "iqr": [
+          0.4334586188197136,
+          1.160479724407196
+        ],
+        "n": 68
+      },
+      "offset_subtraction": {
+        "median": 0.23124946653842926,
+        "iqr": [
+          0.1405693218111992,
+          0.45219825580716133
+        ],
+        "n": 68
+      },
+      "normalized_contribution": {
+        "median": 0.23902300621803874,
+        "iqr": [
+          0.0,
+          0.5342391798336816
+        ],
+        "n": 68
+      },
+      "snr1": {
+        "median": 0.020457966291896307,
+        "iqr": [
+          0.0,
+          0.04572550276971187
+        ],
+        "n": 68
+      },
+      "path_max_window": {
+        "median": 0.7951088140918352,
+        "iqr": [
+          0.49853854864176994,
+          1.2812361984455465
+        ],
+        "n": 47
+      },
+      "snr2": {
+        "median": 0.06805332078470368,
+        "iqr": [
+          0.0426698876593517,
+          0.10966093755780992
+        ],
+        "n": 47
+      },
+      "absorption_ratio": {
+        "median": 0.41970797262326737,
+        "iqr": [
+          0.1566746735833886,
+          0.6759482557570717
+        ],
+        "n": 39
+      },
+      "attributed_stage": "stage1_residual",
+      "attribution_counts": {
+        "stage1_residual": 66,
+        "stage3_normalization": 2
+      },
+      "aucpr": {
+        "stage1_residual": 0.6775208259093726,
+        "stage3_contribution": 0.6441904387113535,
+        "stage4_path": 0.523314834033439
+      }
+    },
+    "S3/persistent/ndvi": {
+      "n": 68,
+      "detection_rate": 0.0,
+      "onset_residual_sigma": {
+        "median": 0.45926880836486816,
+        "iqr": [
+          0.22385964915156364,
+          0.8509315848350525
+        ],
+        "n": 68
+      },
+      "offset_subtraction": {
+        "median": 0.2496379315853119,
+        "iqr": [
+          0.12588399648666382,
+          0.37703991681337357
+        ],
+        "n": 68
+      },
+      "normalized_contribution": {
+        "median": 0.040225485944771974,
+        "iqr": [
+          0.0,
+          0.16525242830351936
+        ],
+        "n": 68
+      },
+      "snr1": {
+        "median": 0.003442897186150394,
+        "iqr": [
+          0.0,
+          0.014143946481885857
+        ],
+        "n": 68
+      },
+      "path_max_window": {
+        "median": 0.9237373330239315,
+        "iqr": [
+          0.7039841015647443,
+          1.469500593613162
+        ],
+        "n": 47
+      },
+      "snr2": {
+        "median": 0.07906262882632757,
+        "iqr": [
+          0.06025396152328846,
+          0.12577447705028014
+        ],
+        "n": 47
+      },
+      "absorption_ratio": {
+        "median": 0.43755271317766714,
+        "iqr": [
+          0.2984187314061603,
+          0.6008642048548278
+        ],
+        "n": 45
+      },
+      "attributed_stage": "stage1_residual",
+      "attribution_counts": {
+        "stage1_residual": 66,
+        "stage3_normalization": 2
+      },
+      "aucpr": {
+        "stage1_residual": 0.5717908050420937,
+        "stage3_contribution": 0.6267631914932433,
+        "stage4_path": 0.5316909949688439
+      }
+    },
+    "S3/persistent/savi": {
+      "n": 68,
+      "detection_rate": 0.0,
+      "onset_residual_sigma": {
+        "median": 0.7416508793830872,
+        "iqr": [
+          0.4334586188197136,
+          1.160479724407196
+        ],
+        "n": 68
+      },
+      "offset_subtraction": {
+        "median": 0.23124946653842926,
+        "iqr": [
+          0.1405693218111992,
+          0.45219825580716133
+        ],
+        "n": 68
+      },
+      "normalized_contribution": {
+        "median": 0.23902300621803874,
+        "iqr": [
+          0.0,
+          0.5342391798336816
+        ],
+        "n": 68
+      },
+      "snr1": {
+        "median": 0.020457966291896307,
+        "iqr": [
+          0.0,
+          0.04572550276971187
+        ],
+        "n": 68
+      },
+      "path_max_window": {
+        "median": 0.935303044703593,
+        "iqr": [
+          0.7665827488166149,
+          1.5559879924775974
+        ],
+        "n": 47
+      },
+      "snr2": {
+        "median": 0.08005253746913189,
+        "iqr": [
+          0.06561177638663625,
+          0.13317692888384292
+        ],
+        "n": 47
+      },
+      "absorption_ratio": {
+        "median": 0.49878831875377627,
+        "iqr": [
+          0.3724943451029305,
+          0.5906600746289672
+        ],
+        "n": 45
+      },
+      "attributed_stage": "stage1_residual",
+      "attribution_counts": {
+        "stage1_residual": 66,
+        "stage3_normalization": 2
+      },
+      "aucpr": {
+        "stage1_residual": 0.6775208259093726,
+        "stage3_contribution": 0.6441904387113535,
+        "stage4_path": 0.5290088379433835
+      }
+    },
+    "S4/acute/ndvi": {
+      "n": 68,
+      "detection_rate": 0.0,
+      "onset_residual_sigma": {
+        "median": 0.9551181197166443,
+        "iqr": [
+          0.30005699396133423,
+          1.6935529708862305
+        ],
+        "n": 68
+      },
+      "offset_subtraction": {
+        "median": 0.2496379315853119,
+        "iqr": [
+          0.12588396668434143,
+          0.37703992426395416
+        ],
+        "n": 68
+      },
+      "normalized_contribution": {
+        "median": 0.31558838312587606,
+        "iqr": [
+          0.0,
+          0.5849393454310906
+        ],
+        "n": 68
+      },
+      "snr1": {
+        "median": 0.027011192797959136,
+        "iqr": [
+          0.0,
+          0.05006492722594681
+        ],
+        "n": 68
+      },
+      "path_max_window": {
+        "median": 0.8505789182976052,
+        "iqr": [
+          0.49277417781991883,
+          1.3397124981967314
+        ],
+        "n": 47
+      },
+      "snr2": {
+        "median": 0.07280100403078603,
+        "iqr": [
+          0.042176515469647735,
+          0.11466592091950895
+        ],
+        "n": 47
+      },
+      "absorption_ratio": {
+        "median": 0.34175908369270747,
+        "iqr": [
+          0.16471143041571154,
+          0.6125531348987823
+        ],
+        "n": 39
+      },
+      "attributed_stage": "stage1_residual",
+      "attribution_counts": {
+        "stage1_residual": 66,
+        "stage3_normalization": 2
+      },
+      "aucpr": {
+        "stage1_residual": 0.6926046464600255,
+        "stage3_contribution": 0.732805964794652,
+        "stage4_path": 0.5546612740658514
+      }
+    },
+    "S4/acute/savi": {
+      "n": 68,
+      "detection_rate": 0.0,
+      "onset_residual_sigma": {
+        "median": 1.2421604990959167,
+        "iqr": [
+          0.5189173966646194,
+          2.608195126056671
+        ],
+        "n": 68
+      },
+      "offset_subtraction": {
+        "median": 0.23124946653842926,
+        "iqr": [
+          0.140569306910038,
+          0.46848083287477493
+        ],
+        "n": 68
+      },
+      "normalized_contribution": {
+        "median": 0.9616762625204311,
+        "iqr": [
+          0.0,
+          1.496640150344105
+        ],
+        "n": 68
+      },
+      "snr1": {
+        "median": 0.08230981976861707,
+        "iqr": [
+          0.0,
+          0.12809735025635205
+        ],
+        "n": 68
+      },
+      "path_max_window": {
+        "median": 1.2192802170351176,
+        "iqr": [
+          0.8999183261640251,
+          1.7536196420509524
+        ],
+        "n": 47
+      },
+      "snr2": {
+        "median": 0.10435812842938781,
+        "iqr": [
+          0.07702396130575467,
+          0.15009221117886762
+        ],
+        "n": 47
+      },
+      "absorption_ratio": {
+        "median": 0.2779815752736677,
+        "iqr": [
+          0.13477854485403318,
+          0.5453977880511913
+        ],
+        "n": 39
+      },
+      "attributed_stage": "stage1_residual",
+      "attribution_counts": {
+        "stage1_residual": 56,
+        "stage3_normalization": 12
+      },
+      "aucpr": {
+        "stage1_residual": 0.8087826260697113,
+        "stage3_contribution": 0.7444239729496105,
+        "stage4_path": 0.6331041157352957
+      }
+    },
+    "S4/persistent/ndvi": {
+      "n": 68,
+      "detection_rate": 0.0,
+      "onset_residual_sigma": {
+        "median": 0.9551181197166443,
+        "iqr": [
+          0.30005699396133423,
+          1.6935529708862305
+        ],
+        "n": 68
+      },
+      "offset_subtraction": {
+        "median": 0.2496379315853119,
+        "iqr": [
+          0.12588396668434143,
+          0.37703992426395416
+        ],
+        "n": 68
+      },
+      "normalized_contribution": {
+        "median": 0.31558838312587606,
+        "iqr": [
+          0.0,
+          0.5849393454310906
+        ],
+        "n": 68
+      },
+      "snr1": {
+        "median": 0.027011192797959136,
+        "iqr": [
+          0.0,
+          0.05006492722594681
+        ],
+        "n": 68
+      },
+      "path_max_window": {
+        "median": 1.3143580004010622,
+        "iqr": [
+          0.9594095874801594,
+          2.0570933059373044
+        ],
+        "n": 47
+      },
+      "snr2": {
+        "median": 0.11249583081203789,
+        "iqr": [
+          0.08211581517340139,
+          0.17606650580639754
+        ],
+        "n": 47
+      },
+      "absorption_ratio": {
+        "median": 0.38349090031133365,
+        "iqr": [
+          0.26530136161203866,
+          0.5866731820020413
+        ],
+        "n": 45
+      },
+      "attributed_stage": "stage1_residual",
+      "attribution_counts": {
+        "stage1_residual": 66,
+        "stage3_normalization": 2
+      },
+      "aucpr": {
+        "stage1_residual": 0.6926046464600255,
+        "stage3_contribution": 0.732805964794652,
+        "stage4_path": 0.6262053106331837
+      }
+    },
+    "S4/persistent/savi": {
+      "n": 68,
+      "detection_rate": 0.0,
+      "onset_residual_sigma": {
+        "median": 1.2421604990959167,
+        "iqr": [
+          0.5189173966646194,
+          2.608195126056671
+        ],
+        "n": 68
+      },
+      "offset_subtraction": {
+        "median": 0.23124946653842926,
+        "iqr": [
+          0.140569306910038,
+          0.46848083287477493
+        ],
+        "n": 68
+      },
+      "normalized_contribution": {
+        "median": 0.9616762625204311,
+        "iqr": [
+          0.0,
+          1.496640150344105
+        ],
+        "n": 68
+      },
+      "snr1": {
+        "median": 0.08230981976861707,
+        "iqr": [
+          0.0,
+          0.12809735025635205
+        ],
+        "n": 68
+      },
+      "path_max_window": {
+        "median": 1.7419107254655544,
+        "iqr": [
+          1.3322483885526215,
+          2.376986260640728
+        ],
+        "n": 47
+      },
+      "snr2": {
+        "median": 0.1490900456358563,
+        "iqr": [
+          0.11402706817510438,
+          0.20344612665497785
+        ],
+        "n": 47
+      },
+      "absorption_ratio": {
+        "median": 0.5021889519553909,
+        "iqr": [
+          0.3824416434099526,
+          0.6064926501719645
+        ],
+        "n": 45
+      },
+      "attributed_stage": "stage1_residual",
+      "attribution_counts": {
+        "stage1_residual": 56,
+        "stage3_normalization": 12
+      },
+      "aucpr": {
+        "stage1_residual": 0.8087826260697113,
+        "stage3_contribution": 0.7444239729496105,
+        "stage4_path": 0.6636686472350379
+      }
+    },
+    "S5/acute/ndvi": {
+      "n": 68,
+      "detection_rate": 0.0,
+      "onset_residual_sigma": {
+        "median": 1.3932428359985352,
+        "iqr": [
+          0.45039984583854675,
+          3.0175936222076416
+        ],
+        "n": 68
+      },
+      "offset_subtraction": {
+        "median": 0.24963802099227905,
+        "iqr": [
+          0.12588396668434143,
+          0.37703992426395416
+        ],
+        "n": 68
+      },
+      "normalized_contribution": {
+        "median": 1.2315132643918165,
+        "iqr": [
+          0.0,
+          1.6958922350339
+        ],
+        "n": 68
+      },
+      "snr1": {
+        "median": 0.10540515429702428,
+        "iqr": [
+          0.0,
+          0.1451513255061465
+        ],
+        "n": 68
+      },
+      "path_max_window": {
+        "median": 1.8197389974957834,
+        "iqr": [
+          1.4061984401146188,
+          2.2295645365653236
+        ],
+        "n": 47
+      },
+      "snr2": {
+        "median": 0.15575136326776046,
+        "iqr": [
+          0.12035644912498368,
+          0.1908283091923496
+        ],
+        "n": 47
+      },
+      "absorption_ratio": {
+        "median": 0.41658575493081285,
+        "iqr": [
+          0.262784281729614,
+          0.5689623699804668
+        ],
+        "n": 43
+      },
+      "attributed_stage": "stage1_residual",
+      "attribution_counts": {
+        "stage1_residual": 50,
+        "stage3_normalization": 18
+      },
+      "aucpr": {
+        "stage1_residual": 0.7841591821674601,
+        "stage3_contribution": 0.7549013555102126,
+        "stage4_path": 0.719181962860804
+      }
+    },
+    "S5/acute/savi": {
+      "n": 68,
+      "detection_rate": 0.0,
+      "onset_residual_sigma": {
+        "median": 1.9432985186576843,
+        "iqr": [
+          0.5339113175868988,
+          4.871710777282715
+        ],
+        "n": 68
+      },
+      "offset_subtraction": {
+        "median": 0.24273419380187988,
+        "iqr": [
+          0.1486007496714592,
+          0.4684808775782585
+        ],
+        "n": 68
+      },
+      "normalized_contribution": {
+        "median": 2.6501289172060813,
+        "iqr": [
+          0.0,
+          4.149192341293993
+        ],
+        "n": 68
+      },
+      "snr1": {
+        "median": 0.22682439199147705,
+        "iqr": [
+          0.0,
+          0.35512915011768753
+        ],
+        "n": 68
+      },
+      "path_max_window": {
+        "median": 2.8960059169207764,
+        "iqr": [
+          2.2204279836360534,
+          4.883670410803262
+        ],
+        "n": 47
+      },
+      "snr2": {
+        "median": 0.24786899121941616,
+        "iqr": [
+          0.19004631211680184,
+          0.4179930887230405
+        ],
+        "n": 47
+      },
+      "absorption_ratio": {
+        "median": 0.42480708121249106,
+        "iqr": [
+          0.29203174050960734,
+          0.532386417934301
+        ],
+        "n": 43
+      },
+      "attributed_stage": "stage1_residual",
+      "attribution_counts": {
+        "stage1_residual": 48,
+        "stage3_normalization": 20
+      },
+      "aucpr": {
+        "stage1_residual": 0.8451580908057623,
+        "stage3_contribution": 0.8122563986598259,
+        "stage4_path": 0.7965227120817069
+      }
+    },
+    "S5/persistent/ndvi": {
+      "n": 68,
+      "detection_rate": 0.0,
+      "onset_residual_sigma": {
+        "median": 1.3932428359985352,
+        "iqr": [
+          0.45039984583854675,
+          3.0175936222076416
+        ],
+        "n": 68
+      },
+      "offset_subtraction": {
+        "median": 0.24963802099227905,
+        "iqr": [
+          0.12588396668434143,
+          0.37703992426395416
+        ],
+        "n": 68
+      },
+      "normalized_contribution": {
+        "median": 1.2315132643918165,
+        "iqr": [
+          0.0,
+          1.6958922350339
+        ],
+        "n": 68
+      },
+      "snr1": {
+        "median": 0.10540515429702428,
+        "iqr": [
+          0.0,
+          0.1451513255061465
+        ],
+        "n": 68
+      },
+      "path_max_window": {
+        "median": 2.771509599708409,
+        "iqr": [
+          1.5089454329592762,
+          5.248364883812901
+        ],
+        "n": 47
+      },
+      "snr2": {
+        "median": 0.23721335810152083,
+        "iqr": [
+          0.12915055873588974,
+          0.4492072691223372
+        ],
+        "n": 47
+      },
+      "absorption_ratio": {
+        "median": 0.44365655798534004,
+        "iqr": [
+          0.29315792162838866,
+          0.5456651789377366
+        ],
+        "n": 45
+      },
+      "attributed_stage": "stage1_residual",
+      "attribution_counts": {
+        "stage1_residual": 50,
+        "stage3_normalization": 18
+      },
+      "aucpr": {
+        "stage1_residual": 0.7841591821674601,
+        "stage3_contribution": 0.7549013555102126,
+        "stage4_path": 0.7823773467528707
+      }
+    },
+    "S5/persistent/savi": {
+      "n": 68,
+      "detection_rate": 0.014705882352941176,
+      "onset_residual_sigma": {
+        "median": 1.9432985186576843,
+        "iqr": [
+          0.5339113175868988,
+          4.871710777282715
+        ],
+        "n": 68
+      },
+      "offset_subtraction": {
+        "median": 0.24273419380187988,
+        "iqr": [
+          0.1486007496714592,
+          0.4684808775782585
+        ],
+        "n": 68
+      },
+      "normalized_contribution": {
+        "median": 2.6501289172060813,
+        "iqr": [
+          0.0,
+          4.149192341293993
+        ],
+        "n": 68
+      },
+      "snr1": {
+        "median": 0.22682439199147705,
+        "iqr": [
+          0.0,
+          0.35512915011768753
+        ],
+        "n": 68
+      },
+      "path_max_window": {
+        "median": 4.098197393255767,
+        "iqr": [
+          2.9111017683246505,
+          4.956798282704284
+        ],
+        "n": 47
+      },
+      "snr2": {
+        "median": 0.35076449524814174,
+        "iqr": [
+          0.24916104433201997,
+          0.4242520993598012
+        ],
+        "n": 47
+      },
+      "absorption_ratio": {
+        "median": 0.4747723618169011,
+        "iqr": [
+          0.3272670085229093,
+          0.5835490152389053
+        ],
+        "n": 45
+      },
+      "attributed_stage": "stage1_residual",
+      "attribution_counts": {
+        "stage1_residual": 48,
+        "stage3_normalization": 19,
+        "detected": 1
+      },
+      "aucpr": {
+        "stage1_residual": 0.8451580908057623,
+        "stage3_contribution": 0.8122563986598259,
+        "stage4_path": 0.8223851694934995
+      }
+    },
+    "S6/acute/ndvi": {
+      "n": 68,
+      "detection_rate": 0.029411764705882353,
+      "onset_residual_sigma": {
+        "median": 1.9504563212394714,
+        "iqr": [
+          0.49618466198444366,
+          4.571846604347229
+        ],
+        "n": 68
+      },
+      "offset_subtraction": {
+        "median": 0.24963802099227905,
+        "iqr": [
+          0.12588393688201904,
+          0.3770398944616318
+        ],
+        "n": 68
+      },
+      "normalized_contribution": {
+        "median": 2.743846431819433,
+        "iqr": [
+          0.0,
+          3.3845531150310437
+        ],
+        "n": 68
+      },
+      "snr1": {
+        "median": 0.23484566904449553,
+        "iqr": [
+          0.0,
+          0.2896837197222575
+        ],
+        "n": 68
+      },
+      "path_max_window": {
+        "median": 3.6444662488676283,
+        "iqr": [
+          2.763327355689089,
+          5.665020316740218
+        ],
+        "n": 47
+      },
+      "snr2": {
+        "median": 0.3119296709174303,
+        "iqr": [
+          0.23651304027443004,
+          0.48486878529616906
+        ],
+        "n": 47
+      },
+      "absorption_ratio": {
+        "median": 0.4668911181975439,
+        "iqr": [
+          0.340042657729654,
+          0.590657089156545
+        ],
+        "n": 44
+      },
+      "attributed_stage": "stage1_residual",
+      "attribution_counts": {
+        "stage1_residual": 47,
+        "stage3_normalization": 19,
+        "detected": 2
+      },
+      "aucpr": {
+        "stage1_residual": 0.8193793005922357,
+        "stage3_contribution": 0.7768317943524161,
+        "stage4_path": 0.8496496161654848
+      }
+    },
+    "S6/acute/savi": {
+      "n": 68,
+      "detection_rate": 0.04411764705882353,
+      "onset_residual_sigma": {
+        "median": 2.6849979162216187,
+        "iqr": [
+          0.5339113175868988,
+          7.664628624916077
+        ],
+        "n": 68
+      },
+      "offset_subtraction": {
+        "median": 0.23777222633361816,
+        "iqr": [
+          0.1432170644402504,
+          0.46848078817129135
+        ],
+        "n": 68
+      },
+      "normalized_contribution": {
+        "median": 5.095460564365812,
+        "iqr": [
+          0.0,
+          8.415533991118494
+        ],
+        "n": 68
+      },
+      "snr1": {
+        "median": 0.4361201966156832,
+        "iqr": [
+          0.0,
+          0.7202851032739488
+        ],
+        "n": 68
+      },
+      "path_max_window": {
+        "median": 5.577148997989049,
+        "iqr": [
+          4.340343711901301,
+          8.977714551602874
+        ],
+        "n": 47
+      },
+      "snr2": {
+        "median": 0.4773478838336712,
+        "iqr": [
+          0.37148978568331514,
+          0.7684021073160512
+        ],
+        "n": 47
+      },
+      "absorption_ratio": {
+        "median": 0.4685491583827486,
+        "iqr": [
+          0.33674063619800576,
+          0.5750153281991585
+        ],
+        "n": 44
+      },
+      "attributed_stage": "stage1_residual",
+      "attribution_counts": {
+        "stage3_normalization": 23,
+        "stage1_residual": 41,
+        "detected": 3,
+        "stage4_aggregation": 1
+      },
+      "aucpr": {
+        "stage1_residual": 0.862631358374577,
+        "stage3_contribution": 0.8228683897801545,
+        "stage4_path": 0.9171457592415283
+      }
+    },
+    "S6/persistent/ndvi": {
+      "n": 68,
+      "detection_rate": 0.1323529411764706,
+      "onset_residual_sigma": {
+        "median": 1.9504563212394714,
+        "iqr": [
+          0.49618466198444366,
+          4.571846604347229
+        ],
+        "n": 68
+      },
+      "offset_subtraction": {
+        "median": 0.24963802099227905,
+        "iqr": [
+          0.12588393688201904,
+          0.3770398944616318
+        ],
+        "n": 68
+      },
+      "normalized_contribution": {
+        "median": 2.743846431819433,
+        "iqr": [
+          0.0,
+          3.3845531150310437
+        ],
+        "n": 68
+      },
+      "snr1": {
+        "median": 0.23484566904449553,
+        "iqr": [
+          0.0,
+          0.2896837197222575
+        ],
+        "n": 68
+      },
+      "path_max_window": {
+        "median": 5.961539058353036,
+        "iqr": [
+          2.763327355689089,
+          8.881971322599473
+        ],
+        "n": 47
+      },
+      "snr2": {
+        "median": 0.5102478084990525,
+        "iqr": [
+          0.23651304027443004,
+          0.7602074494769553
+        ],
+        "n": 47
+      },
+      "absorption_ratio": {
+        "median": 0.4478281586414732,
+        "iqr": [
+          0.30877216294440746,
+          0.6115029630905217
+        ],
+        "n": 45
+      },
+      "attributed_stage": "stage1_residual",
+      "attribution_counts": {
+        "detected": 9,
+        "stage3_normalization": 19,
+        "stage1_residual": 40
+      },
+      "aucpr": {
+        "stage1_residual": 0.8193793005922357,
+        "stage3_contribution": 0.7768317943524161,
+        "stage4_path": 0.9062845875177672
+      }
+    },
+    "S6/persistent/savi": {
+      "n": 68,
+      "detection_rate": 0.04411764705882353,
+      "onset_residual_sigma": {
+        "median": 2.6849979162216187,
+        "iqr": [
+          0.5339113175868988,
+          7.664628624916077
+        ],
+        "n": 68
+      },
+      "offset_subtraction": {
+        "median": 0.23777222633361816,
+        "iqr": [
+          0.1432170644402504,
+          0.46848078817129135
+        ],
+        "n": 68
+      },
+      "normalized_contribution": {
+        "median": 5.095460564365812,
+        "iqr": [
+          0.0,
+          8.415533991118494
+        ],
+        "n": 68
+      },
+      "snr1": {
+        "median": 0.4361201966156832,
+        "iqr": [
+          0.0,
+          0.7202851032739488
+        ],
+        "n": 68
+      },
+      "path_max_window": {
+        "median": 7.550844081659662,
+        "iqr": [
+          5.549354856885699,
+          9.216989630445648
+        ],
+        "n": 47
+      },
+      "snr2": {
+        "median": 0.6462763402659442,
+        "iqr": [
+          0.47496898478624716,
+          0.7888816484903889
+        ],
+        "n": 47
+      },
+      "absorption_ratio": {
+        "median": 0.44977745161074706,
+        "iqr": [
+          0.3356876268254612,
+          0.5895095970360756
+        ],
+        "n": 45
+      },
+      "attributed_stage": "stage1_residual",
+      "attribution_counts": {
+        "stage3_normalization": 23,
+        "stage1_residual": 41,
+        "detected": 3,
+        "stage4_aggregation": 1
+      },
+      "aucpr": {
+        "stage1_residual": 0.862631358374577,
+        "stage3_contribution": 0.8228683897801545,
+        "stage4_path": 0.9456044113132862
+      }
+    }
+  },
+  "decomposition_channel_counts": {
+    "S1/acute/ndvi": {
+      "ndvi": 68
+    },
+    "S1/acute/savi": {
+      "nir": 28,
+      "red": 40
+    },
+    "S1/persistent/ndvi": {
+      "ndvi": 68
+    },
+    "S1/persistent/savi": {
+      "nir": 28,
+      "red": 40
+    },
+    "S2/acute/ndvi": {
+      "ndvi": 68
+    },
+    "S2/acute/savi": {
+      "nir": 23,
+      "red": 45
+    },
+    "S2/persistent/ndvi": {
+      "ndvi": 68
+    },
+    "S2/persistent/savi": {
+      "nir": 23,
+      "red": 45
+    },
+    "S3/acute/ndvi": {
+      "ndvi": 68
+    },
+    "S3/acute/savi": {
+      "nir": 20,
+      "red": 48
+    },
+    "S3/persistent/ndvi": {
+      "ndvi": 68
+    },
+    "S3/persistent/savi": {
+      "nir": 20,
+      "red": 48
+    },
+    "S4/acute/ndvi": {
+      "ndvi": 68
+    },
+    "S4/acute/savi": {
+      "nir": 16,
+      "red": 52
+    },
+    "S4/persistent/ndvi": {
+      "ndvi": 68
+    },
+    "S4/persistent/savi": {
+      "nir": 16,
+      "red": 52
+    },
+    "S5/acute/ndvi": {
+      "ndvi": 68
+    },
+    "S5/acute/savi": {
+      "red": 55,
+      "nir": 13
+    },
+    "S5/persistent/ndvi": {
+      "ndvi": 68
+    },
+    "S5/persistent/savi": {
+      "red": 55,
+      "nir": 13
+    },
+    "S6/acute/ndvi": {
+      "ndvi": 68
+    },
+    "S6/acute/savi": {
+      "red": 57,
+      "nir": 11
+    },
+    "S6/persistent/ndvi": {
+      "ndvi": 68
+    },
+    "S6/persistent/savi": {
+      "red": 57,
+      "nir": 11
+    }
+  },
+  "detection_crosscheck_vs_sweep": {
+    "S1/acute/ndvi": {
+      "diagnostic_rate": 0.0,
+      "sweep_rate": 0.0,
+      "match": true
+    },
+    "S1/acute/savi": {
+      "diagnostic_rate": 0.0,
+      "sweep_rate": 0.0,
+      "match": true
+    },
+    "S1/persistent/ndvi": {
+      "diagnostic_rate": 0.0,
+      "sweep_rate": 0.0,
+      "match": true
+    },
+    "S1/persistent/savi": {
+      "diagnostic_rate": 0.0,
+      "sweep_rate": 0.0,
+      "match": true
+    },
+    "S2/acute/ndvi": {
+      "diagnostic_rate": 0.0,
+      "sweep_rate": 0.0,
+      "match": true
+    },
+    "S2/acute/savi": {
+      "diagnostic_rate": 0.0,
+      "sweep_rate": 0.0,
+      "match": true
+    },
+    "S2/persistent/ndvi": {
+      "diagnostic_rate": 0.0,
+      "sweep_rate": 0.0,
+      "match": true
+    },
+    "S2/persistent/savi": {
+      "diagnostic_rate": 0.0,
+      "sweep_rate": 0.0,
+      "match": true
+    },
+    "S3/acute/ndvi": {
+      "diagnostic_rate": 0.0,
+      "sweep_rate": 0.0,
+      "match": true
+    },
+    "S3/acute/savi": {
+      "diagnostic_rate": 0.0,
+      "sweep_rate": 0.0,
+      "match": true
+    },
+    "S3/persistent/ndvi": {
+      "diagnostic_rate": 0.0,
+      "sweep_rate": 0.0,
+      "match": true
+    },
+    "S3/persistent/savi": {
+      "diagnostic_rate": 0.0,
+      "sweep_rate": 0.0,
+      "match": true
+    },
+    "S4/acute/ndvi": {
+      "diagnostic_rate": 0.0,
+      "sweep_rate": 0.0,
+      "match": true
+    },
+    "S4/acute/savi": {
+      "diagnostic_rate": 0.0,
+      "sweep_rate": 0.0,
+      "match": true
+    },
+    "S4/persistent/ndvi": {
+      "diagnostic_rate": 0.0,
+      "sweep_rate": 0.0,
+      "match": true
+    },
+    "S4/persistent/savi": {
+      "diagnostic_rate": 0.0,
+      "sweep_rate": 0.0,
+      "match": true
+    },
+    "S5/acute/ndvi": {
+      "diagnostic_rate": 0.0,
+      "sweep_rate": 0.0,
+      "match": true
+    },
+    "S5/acute/savi": {
+      "diagnostic_rate": 0.0,
+      "sweep_rate": 0.0,
+      "match": true
+    },
+    "S5/persistent/ndvi": {
+      "diagnostic_rate": 0.0,
+      "sweep_rate": 0.0,
+      "match": true
+    },
+    "S5/persistent/savi": {
+      "diagnostic_rate": 0.014705882352941176,
+      "sweep_rate": 0.014705882352941176,
+      "match": true
+    },
+    "S6/acute/ndvi": {
+      "diagnostic_rate": 0.029411764705882353,
+      "sweep_rate": 0.029411764705882353,
+      "match": true
+    },
+    "S6/acute/savi": {
+      "diagnostic_rate": 0.04411764705882353,
+      "sweep_rate": 0.04411764705882353,
+      "match": true
+    },
+    "S6/persistent/ndvi": {
+      "diagnostic_rate": 0.1323529411764706,
+      "sweep_rate": 0.1323529411764706,
+      "match": true
+    },
+    "S6/persistent/savi": {
+      "diagnostic_rate": 0.04411764705882353,
+      "sweep_rate": 0.04411764705882353,
+      "match": true
+    }
+  },
+  "smoke": false,
+  "notes": "full run v2: + matched-negative stage-wise AUC-PR"
+}

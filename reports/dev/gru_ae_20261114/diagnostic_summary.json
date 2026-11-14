@@ -1,0 +1,11 @@
+{
+  "type": "diagnostic_summary",
+  "created": "2026-11-14 21:29:15",
+  "wall_time_s": 49.8,
+  "sidecar_byte_identical": true,
+  "outputs": {
+    "gru_ae:2026": "reports\\dev\\gru_ae_20261114\\diagnostic_gru_ae_seed2026.json",
+    "b1:2026": "reports\\dev\\b1_20261114\\diagnostic_b1_seed2026.json"
+  },
+  "notes": "full run v2: + matched-negative stage-wise AUC-PR"
+}
