@@ -1,0 +1,17 @@
+{
+  "far_clean_main": 0.06432748538011696,
+  "far_clean_b1": 0.07017543859649122,
+  "detection_rate_1mad_main": 0.06666666666666667,
+  "detection_rate_1mad_b1": 0.05154639175257732,
+  "bootstrap_ci95_fields_main": [
+    0.02,
+    0.125
+  ],
+  "bootstrap_ci95_fields_b1": [
+    0.0,
+    0.11831171107994387
+  ],
+  "ladder_rung_result": "L2"
+}
+[final-test] report → D:\RS\Thesis\thesis_implementation\reports\final_test_gru_ae_main.json
+[final-test] D6 target NOT met — reported as a finding; rung stays L2 (spec: honest outcome, no goalpost moving).

@@ -1,0 +1,10 @@
+[eval] channels=7, dev cycles=69, rounds=6
+[eval] dropped-channel injections skipped: ['lst_rise']
+[seed 13] extended severity: 4.0xMAD=0.04 6.0xMAD=0.04 8.0xMAD=0.25
+[seed 13] det@1MAD=0.071 delay=172d tau=4.3159 k=2 far=0.043 aucpr50=0.366 (mean-stat secondary det 0.000)
+[seed 42] extended severity: 4.0xMAD=0.12 6.0xMAD=0.17 8.0xMAD=0.21
+[seed 42] det@1MAD=0.065 delay=105d tau=5.4481 k=1 far=0.043 aucpr50=0.303 (mean-stat secondary det 0.032)
+[seed 2026] extended severity: 4.0xMAD=0.00 6.0xMAD=0.00 8.0xMAD=0.29
+[seed 2026] det@1MAD=0.103 delay=165d tau=6.4275 k=1 far=0.043 aucpr50=0.317 (mean-stat secondary det 0.000)
+[dev_log] appended row for gru_ae_nolst_20261114:gru_ae
+[done] metrics → D:\RS\Thesis\thesis_implementation\reports\dev\gru_ae_nolst_20261114\metrics_gru_ae.json (wall 5.7s)

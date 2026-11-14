@@ -21,3 +21,6 @@
 14. `14_stage_conditioned_thresholds.md` — تشخیص آنومالی با آستانه‌های conditional (npphen confidence envelope) روی ۷۹۹ چرخه و ۳۷۰ مزرعه: ۱۸,۵۰۵ مشاهده، ۱,۷۷۴ شانه (۹.۵۹%)
 14b. `14_cycle_audit.md` — ممیزی segmentation: نمونهٔ ۹۴ چرخه‌ای، برچسب‌های عامل (۶۷ درست / ۱۹ merged / ۶ split / ۲ جابه‌جایی)، نرخ خطای جمعیت ۷.۹٪ و قاعدهٔ حذف ۳۸ چرخه
 15. `15_cycle_segmentation_method.md` — شرح کامل روش استخراج چرخه‌ها (گام‌به‌گام با پارامترها و file:line) و تطبیق با منابع مرورشده (Kavats، Joshi، Manrique، Rodigheri، BFAST، CCDC، GDD) + خطای شناخته‌شدهٔ merged زمستانی و قاعدهٔ حذف
+14. `14_stage_conditioned_thresholds.md` — آستانه‌های شرطی-مرحله‌ای با پوش اطمینان npphen (جلوگیری از پرچ‌کردن افت فنولوژیک طبیعی)
+15. `15_cycle_segmentation_method.md` — روش قطعه‌بندی چرخه
+16. `16_development_protocol_results.md` — نتایج پروتکل توسعه: معماری نهایی (`gru_ae_main`)، آمار هشدار، یافته‌ی شدت ۱×MAD، تست نهایی قفل‌شده (پله L2؛ هدف D6 برآورده نشد و صادقانه ثبت شد)

@@ -1,0 +1,29 @@
+{
+  "run_id": "b1_20261114",
+  "created": "2026-11-14 13:55:26",
+  "git_sha": "81b2a58f",
+  "splits_locked_sha256": "9aa5eb111b31e73ba1ab30ebed52d7e9ef22c7e9e1de7cbd799e99ccf22e8565",
+  "config": {
+    "model": "b1",
+    "epochs": 60,
+    "batch_size": 32,
+    "lr": 0.001,
+    "mask_ratio": 0.3,
+    "use_doy": true,
+    "seed": 2026,
+    "smoke": false
+  },
+  "config_hash": "e19b2f014b32",
+  "seeds": [
+    13,
+    42,
+    2026
+  ],
+  "device": "cpu",
+  "wall_time_s": 0.3,
+  "n_train_cycles": 447,
+  "n_dev_cycles": 69,
+  "determinism_flags": {},
+  "parameter_count": 0,
+  "data_source": "real490 (masked rebuild from stats.zarr)"
+}

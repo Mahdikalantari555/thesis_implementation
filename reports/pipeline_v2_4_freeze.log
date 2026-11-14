@@ -1,0 +1,2 @@
+[freeze] D:\RS\Thesis\thesis_implementation\checkpoints\gru_ae_main.pt
+[freeze] sidecar D:\RS\Thesis\thesis_implementation\checkpoints\gru_ae_main.json (ladder_rung=L2, seed 2026 det@1MAD=0.098)
