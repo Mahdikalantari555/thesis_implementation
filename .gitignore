@@ -77,3 +77,6 @@ platform/.tmpbuild/
 data/.tmp*
 .tmp-esbuild/
 /data/
+
+# Large generated platform data (regenerate via scripts/export_platform_data.py)
+platform/src/data/series_khuzestan.json
