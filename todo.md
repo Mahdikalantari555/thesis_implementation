@@ -81,7 +81,7 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
    - typical NDVI drop magnitude in mid-season water stress?
    - waterlogging occurrence and which months?
    Literature review task 0.3 runs in parallel.
-7. **1704 vs 799 cycle-count discrepancy:** `docs/findings/02_phenology_cycles.md` reports 1704 non-censored cycles, but real490 stats show 799 cycles (`splits_490.json`). Recount needed (finding 13 R8) before the 10%/25% segmentation decision rule can be applied.
+7. **RESOLVED 2026-11-14 (was: 1704 vs 799 cycle-count discrepancy):** recount (fixed `data_quality_report.py --all`) = 800 non-censored cycles, matching the archive 799 within 1 trailing-censoring cycle; findings-02 count is stale. Segmentation decision rule applied via the cycle audit — see finding 14 (exclusion list `reports/cycle_audit/exclusion_cycles.csv`) and finding 15 (method write-up). Remaining open follow-up: optional winter-harvest tuning.
 
 ## Thesis-level reminders
 

@@ -1,9 +1,17 @@
 # Finding 14 — Cycle Audit (D2): segmentation error rate on real490
 
-**Status (2026-11-14):** agent pre-labeling COMPLETE (94/94 plots reviewed).
-**Blocked on:** user confirmation of the 20-cycle subset (task 2.2) before the
-final D2 rule application is recorded. Numbers below are agent pre-labels and
-must be read as such until that confirmation lands.
+**Status (2026-11-14, final):** agent pre-labeled all 94 plots. The user
+reviewed the confirmation procedure (documented in this file §6), stated they
+could not judge the plots themselves, and **explicitly delegated the
+confirmation to the agent's pre-labels** (user message, 2026-11-14, Persian).
+The labels below therefore stand as **agent-only visual judgment** — a
+limitation recorded for the thesis; a future cross-check against planting/
+harvest records (optional task 2.4) can validate them independently.
+**D2 outcome (population point estimate 7.9 % < 10 %): proceed to training
+with the 38 flagged/suspect cycles excluded** (`reports/cycle_audit/exclusion_cycles.csv`);
+the CI upper bound (16.3 %) does not exclude the 10–25 % tuning band, so the
+winter-harvest tuning fix stays a recommended follow-up. The exclusion list
+is applied by `build_locked_splits.py` (train task 1.1).
 
 > **History:** the 2026-11-11 draft of this finding reported a 96.7 %
 > `overlap_with_neighbour` rate and a "BLOCKING" verdict. That result was void:
@@ -111,8 +119,14 @@ recommendation are recomputed.
 
 ## 6. User confirmation set (task 2.2) — 20 cycles
 
-Open the plots in `reports/cycle_audit/plots/` (and/or the field's NDVI series
-in the platform inspector) and confirm/correct the pre-label:
+**Waived 2026-11-14:** the user delegated confirmation to the agent's
+pre-labels after receiving the explanation of the procedure. The set below is
+kept as the reference subset for any future independent cross-check (e.g.
+against planting/harvest records, optional task 2.4). The judgment criterion
+for each plot: a correct cycle rises from bare-soil NDVI (~0.1–0.2) to a
+single plateau and falls to a trough at the end boundary; a merged cycle
+contains a full interior crash-and-regrow; a split fragment starts or ends
+away from any trough.
 
 | # | field_cycle | len | pre-label | plot |
 |---|---|---|---|---|
@@ -137,12 +151,17 @@ in the platform inspector) and confirm/correct the pre-label:
 | 19 | 370_c1 | 414 | correct | `field370_cycle1.png` |
 | 20 | 47_c1 | 397 | correct | `field47_cycle1.png` |
 
-## 7. Pending after confirmation
+## 7. Outcome and follow-ups
 
-1. Apply user corrections to `pre_labels.csv`, recompute the rates, record the
-   final D2 rule outcome in `train-and-finalize-main-architecture/design.md`
-   D11 (exclusion list for the locked splits).
-2. Optional (separate change proposal): tune winter-harvest detection, then
-   re-run `audit_cycles.py --all`.
+1. **D2 outcome recorded (2026-11-14):** proceed to training; exclusion list =
+   `reports/cycle_audit/exclusion_cycles.csv` (38 cycles: 35 sanity-flagged +
+   3 unflagged agent-labeled errors). Applied by `build_locked_splits.py`
+   (train task 1.1), which must join on (field, cycle_id) against the archive
+   population and log the actual dropped count (799-cycle NPZ vs 800 re-segmented).
+2. **Recommended follow-up (separate change proposal):** tune winter-harvest
+   detection (prominence/plateau rules for shallow Dec–Feb troughs; see
+   `docs/findings/15_cycle_segmentation_method.md` §7), then re-run
+   `audit_cycles.py --all`.
 3. `data_quality.json` full re-run recorded the recount (800) — OQ7 resolved;
    OQ5 (538 vs 539 scenes) remains open in todo.md.
+4. Method write-up for the advisor: `docs/findings/15_cycle_segmentation_method.md`.
