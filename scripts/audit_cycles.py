@@ -349,6 +349,8 @@ def main():
 
     REPORTS.mkdir(parents=True, exist_ok=True)
     PLOTS.mkdir(parents=True, exist_ok=True)
+    for old in PLOTS.glob("*.png"):  # plots are pure per-run output; purge stale ones
+        old.unlink()
 
     rows = []
     n_plots = 0
