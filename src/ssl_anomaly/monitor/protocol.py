@@ -38,7 +38,12 @@ DEV_LOG_COLUMNS: tuple[str, ...] = (
     "aucpr_25", "aucpr_50", "aucpr_75",
     "nrmse_mean", "severity_0p5", "severity_1p5", "severity_2",
     "params", "wall_time_s", "device", "git_sha", "data_source",
-    "splits_sha256", "ladder_rung", "notes",
+    "splits_sha256", "ladder_rung",
+    # Severity protocol (change literature-grounded-severity-protocol, task 2.3):
+    # protocol/scorer identity, the verified-table hash, the independent
+    # evaluation-subset hash and the MDM80 labels (JSON per family × index).
+    "protocol", "scorer", "severity_table_sha256", "eval_subset_sha256", "mdm80",
+    "notes",
 )
 
 

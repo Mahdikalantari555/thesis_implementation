@@ -19,6 +19,8 @@ REQUIRED_COLUMNS = {
     "aucpr_25", "aucpr_50", "aucpr_75", "nrmse_mean",
     "params", "wall_time_s", "device", "git_sha", "data_source",
     "splits_sha256", "ladder_rung",
+    # Severity protocol (literature-grounded-severity-protocol task 2.3).
+    "protocol", "scorer", "severity_table_sha256", "eval_subset_sha256", "mdm80",
 }
 
 

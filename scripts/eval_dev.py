@@ -1,17 +1,29 @@
 #!/usr/bin/env python3
-"""Dev-metric evaluation (design D6, task 3.2, spec model-development-protocol).
+"""Dev-metric evaluation — two protocols (spec model-development-protocol).
 
-Evaluates one trained run (all seeds present under checkpoints/dev/<run_id>/)
-on the DEV split only:
+**severity** (default; change literature-grounded-severity-protocol):
+- Injections: the verified severity table (S1 −0.02 … S6 −0.40 absolute
+  index drops) × {acute, persistent} × {ndvi, savi} on the INDEPENDENT
+  evaluation subset of dev (disjoint from the threshold-calibration subset,
+  deterministic hash partition; the partition hash is recorded).
+- Calibration: τ at the 5 % cycle-level FAR on the calibration subset's clean
+  cycles; k ∈ {1, 2} chosen by detection rate on calibration-subset injections
+  of the S3/acute/ndvi cell (the moderate verified anchor).
+- Primary: MDM80 per duration family and index — the lowest level with
+  detection rate ≥ 0.80 at the calibrated threshold; censored ">S6" when no
+  level reaches 0.80. Secondary: per-level detection with Wilson CIs,
+  event-level FAR (declustering, gap ≤ 2 bins), partial-cycle AUC-PR at
+  25/50/75 %, masked NRMSE, per-phase breakdown.
+- The MAD-scaled D6 statistic (1×MAD headline) is retired; `lst_rise` stays
+  runnable only in the legacy protocol (owner decision 2026-11-14).
 
-- FAR calibration on CLEAN dev cycles (cycle-level FAR ≤ 5 %), k ∈ {1, 2}
-  chosen by detection rate; τ, k, achieved FAR recorded per seed.
-- Primary: detection rate at 1×MAD over the injected set (mean ± std over
-  seeds) + median detection delay in days.
-- Secondary: partial-cycle AUC-PR at 25/50/75 %, masked NRMSE per band on
-  clean dev, severity curve 0.5–2×MAD, per-type and per-phase tables.
-- Writes reports/dev/<run_id>/metrics.json (per-seed + mean/std, full
-  provenance) and appends one row to reports/dev_log.csv.
+**legacy** (finding-16 continuity, flagged "legacy" in every artifact):
+the interim MAD-scaled perturbation set with detection@1×MAD as primary.
+
+Writes reports/dev/<run_id>/metrics_<model>_sev_<scorer>.json (severity) or
+metrics_<model>.json (legacy) with per-seed + mean/std provenance, appends one
+row to reports/dev_log.csv (with severity_table_sha256 + eval subset hash),
+and streams progress to progress_eval_<model>_sev_<scorer>.jsonl.
 
 Forbidden: this script never reads CWSI, ETa, y_stress, yield or test cycles
 (enforced by the forbidden-target unit test and the split guard).
@@ -19,6 +31,7 @@ Forbidden: this script never reads CWSI, ETa, y_stress, yield or test cycles
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 import time
@@ -34,21 +47,34 @@ from ssl_anomaly.monitor import models as mmodels  # noqa: E402
 from ssl_anomaly.monitor import perturbations as mpert  # noqa: E402
 from ssl_anomaly.monitor import protocol as mproto  # noqa: E402
 from ssl_anomaly.monitor import scoring as mscoring  # noqa: E402
+from ssl_anomaly.monitor import severity_table as sev  # noqa: E402
 from ssl_anomaly.monitor import splits as msplits  # noqa: E402
 
 BAND_NAMES = ["ndvi", "blue", "green", "red", "nir", "swir1", "swir2", "lst"]
+SCORER_CHOICES = ("recon_only", "bank", "fused_max", "fused_weighted")
+EVAL_PARTITION_SALT = "mdm80_eval_subset_v1"
+MDM80_TARGET = 0.80
+MDM80_CENSORED = 7  # numeric sentinel for ">S6" (ordering only; reported as ">S6")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--run-id", required=True, help="training run id (checkpoints/dev/<run_id>/)")
     p.add_argument("--model", required=True, choices=["masked_transformer", "gru_ae", "b1"])
+    p.add_argument("--protocol", choices=["severity", "legacy"], default="severity",
+                   help="severity = literature-grounded sweep (headline); legacy = finding-16 MAD-scaled continuity")
+    p.add_argument("--scorer", choices=SCORER_CHOICES, default="recon_only",
+                   help="scoring arm (severity protocol; bank arms are Phase B of normal-bank-novelty-scoring)")
+    p.add_argument("--bank-k", type=int, choices=[1, 5], default=5)
+    p.add_argument("--bank-distance", choices=["knn", "mahalanobis"], default="knn")
     p.add_argument("--seeds", default="13,42,2026", help="seeds to evaluate (default: 13,42,2026)")
     p.add_argument("--far", type=float, default=0.05)
-    p.add_argument("--n-per-stratum", type=int, default=8, help="injected cycles per dev cycle per round")
-    p.add_argument("--rounds", type=int, default=6, help="injection rounds (each injects 1 perturbation per cycle)")
+    p.add_argument("--rounds", type=int, default=2,
+                   help="severity sweep: injection rounds per cell (each round injects every eval cycle once)")
+    p.add_argument("--n-per-stratum", type=int, default=8,
+                   help="legacy protocol only: injected cycles per dev cycle per round")
     p.add_argument("--extended-severity", action="store_true", default=True,
-                   help="diagnostic: also inject 4/6/8×MAD to find where detection starts (OQ6)")
+                   help="legacy protocol only: diagnostic 4/6/8×MAD sweep (finding 16)")
     p.add_argument("--no-extended-severity", dest="extended_severity", action="store_false")
     p.add_argument("--smoke", action="store_true", help="tiny subset for agent smoke runs")
     p.add_argument("--device", default=None)
@@ -123,6 +149,362 @@ def score_cycles(scorer, X_raw: np.ndarray, M: np.ndarray, doy: np.ndarray, norm
     return {"mean": scores, "z2": z2, "pred_raw": pred_raw}
 
 
+# ---------------------------------------------------------------------------
+# Severity protocol helpers (change literature-grounded-severity-protocol)
+# ---------------------------------------------------------------------------
+def partition_calib_eval(
+    cycle_keys: list[str],
+    *,
+    frac_eval: float = 0.5,
+    salt: str = EVAL_PARTITION_SALT,
+) -> tuple[list[int], list[int], str]:
+    """Deterministic disjoint partition of the dev cycles into the threshold
+    CALIBRATION subset and the INDEPENDENT EVALUATION subset (spec: the MDM
+    sweep uses clean dev cycles disjoint from the calibration subset where
+    dev size permits).
+
+    Cycles are ordered by sha256(salt + key) and the last ``frac_eval`` share
+    becomes the evaluation subset — deterministic across arms, seeds and
+    reruns. Returns (calibration indices, evaluation indices, evaluation
+    subset hash = sha256 of the sorted evaluation keys).
+    """
+    if len(cycle_keys) < 8:
+        raise ValueError(
+            f"partition_calib_eval needs ≥8 dev cycles for a disjoint split, got {len(cycle_keys)}"
+        )
+    order = sorted(range(len(cycle_keys)),
+                   key=lambda i: hashlib.sha256((salt + cycle_keys[i]).encode("utf-8")).hexdigest())
+    n_eval = max(4, int(round(frac_eval * len(cycle_keys))))
+    eval_idx = sorted(order[-n_eval:])
+    calib_idx = sorted(order[:-n_eval])
+    eval_keys = sorted(cycle_keys[i] for i in eval_idx)
+    eval_hash = hashlib.sha256(json.dumps(eval_keys).encode("utf-8")).hexdigest()[:16]
+    return calib_idx, eval_idx, eval_hash
+
+
+def arm_paths(
+    args: argparse.Namespace,
+    recon_paths: np.ndarray,
+    bank_scores: np.ndarray | None,
+) -> np.ndarray:
+    """Paths of the selected scoring arm (Phase-B hook for the bank arms).
+
+    recon_only: the reconstruction alarm statistic unchanged.
+    bank/fused_*: require bank scores (Phase B of normal-bank-novelty-scoring).
+    """
+    if args.scorer == "recon_only":
+        return recon_paths
+    if bank_scores is None:
+        raise RuntimeError(
+            f"--scorer {args.scorer} requires bank scores; bank arms land with "
+            "normal-bank-novelty-scoring Phase B."
+        )
+    if args.scorer == "bank":
+        return bank_scores
+    if args.scorer == "fused_max":
+        with np.errstate(invalid="ignore"):
+            return np.fmax(recon_paths, bank_scores)
+    # fused_weighted: mean of the two statistics; where only one is defined,
+    # that one carries the bin (NaN bins stay NaN).
+    both = np.isfinite(recon_paths) & np.isfinite(bank_scores)
+    out = np.where(both, 0.5 * (recon_paths + bank_scores),
+                   np.where(np.isfinite(recon_paths), recon_paths, bank_scores))
+    return out
+
+
+def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, seeds: list[str],
+                          device: str) -> tuple[dict, list]:
+    """The literature-grounded severity sweep + MDM80 (one run, all seeds)."""
+    X, M = sel["X"], sel["M"]
+    doy = minputs.doy_channels(sel["harvest_days"])
+    N, T, C = X.shape
+    cycle_keys = list(sel["cycle_keys"])
+
+    norm = None
+    if args.model != "b1":
+        norm = minputs.load_norm(mproto.DEV_DIR / args.run_id / "norm_stats.npz")
+
+    if args.smoke:
+        rng0 = np.random.default_rng(7)
+        keep = rng0.choice(N, size=min(12, N), replace=False)
+        X, M, doy = X[keep], M[keep], doy[keep]
+        cycle_keys = [cycle_keys[i] for i in keep]
+        seeds = seeds[:1]
+        args.rounds = 1
+        N = X.shape[0]
+
+    # Ablation runs (no-LST) carry fewer channels: slice X/M to the
+    # checkpoint's channel count (order preserved; dropped channels are the
+    # trailing lst) — same pattern as the legacy protocol.
+    _, _, probe_channels = load_scorer(args.model, seeds[0], args.run_id, device)
+    channel_count = probe_channels
+    if channel_count < X.shape[2]:
+        X, M = X[:, :, :channel_count], M[:, :, :channel_count]
+    N, T, C = X.shape
+
+    calib_idx, eval_idx, eval_hash = partition_calib_eval(cycle_keys)
+    n_calib, n_eval = len(calib_idx), len(eval_idx)
+    print(f"[severity] calibration subset n={n_calib}, independent evaluation subset n={n_eval} "
+          f"(hash {eval_hash})")
+
+    levels = sev.load_table()
+    table_hash = sev.severity_table_hash()
+    cells_all = [f"{lv.level_id}/{fam}/{idx}"
+                 for lv in levels
+                 for fam in (sev.ACUTE_FAMILY, sev.PERSISTENT_FAMILY)
+                 for idx in ("ndvi", "savi")]
+
+    norm_path = mproto.DEV_DIR / args.run_id
+    progress_path = norm_path / f"progress_eval_{args.model}_sev_{args.scorer}{'_smoke' if args.smoke else ''}.jsonl"
+    norm_path.mkdir(parents=True, exist_ok=True)
+    total_steps = len(seeds) * (1 + len(cells_all) * max(1, args.rounds))
+    done_steps = 0
+    t_start = time.time()
+
+    def progress(**kw) -> None:
+        nonlocal done_steps
+        done_steps += 1
+        rec = {"stage": "severity_sweep", "step": done_steps, "total": total_steps,
+               "wall_s": round(time.time() - t_start, 1),
+               "eta_s": round((time.time() - t_start) / done_steps * (total_steps - done_steps), 1),
+               **kw}
+        with progress_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(rec) + "\n")
+
+    per_seed: list[dict] = []
+    for seed in seeds:
+        scorer, params, _ = load_scorer(args.model, seed, args.run_id, device)
+
+        # ---- Clean scores (calibration + evaluation) -----------------------
+        clean = score_cycles(scorer, X, M, doy, norm)
+        # Per-cell normalizer from the CALIBRATION subset only — the
+        # evaluation subset stays independent of every statistic input.
+        cell_q95 = mscoring.cell_q95_normalizer(clean["z2"][calib_idx], M[calib_idx])
+        clean_paths_all = mscoring.cumulative_channel_max(clean["z2"], M, cell_q95)
+
+        # ---- Threshold (τ, k) on the CALIBRATION subset ---------------------
+        ksel = mpert.inject_index_drop_dataset(
+            X[calib_idx], M[calib_idx], level_id="S3", family=sev.ACUTE_FAMILY,
+            index="ndvi", round_idx=0,
+        )
+        Xk = np.stack([r.x for r in ksel])
+        Mk = np.stack([r.m for r in ksel])
+        doyk = doy[calib_idx][[r.source_row for r in ksel]]
+        ksel_scores = score_cycles(scorer, Xk, Mk, doyk, norm)
+        ksel_paths = mscoring.cumulative_channel_max(ksel_scores["z2"], Mk, cell_q95)
+        threshold, per_k = mscoring.choose_threshold(
+            [clean_paths_all[i] for i in calib_idx],
+            [arm_paths(args, p, None) for p in ksel_paths],
+            [r.onset_bin for r in ksel],
+            far_target=args.far,
+        )
+        tau, k = threshold.tau, threshold.k
+        progress(seed=seed, cell="threshold_calibration")
+
+        # ---- Severity sweep on the INDEPENDENT evaluation subset ------------
+        Xe, Me, doye = X[eval_idx], M[eval_idx], doy[eval_idx]
+        clean_eval_paths = arm_paths(args, clean_paths_all[eval_idx], None)
+        cells: dict[str, dict] = {}
+        det_pools: dict[str, list[int]] = {}
+        delay_pools: dict[str, list[float]] = {}
+        window_pools: dict[str, list] = {}
+        path_pool: dict[str, list[np.ndarray]] = {}
+        for lv in levels:
+            for fam in (sev.ACUTE_FAMILY, sev.PERSISTENT_FAMILY):
+                for index in ("ndvi", "savi"):
+                    key = f"{lv.level_id}/{fam}/{index}"
+                    det_flags: list[int] = []
+                    delays: list[float] = []
+                    windows: list = []
+                    paths_list: list[np.ndarray] = []
+                    for rnd in range(max(1, args.rounds)):
+                        results = mpert.inject_index_drop_dataset(
+                            Xe, Me, level_id=lv.level_id, family=fam, index=index, round_idx=rnd,
+                        )
+                        Xinj = np.stack([r.x for r in results])
+                        Minj = np.stack([r.m for r in results])
+                        doy_inj = doye[[r.source_row for r in results]]
+                        s_inj = score_cycles(scorer, Xinj, Minj, doy_inj, norm)
+                        inj_paths = arm_paths(
+                            args, mscoring.cumulative_channel_max(s_inj["z2"], Minj, cell_q95), None,
+                        )
+                        for j, r in enumerate(results):
+                            fb = mscoring.first_alarm_bin(inj_paths[j], tau, k, r.onset_bin)
+                            det_flags.append(1 if fb >= 0 else 0)
+                            if fb >= 0:
+                                delays.append(float((fb - r.onset_bin) * 15))
+                            windows.append([(r.onset_bin, r.onset_bin + r.meta["n_bins_window"])])
+                            paths_list.append(inj_paths[j])
+                        progress(seed=seed, cell=key, round=rnd)
+                    n = len(det_flags)
+                    n_det = int(sum(det_flags))
+                    lo, hi = mscoring.wilson_ci(n_det, n)
+                    efar = mscoring.event_far_from_paths(
+                        np.stack(paths_list), windows, tau, gap=2,
+                    )
+                    cells[key] = {
+                        "n": n, "n_detected": n_det,
+                        "detection_rate": n_det / max(1, n),
+                        "wilson_ci95": [round(lo, 4), round(hi, 4)],
+                        "median_delay_days": (float(np.median(delays)) if delays else float("nan")),
+                        "event_far": efar["event_far"],
+                        "n_events": efar["n_events"], "n_false_events": efar["n_false_events"],
+                        "level_id": lv.level_id, "family": fam, "index": index,
+                        "delta_ndvi": lv.delta_ndvi, "duration_bins":
+                            (sev.PERSISTENT_DURATION_BINS if fam == sev.PERSISTENT_FAMILY
+                             else lv.duration_bins),
+                    }
+                    det_pools[key] = det_flags
+                    delay_pools[key] = delays
+                    window_pools[key] = windows
+                    path_pool[key] = paths_list
+
+        # ---- MDM80 per family × index (lowest level with det ≥ 0.80) --------
+        mdm80: dict[str, dict] = {}
+        for fam in (sev.ACUTE_FAMILY, sev.PERSISTENT_FAMILY):
+            for index in ("ndvi", "savi"):
+                reached = None
+                for lv in levels:
+                    if cells[f"{lv.level_id}/{fam}/{index}"]["detection_rate"] >= MDM80_TARGET:
+                        reached = lv.level_id
+                        break
+                if reached is None:
+                    mdm80[f"{fam}/{index}"] = {
+                        "value": ">S6", "sentinel": MDM80_CENSORED, "censored": True,
+                        "level_cell": None, "median_delay_days": float("nan"),
+                    }
+                else:
+                    cell = cells[f"{reached}/{fam}/{index}"]
+                    mdm80[f"{fam}/{index}"] = {
+                        "value": reached, "sentinel": int(reached[1:]), "censored": False,
+                        "level_cell": f"{reached}/{fam}/{index}",
+                        "median_delay_days": cell["median_delay_days"],
+                        "detection_rate_at_mdm": cell["detection_rate"],
+                    }
+
+        # ---- Secondary metrics ----------------------------------------------
+        # Partial-cycle AUC-PR: the acute/ndvi cells (all levels pooled) vs
+        # the evaluation subset's clean cycles — the primary index/family.
+        auc_inj_idx = [f"{lv.level_id}/{sev.ACUTE_FAMILY}/ndvi" for lv in levels]
+        auc_clean = np.array([
+            np.nanmax(np.where(np.isfinite(clean_eval_paths[i]), clean_eval_paths[i], -np.inf))
+            for i in range(n_eval)
+        ])
+        aucpr = {}
+        for frac in (0.25, 0.50, 0.75):
+            cut = max(1, int(np.ceil(frac * T)))
+            inj_max = np.concatenate([
+                np.array([np.nanmax(np.where(np.isfinite(p[:cut]), p[:cut], -np.inf))
+                          for p in path_pool[key]])
+                for key in auc_inj_idx
+            ]) if n_eval else np.array([np.nan])
+            aucpr[str(frac)] = mscoring.partial_auc_pr(auc_clean, inj_max)
+        aucpr_per_level = {
+            lv.level_id: mscoring.partial_auc_pr(
+                auc_clean,
+                np.array([np.nanmax(np.where(np.isfinite(p), p, -np.inf))
+                          for p in path_pool[f"{lv.level_id}/{sev.ACUTE_FAMILY}/ndvi"]]),
+            ) for lv in levels
+        }
+
+        # Clean event-level FAR (every event false — no injection windows).
+        clean_efar_eval = mscoring.event_far_from_paths(
+            clean_eval_paths, [None] * n_eval, tau, gap=2,
+        )
+        clean_efar_calib = mscoring.event_far_from_paths(
+            arm_paths(args, clean_paths_all[calib_idx], None), [None] * n_calib, tau, gap=2,
+        )
+
+        # Masked NRMSE per band on clean dev (descriptive; not part of the
+        # detection protocol — computed over all clean dev as in finding 16).
+        nrmse = mscoring.masked_nrmse_per_band(
+            clean["pred_raw"], X, M, norm_robust_range(norm, scorer),
+        )
+        nrmse_valid = nrmse[np.isfinite(nrmse)]
+
+        # Per-phase breakdown pooled over the acute/ndvi cells (the primary
+        # index/family) — onset phases rotate deterministically per round.
+        per_phase: dict[str, dict] = {}
+        phase_flags: dict[str, list[int]] = {}
+        for rnd in range(max(1, args.rounds)):
+            results = mpert.inject_index_drop_dataset(
+                Xe, Me, level_id="S3", family=sev.ACUTE_FAMILY, index="ndvi", round_idx=rnd,
+            )
+            for j, r in enumerate(results):
+                phase_flags.setdefault(r.phase, []).append(det_pools[f"S3/{sev.ACUTE_FAMILY}/ndvi"][rnd * n_eval + j])
+        for ph, flags in phase_flags.items():
+            nd_ = int(sum(flags))
+            lo, hi = mscoring.wilson_ci(nd_, len(flags))
+            per_phase[ph] = {"n": len(flags), "n_detected": nd_,
+                             "detection_rate": nd_ / max(1, len(flags)), "wilson_ci95": [lo, hi]}
+
+        # Injection % summary (of each field's own grand-growth median).
+        pct_summary = {}
+        for rnd in range(max(1, args.rounds)):
+            results = mpert.inject_index_drop_dataset(
+                Xe, Me, level_id="S3", family=sev.ACUTE_FAMILY, index="ndvi", round_idx=rnd,
+            )
+            pcts = [r.meta["pct_of_field_median"] for r in results if r.meta["pct_of_field_median"] is not None]
+            pct_summary = {"median_pct_of_field_grand_growth_median": float(np.median(pcts)) if pcts else None,
+                           "n": len(pcts)}
+
+        per_seed.append({
+            "seed": seed,
+            "tau": float(tau), "k": int(k),
+            "far_target": args.far, "far_achieved": float(threshold.far_achieved),
+            "threshold_per_k": per_k,
+            "alarm_statistic": "trailing3_window_channel_max_z2_cell_q95_normalized",
+            "per_bin_q95": [round(float(v), 6) for row in cell_q95 for v in row],
+            "mdm80": mdm80,
+            "cells": cells,
+            "event_far_clean_eval": clean_efar_eval,
+            "event_far_clean_calibration": clean_efar_calib,
+            "aucpr_partial": aucpr,
+            "aucpr_per_level_acute_ndvi": aucpr_per_level,
+            "per_phase_S3_acute_ndvi": per_phase,
+            "pct_of_field_median_summary": pct_summary,
+            "nrmse_per_band": {b: float(nrmse[i]) for i, b in enumerate(BAND_NAMES[:C])},
+            "nrmse_mean": float(np.mean(nrmse_valid)) if nrmse_valid.size else float("nan"),
+            "params": params,
+            "n_calib_cycles": n_calib, "n_eval_cycles": n_eval,
+            "n_injected_total": int(sum(c["n"] for c in cells.values())),
+        })
+
+        mdm_str = " ".join(f"{kk}={vv['value']}" for kk, vv in mdm80.items())
+        print(f"[seed {seed}] tau={tau:.4f} k={k} far={threshold.far_achieved:.3f} MDM80 {mdm_str}")
+
+    return {
+        "protocol": "severity_sweep_v1",
+        "scorer": args.scorer,
+        "severity_table_sha256": table_hash,
+        "eval_subset_sha256": eval_hash,
+        "n_calib_cycles": n_calib,
+        "n_eval_cycles": n_eval,
+        "mdm80_target": MDM80_TARGET,
+        "cells_order": cells_all,
+        "per_seed": per_seed,
+        "seeds": seeds,
+    }, per_seed
+
+
+def aggregate_severity(per_seed: list[dict]) -> dict:
+    """Seed aggregation for the severity protocol (mean ± std of the MDM80
+    sentinels; pooled per-level detection with Wilson CIs)."""
+    mdm_mean = {}
+    for fam in (sev.ACUTE_FAMILY, sev.PERSISTENT_FAMILY):
+        for index in ("ndvi", "savi"):
+            key = f"{fam}/{index}"
+            vals = [r["mdm80"][key]["sentinel"] for r in per_seed]
+            labels = [r["mdm80"][key]["value"] for r in per_seed]
+            mean, std = mproto.mean_std([float(v) for v in vals])
+            mdm_mean[key] = {
+                "mean_sentinel": mean, "std_sentinel": std,
+                "per_seed_labels": labels,
+                "n_censored": int(sum(1 for v in vals if v == MDM80_CENSORED)),
+            }
+    return {"mdm80": mdm_mean}
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     t0 = time.time()
@@ -132,6 +514,108 @@ def main(argv: list[str] | None = None) -> int:
     manifest = msplits.load_splits_locked()
     data = minputs.load_masked_cycles()
     sel = mproto.select_splits(data, manifest, splits=("dev",))
+
+    if args.protocol == "severity":
+        sev_metrics, per_seed = run_severity_protocol(args, manifest, sel, seeds, device)
+
+        # ---- Aggregate over seeds -------------------------------------------
+        wall = time.time() - t0
+        agg = aggregate_severity(per_seed)
+        N = int(sev_metrics["n_calib_cycles"] + sev_metrics["n_eval_cycles"])
+        channel_count = len(per_seed[0]["nrmse_per_band"]) if per_seed else 8
+        metrics = {
+            "run_id": args.run_id,
+            "model_id": args.model,
+            "protocol": sev_metrics["protocol"],
+            "scorer": args.scorer,
+            "severity_table_sha256": sev_metrics["severity_table_sha256"],
+            "eval_subset_sha256": sev_metrics["eval_subset_sha256"],
+            "ladder_rung": "L2",
+            "claim_noun": "synthetic anomaly",
+            "data_source": "real490 (masked rebuild from stats.zarr)",
+            "splits_locked_sha256": manifest["manifest_sha256"],
+            "git_sha": mproto.git_sha(),
+            "seeds": seeds,
+            "device": device,
+            "wall_time_s": round(wall, 1),
+            "far_target": args.far,
+            "date_range": {
+                "first": str(sel["start_dates"][0])[:10],
+                "last": str(sel["end_dates"][-1])[:10],
+            },
+            "n_dev_cycles": N,
+            "n_calib_cycles": sev_metrics["n_calib_cycles"],
+            "n_eval_cycles": sev_metrics["n_eval_cycles"],
+            "channel_count": channel_count,
+            "mdm80_target": MDM80_TARGET,
+            "mdm80": agg["mdm80"],
+            "smoke": bool(args.smoke),
+            "notes": args.notes,
+            "per_seed": per_seed,
+        }
+        out_dir = mproto.DEV_DIR / args.run_id
+        out_dir.mkdir(parents=True, exist_ok=True)
+        suffix = f"_sev_{args.scorer}{'_smoke' if args.smoke else ''}"
+        out_path = out_dir / f"metrics_{args.model}{suffix}.json"
+        out_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+
+        if not args.smoke:
+            primary_key = f"{sev.ACUTE_FAMILY}/ndvi"
+            mdm_vals = [r["mdm80"][primary_key]["sentinel"] for r in per_seed]
+            mdm_mean, mdm_std = mproto.mean_std([float(v) for v in mdm_vals])
+            far_max = max(r["far_achieved"] for r in per_seed)
+            row = {
+                "run_id": f"{args.run_id}:{args.model}:sev_{args.scorer}",
+                "date": time.strftime("%Y-%m-%d"),
+                "model_id": args.model,
+                "parent_run_id": "",
+                "change_description": "severity sweep S1-S6 (literature-grounded protocol)"
+                                      + (f"; {args.notes}" if args.notes else ""),
+                "config_hash": mproto.config_hash({
+                    "model": args.model, "run_id": args.run_id, "protocol": "severity",
+                    "scorer": args.scorer, "rounds": args.rounds, "bank_k": args.bank_k,
+                    "bank_distance": args.bank_distance,
+                }),
+                "seeds": ";".join(str(s) for s in seeds),
+                "n_train_cycles": _n_train(manifest),
+                "n_dev_cycles": N,
+                "primary_metric_mean": round(mdm_mean, 4),
+                "primary_metric_std": round(mdm_std, 4),
+                "median_delay_days": "",
+                "far_target": args.far,
+                "far_achieved": round(float(far_max), 4),
+                "tau": round(float(np.mean([r["tau"] for r in per_seed])), 4),
+                "k": int(np.bincount([r["k"] for r in per_seed]).argmax()),
+                "aucpr_25": round(float(np.mean([r["aucpr_partial"]["0.25"] for r in per_seed])), 4),
+                "aucpr_50": round(float(np.mean([r["aucpr_partial"]["0.5"] for r in per_seed])), 4),
+                "aucpr_75": round(float(np.mean([r["aucpr_partial"]["0.75"] for r in per_seed])), 4),
+                "nrmse_mean": round(float(np.mean([r["nrmse_mean"] for r in per_seed
+                                                    if np.isfinite(r["nrmse_mean"])])), 4),
+                "severity_0p5": "", "severity_1p5": "", "severity_2": "",
+                "params": max([r["params"] for r in per_seed]),
+                "wall_time_s": round(wall, 1),
+                "device": device,
+                "git_sha": mproto.git_sha(),
+                "data_source": "real490",
+                "splits_sha256": manifest["manifest_sha256"],
+                "ladder_rung": "L2",
+                "protocol": "severity_sweep_v1",
+                "scorer": args.scorer,
+                "severity_table_sha256": sev_metrics["severity_table_sha256"],
+                "eval_subset_sha256": sev_metrics["eval_subset_sha256"],
+                "mdm80": json.dumps({k: v["per_seed_labels"] for k, v in agg["mdm80"].items()},
+                                    sort_keys=True),
+                "notes": args.notes,
+            }
+            mproto.append_dev_log(row)
+            print(f"[dev_log] appended row for {row['run_id']}")
+
+        print(f"[done] metrics → {out_path} (wall {time.time() - t0:.1f}s)")
+        return 0
+
+    # ------------------------------------------------------------------
+    # LEGACY protocol (finding-16 continuity; flagged "legacy")
+    # ------------------------------------------------------------------
     X, M = sel["X"], sel["M"]
     doy = minputs.doy_channels(sel["harvest_days"])
     N, T, C = X.shape
@@ -158,7 +642,7 @@ def main(argv: list[str] | None = None) -> int:
     if channel_count < X.shape[2]:
         X, M = X[:, :, :channel_count], M[:, :, :channel_count]
     N, T, C = X.shape
-    print(f"[eval] channels={channel_count}, dev cycles={N}, rounds={args.rounds}")
+    print(f"[eval:legacy] channels={channel_count}, dev cycles={N}, rounds={args.rounds}")
 
     # Perturbation types touching a dropped channel (no-LST ablation) cannot
     # be injected: restrict to types whose channels all exist.
@@ -167,7 +651,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     dropped_types = [pt for pt in mpert.INTERIM_TYPES if pt not in usable_types]
     if dropped_types:
-        print(f"[eval] dropped-channel injections skipped: {dropped_types}")
+        print(f"[eval:legacy] dropped-channel injections skipped: {dropped_types}")
 
     cfg_pert = mpert.PerturbationConfig(types=usable_types, n_per_stratum=args.n_per_stratum)
     per_seed: list[dict] = []
@@ -235,9 +719,9 @@ def main(argv: list[str] | None = None) -> int:
         ])) if sev1_idx else float("nan")
 
         # ---- Detection metrics --------------------------------------------
-        def detect_at(sev: float | None) -> tuple[float, float, list[float]]:
+        def detect_at(sev_: float | None) -> tuple[float, float, list[float]]:
             idx = [j for j, meta in enumerate(inj_meta)
-                   if (sev is None or abs(meta["severity"] - sev) < 1e-9)]
+                   if (sev_ is None or abs(meta["severity"] - sev_) < 1e-9)]
             delays = []
             det = 0
             for j in idx:
@@ -254,9 +738,9 @@ def main(argv: list[str] | None = None) -> int:
 
         # Severity curve.
         severity_curve = {}
-        for sev in mpert.SEVERITIES:
-            r, dmed, _ = detect_at(sev)
-            severity_curve[str(sev)] = {"detection_rate": r, "median_delay_days": dmed}
+        for sev_ in mpert.SEVERITIES:
+            r, dmed, _ = detect_at(sev_)
+            severity_curve[str(sev_)] = {"detection_rate": r, "median_delay_days": dmed}
 
         # Per-type and per-phase tables at 1×MAD.
         per_type: dict[str, dict] = {}
@@ -374,6 +858,7 @@ def main(argv: list[str] | None = None) -> int:
     metrics = {
         "run_id": args.run_id,
         "model_id": args.model,
+        "protocol": "legacy_mad_scaled_v1",
         "ladder_rung": "L2",
         "data_source": "real490 (masked rebuild from stats.zarr)",
         "splits_locked_sha256": manifest["manifest_sha256"],
@@ -414,8 +899,10 @@ def main(argv: list[str] | None = None) -> int:
             "date": time.strftime("%Y-%m-%d"),
             "model_id": args.model,
             "parent_run_id": "",
-            "change_description": "initial architecture screen" + (f"; {args.notes}" if args.notes else ""),
-            "config_hash": mproto.config_hash({"model": args.model, "run_id": args.run_id}),
+            "change_description": "legacy MAD-scaled continuity (finding 16)"
+                                  + (f"; {args.notes}" if args.notes else ""),
+            "config_hash": mproto.config_hash({"model": args.model, "run_id": args.run_id,
+                                               "protocol": "legacy"}),
             "seeds": ";".join(str(s) for s in seeds),
             "n_train_cycles": _n_train(manifest),
             "n_dev_cycles": int(N),
@@ -440,6 +927,11 @@ def main(argv: list[str] | None = None) -> int:
             "data_source": "real490",
             "splits_sha256": manifest["manifest_sha256"],
             "ladder_rung": "L2",
+            "protocol": "legacy_mad_scaled_v1",
+            "scorer": "recon_only",
+            "severity_table_sha256": "",
+            "eval_subset_sha256": "",
+            "mdm80": "",
             "notes": args.notes,
         }
         mproto.append_dev_log(row)
@@ -464,6 +956,7 @@ def norm_scale_or_mad(norm: dict | None, scorer) -> np.ndarray:
     """The (T, C) scale array (= MAD × 1.4826) used to size perturbations.
 
     Deep runs use the train-fit stats sidecar; B1 carries its own stats.
+    (Legacy protocol only — the severity protocol uses absolute deltas.)
     """
     if norm is not None:
         return norm["scale"]

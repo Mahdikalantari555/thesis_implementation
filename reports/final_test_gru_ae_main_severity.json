@@ -1,0 +1,1109 @@
+{
+  "type": "final_test_severity",
+  "created": "2026-11-14 19:53:39",
+  "git_sha": "57836b62",
+  "model_id": "gru_ae_main",
+  "scorer": "recon_only",
+  "protocol": "severity_sweep_v1",
+  "severity_table_sha256": "9d720e3b40160dd07c9f564cd0d6848211756ab65212d235c63657e3a474c1b5",
+  "frozen_seed": 2026,
+  "n_test_cycles": 171,
+  "n_test_fields": 128,
+  "date_range": {
+    "first": "2024-02-19",
+    "last": "2020-02-20"
+  },
+  "splits_locked_sha256": "9aa5eb111b31e73ba1ab30ebed52d7e9ef22c7e9e1de7cbd799e99ccf22e8565",
+  "far_target": 0.05,
+  "threshold_source": "dev severity metrics (frozen seed); platform sidecar threshold block untouched",
+  "main": {
+    "cells": {
+      "S1/acute/ndvi": {
+        "n": 171,
+        "n_detected": 3,
+        "detection_rate": 0.017543859649122806,
+        "wilson_ci95": [
+          0.006,
+          0.0503
+        ],
+        "median_delay_days": 345.0,
+        "event_far": 0.0012342631449024932,
+        "level_id": "S1",
+        "family": "acute",
+        "index": "ndvi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S1/acute/savi": {
+        "n": 171,
+        "n_detected": 3,
+        "detection_rate": 0.017543859649122806,
+        "wilson_ci95": [
+          0.006,
+          0.0503
+        ],
+        "median_delay_days": 345.0,
+        "event_far": 0.0012342631449024932,
+        "level_id": "S1",
+        "family": "acute",
+        "index": "savi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S1/persistent/ndvi": {
+        "n": 171,
+        "n_detected": 3,
+        "detection_rate": 0.017543859649122806,
+        "wilson_ci95": [
+          0.006,
+          0.0503
+        ],
+        "median_delay_days": 345.0,
+        "event_far": 0.0012342631449024932,
+        "level_id": "S1",
+        "family": "persistent",
+        "index": "ndvi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S1/persistent/savi": {
+        "n": 171,
+        "n_detected": 3,
+        "detection_rate": 0.017543859649122806,
+        "wilson_ci95": [
+          0.006,
+          0.0503
+        ],
+        "median_delay_days": 345.0,
+        "event_far": 0.0012342631449024932,
+        "level_id": "S1",
+        "family": "persistent",
+        "index": "savi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S2/acute/ndvi": {
+        "n": 171,
+        "n_detected": 3,
+        "detection_rate": 0.017543859649122806,
+        "wilson_ci95": [
+          0.006,
+          0.0503
+        ],
+        "median_delay_days": 345.0,
+        "event_far": 0.0012342631449024932,
+        "level_id": "S2",
+        "family": "acute",
+        "index": "ndvi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S2/acute/savi": {
+        "n": 171,
+        "n_detected": 3,
+        "detection_rate": 0.017543859649122806,
+        "wilson_ci95": [
+          0.006,
+          0.0503
+        ],
+        "median_delay_days": 345.0,
+        "event_far": 0.0012342631449024932,
+        "level_id": "S2",
+        "family": "acute",
+        "index": "savi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S2/persistent/ndvi": {
+        "n": 171,
+        "n_detected": 3,
+        "detection_rate": 0.017543859649122806,
+        "wilson_ci95": [
+          0.006,
+          0.0503
+        ],
+        "median_delay_days": 345.0,
+        "event_far": 0.0012342631449024932,
+        "level_id": "S2",
+        "family": "persistent",
+        "index": "ndvi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S2/persistent/savi": {
+        "n": 171,
+        "n_detected": 3,
+        "detection_rate": 0.017543859649122806,
+        "wilson_ci95": [
+          0.006,
+          0.0503
+        ],
+        "median_delay_days": 345.0,
+        "event_far": 0.0012342631449024932,
+        "level_id": "S2",
+        "family": "persistent",
+        "index": "savi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S3/acute/ndvi": {
+        "n": 171,
+        "n_detected": 3,
+        "detection_rate": 0.017543859649122806,
+        "wilson_ci95": [
+          0.006,
+          0.0503
+        ],
+        "median_delay_days": 345.0,
+        "event_far": 0.0012342631449024932,
+        "level_id": "S3",
+        "family": "acute",
+        "index": "ndvi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S3/acute/savi": {
+        "n": 171,
+        "n_detected": 3,
+        "detection_rate": 0.017543859649122806,
+        "wilson_ci95": [
+          0.006,
+          0.0503
+        ],
+        "median_delay_days": 345.0,
+        "event_far": 0.0012342631449024932,
+        "level_id": "S3",
+        "family": "acute",
+        "index": "savi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S3/persistent/ndvi": {
+        "n": 171,
+        "n_detected": 3,
+        "detection_rate": 0.017543859649122806,
+        "wilson_ci95": [
+          0.006,
+          0.0503
+        ],
+        "median_delay_days": 345.0,
+        "event_far": 0.0012342631449024932,
+        "level_id": "S3",
+        "family": "persistent",
+        "index": "ndvi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S3/persistent/savi": {
+        "n": 171,
+        "n_detected": 3,
+        "detection_rate": 0.017543859649122806,
+        "wilson_ci95": [
+          0.006,
+          0.0503
+        ],
+        "median_delay_days": 345.0,
+        "event_far": 0.0012342631449024932,
+        "level_id": "S3",
+        "family": "persistent",
+        "index": "savi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S4/acute/ndvi": {
+        "n": 171,
+        "n_detected": 3,
+        "detection_rate": 0.017543859649122806,
+        "wilson_ci95": [
+          0.006,
+          0.0503
+        ],
+        "median_delay_days": 345.0,
+        "event_far": 0.0012342631449024932,
+        "level_id": "S4",
+        "family": "acute",
+        "index": "ndvi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S4/acute/savi": {
+        "n": 171,
+        "n_detected": 3,
+        "detection_rate": 0.017543859649122806,
+        "wilson_ci95": [
+          0.006,
+          0.0503
+        ],
+        "median_delay_days": 345.0,
+        "event_far": 0.0012342631449024932,
+        "level_id": "S4",
+        "family": "acute",
+        "index": "savi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S4/persistent/ndvi": {
+        "n": 171,
+        "n_detected": 3,
+        "detection_rate": 0.017543859649122806,
+        "wilson_ci95": [
+          0.006,
+          0.0503
+        ],
+        "median_delay_days": 345.0,
+        "event_far": 0.0012342631449024932,
+        "level_id": "S4",
+        "family": "persistent",
+        "index": "ndvi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S4/persistent/savi": {
+        "n": 171,
+        "n_detected": 3,
+        "detection_rate": 0.017543859649122806,
+        "wilson_ci95": [
+          0.006,
+          0.0503
+        ],
+        "median_delay_days": 345.0,
+        "event_far": 0.0012342631449024932,
+        "level_id": "S4",
+        "family": "persistent",
+        "index": "savi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S5/acute/ndvi": {
+        "n": 171,
+        "n_detected": 3,
+        "detection_rate": 0.017543859649122806,
+        "wilson_ci95": [
+          0.006,
+          0.0503
+        ],
+        "median_delay_days": 345.0,
+        "event_far": 0.0012342631449024932,
+        "level_id": "S5",
+        "family": "acute",
+        "index": "ndvi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S5/acute/savi": {
+        "n": 171,
+        "n_detected": 3,
+        "detection_rate": 0.017543859649122806,
+        "wilson_ci95": [
+          0.006,
+          0.0503
+        ],
+        "median_delay_days": 345.0,
+        "event_far": 0.0012342631449024932,
+        "level_id": "S5",
+        "family": "acute",
+        "index": "savi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S5/persistent/ndvi": {
+        "n": 171,
+        "n_detected": 3,
+        "detection_rate": 0.017543859649122806,
+        "wilson_ci95": [
+          0.006,
+          0.0503
+        ],
+        "median_delay_days": 345.0,
+        "event_far": 0.0012342631449024932,
+        "level_id": "S5",
+        "family": "persistent",
+        "index": "ndvi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S5/persistent/savi": {
+        "n": 171,
+        "n_detected": 3,
+        "detection_rate": 0.017543859649122806,
+        "wilson_ci95": [
+          0.006,
+          0.0503
+        ],
+        "median_delay_days": 345.0,
+        "event_far": 0.0012342631449024932,
+        "level_id": "S5",
+        "family": "persistent",
+        "index": "savi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S6/acute/ndvi": {
+        "n": 171,
+        "n_detected": 3,
+        "detection_rate": 0.017543859649122806,
+        "wilson_ci95": [
+          0.006,
+          0.0503
+        ],
+        "median_delay_days": 345.0,
+        "event_far": 0.0012342631449024932,
+        "level_id": "S6",
+        "family": "acute",
+        "index": "ndvi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S6/acute/savi": {
+        "n": 171,
+        "n_detected": 11,
+        "detection_rate": 0.06432748538011696,
+        "wilson_ci95": [
+          0.0363,
+          0.1115
+        ],
+        "median_delay_days": 135.0,
+        "event_far": 0.0029622315477659837,
+        "level_id": "S6",
+        "family": "acute",
+        "index": "savi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.058823529411764705
+        ]
+      },
+      "S6/persistent/ndvi": {
+        "n": 171,
+        "n_detected": 12,
+        "detection_rate": 0.07017543859649122,
+        "wilson_ci95": [
+          0.0406,
+          0.1186
+        ],
+        "median_delay_days": 105.0,
+        "event_far": 0.003455936805726981,
+        "level_id": "S6",
+        "family": "persistent",
+        "index": "ndvi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S6/persistent/savi": {
+        "n": 171,
+        "n_detected": 14,
+        "detection_rate": 0.08187134502923976,
+        "wilson_ci95": [
+          0.0494,
+          0.1327
+        ],
+        "median_delay_days": 135.0,
+        "event_far": 0.00370278943470748,
+        "level_id": "S6",
+        "family": "persistent",
+        "index": "savi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.058823529411764705
+        ]
+      }
+    },
+    "mdm80": {
+      "acute/ndvi": {
+        "value": ">S6",
+        "sentinel": 7,
+        "censored": true,
+        "bootstrap_ci95_sentinel": [
+          7.0,
+          7.0
+        ]
+      },
+      "acute/savi": {
+        "value": ">S6",
+        "sentinel": 7,
+        "censored": true,
+        "bootstrap_ci95_sentinel": [
+          7.0,
+          7.0
+        ]
+      },
+      "persistent/ndvi": {
+        "value": ">S6",
+        "sentinel": 7,
+        "censored": true,
+        "bootstrap_ci95_sentinel": [
+          7.0,
+          7.0
+        ]
+      },
+      "persistent/savi": {
+        "value": ">S6",
+        "sentinel": 7,
+        "censored": true,
+        "bootstrap_ci95_sentinel": [
+          7.0,
+          7.0
+        ]
+      }
+    },
+    "event_far_clean": {
+      "event_far": 0.0012342631449024932,
+      "n_events": 5,
+      "n_false_events": 5,
+      "n_scored_bins": 4051,
+      "gap_bins": 2
+    },
+    "clean_far_cycle_level": 0.029239766081871343,
+    "n_cycles": 171,
+    "n_fields": 128
+  },
+  "b1": {
+    "cells": {
+      "S1/acute/ndvi": {
+        "n": 171,
+        "n_detected": 4,
+        "detection_rate": 0.023391812865497075,
+        "wilson_ci95": [
+          0.0091,
+          0.0586
+        ],
+        "median_delay_days": 22.5,
+        "event_far": 0.0032090841767464825,
+        "level_id": "S1",
+        "family": "acute",
+        "index": "ndvi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S1/acute/savi": {
+        "n": 171,
+        "n_detected": 4,
+        "detection_rate": 0.023391812865497075,
+        "wilson_ci95": [
+          0.0091,
+          0.0586
+        ],
+        "median_delay_days": 22.5,
+        "event_far": 0.0032090841767464825,
+        "level_id": "S1",
+        "family": "acute",
+        "index": "savi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S1/persistent/ndvi": {
+        "n": 171,
+        "n_detected": 4,
+        "detection_rate": 0.023391812865497075,
+        "wilson_ci95": [
+          0.0091,
+          0.0586
+        ],
+        "median_delay_days": 22.5,
+        "event_far": 0.0027153789187854853,
+        "level_id": "S1",
+        "family": "persistent",
+        "index": "ndvi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S1/persistent/savi": {
+        "n": 171,
+        "n_detected": 4,
+        "detection_rate": 0.023391812865497075,
+        "wilson_ci95": [
+          0.0091,
+          0.0586
+        ],
+        "median_delay_days": 22.5,
+        "event_far": 0.0027153789187854853,
+        "level_id": "S1",
+        "family": "persistent",
+        "index": "savi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S2/acute/ndvi": {
+        "n": 171,
+        "n_detected": 4,
+        "detection_rate": 0.023391812865497075,
+        "wilson_ci95": [
+          0.0091,
+          0.0586
+        ],
+        "median_delay_days": 22.5,
+        "event_far": 0.0032090841767464825,
+        "level_id": "S2",
+        "family": "acute",
+        "index": "ndvi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S2/acute/savi": {
+        "n": 171,
+        "n_detected": 4,
+        "detection_rate": 0.023391812865497075,
+        "wilson_ci95": [
+          0.0091,
+          0.0586
+        ],
+        "median_delay_days": 22.5,
+        "event_far": 0.0032090841767464825,
+        "level_id": "S2",
+        "family": "acute",
+        "index": "savi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S2/persistent/ndvi": {
+        "n": 171,
+        "n_detected": 4,
+        "detection_rate": 0.023391812865497075,
+        "wilson_ci95": [
+          0.0091,
+          0.0586
+        ],
+        "median_delay_days": 22.5,
+        "event_far": 0.0029622315477659837,
+        "level_id": "S2",
+        "family": "persistent",
+        "index": "ndvi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S2/persistent/savi": {
+        "n": 171,
+        "n_detected": 4,
+        "detection_rate": 0.023391812865497075,
+        "wilson_ci95": [
+          0.0091,
+          0.0586
+        ],
+        "median_delay_days": 22.5,
+        "event_far": 0.0027153789187854853,
+        "level_id": "S2",
+        "family": "persistent",
+        "index": "savi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S3/acute/ndvi": {
+        "n": 171,
+        "n_detected": 4,
+        "detection_rate": 0.023391812865497075,
+        "wilson_ci95": [
+          0.0091,
+          0.0586
+        ],
+        "median_delay_days": 22.5,
+        "event_far": 0.0032090841767464825,
+        "level_id": "S3",
+        "family": "acute",
+        "index": "ndvi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S3/acute/savi": {
+        "n": 171,
+        "n_detected": 4,
+        "detection_rate": 0.023391812865497075,
+        "wilson_ci95": [
+          0.0091,
+          0.0586
+        ],
+        "median_delay_days": 22.5,
+        "event_far": 0.0032090841767464825,
+        "level_id": "S3",
+        "family": "acute",
+        "index": "savi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S3/persistent/ndvi": {
+        "n": 171,
+        "n_detected": 4,
+        "detection_rate": 0.023391812865497075,
+        "wilson_ci95": [
+          0.0091,
+          0.0586
+        ],
+        "median_delay_days": 22.5,
+        "event_far": 0.0029622315477659837,
+        "level_id": "S3",
+        "family": "persistent",
+        "index": "ndvi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S3/persistent/savi": {
+        "n": 171,
+        "n_detected": 4,
+        "detection_rate": 0.023391812865497075,
+        "wilson_ci95": [
+          0.0091,
+          0.0586
+        ],
+        "median_delay_days": 22.5,
+        "event_far": 0.0027153789187854853,
+        "level_id": "S3",
+        "family": "persistent",
+        "index": "savi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S4/acute/ndvi": {
+        "n": 171,
+        "n_detected": 4,
+        "detection_rate": 0.023391812865497075,
+        "wilson_ci95": [
+          0.0091,
+          0.0586
+        ],
+        "median_delay_days": 22.5,
+        "event_far": 0.0032090841767464825,
+        "level_id": "S4",
+        "family": "acute",
+        "index": "ndvi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S4/acute/savi": {
+        "n": 171,
+        "n_detected": 4,
+        "detection_rate": 0.023391812865497075,
+        "wilson_ci95": [
+          0.0091,
+          0.0586
+        ],
+        "median_delay_days": 22.5,
+        "event_far": 0.0032090841767464825,
+        "level_id": "S4",
+        "family": "acute",
+        "index": "savi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S4/persistent/ndvi": {
+        "n": 171,
+        "n_detected": 4,
+        "detection_rate": 0.023391812865497075,
+        "wilson_ci95": [
+          0.0091,
+          0.0586
+        ],
+        "median_delay_days": 22.5,
+        "event_far": 0.0029622315477659837,
+        "level_id": "S4",
+        "family": "persistent",
+        "index": "ndvi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S4/persistent/savi": {
+        "n": 171,
+        "n_detected": 4,
+        "detection_rate": 0.023391812865497075,
+        "wilson_ci95": [
+          0.0091,
+          0.0586
+        ],
+        "median_delay_days": 22.5,
+        "event_far": 0.0027153789187854853,
+        "level_id": "S4",
+        "family": "persistent",
+        "index": "savi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S5/acute/ndvi": {
+        "n": 171,
+        "n_detected": 5,
+        "detection_rate": 0.029239766081871343,
+        "wilson_ci95": [
+          0.0126,
+          0.0666
+        ],
+        "median_delay_days": 30.0,
+        "event_far": 0.0032090841767464825,
+        "level_id": "S5",
+        "family": "acute",
+        "index": "ndvi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S5/acute/savi": {
+        "n": 171,
+        "n_detected": 9,
+        "detection_rate": 0.05263157894736842,
+        "wilson_ci95": [
+          0.0279,
+          0.097
+        ],
+        "median_delay_days": 30.0,
+        "event_far": 0.003455936805726981,
+        "level_id": "S5",
+        "family": "acute",
+        "index": "savi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S5/persistent/ndvi": {
+        "n": 171,
+        "n_detected": 7,
+        "detection_rate": 0.04093567251461988,
+        "wilson_ci95": [
+          0.02,
+          0.0821
+        ],
+        "median_delay_days": 45.0,
+        "event_far": 0.0027153789187854853,
+        "level_id": "S5",
+        "family": "persistent",
+        "index": "ndvi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S5/persistent/savi": {
+        "n": 171,
+        "n_detected": 9,
+        "detection_rate": 0.05263157894736842,
+        "wilson_ci95": [
+          0.0279,
+          0.097
+        ],
+        "median_delay_days": 30.0,
+        "event_far": 0.0032090841767464825,
+        "level_id": "S5",
+        "family": "persistent",
+        "index": "savi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.0
+        ]
+      },
+      "S6/acute/ndvi": {
+        "n": 171,
+        "n_detected": 15,
+        "detection_rate": 0.08771929824561403,
+        "wilson_ci95": [
+          0.0539,
+          0.1397
+        ],
+        "median_delay_days": 30.0,
+        "event_far": 0.003949642063687978,
+        "level_id": "S6",
+        "family": "acute",
+        "index": "ndvi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.058823529411764705
+        ]
+      },
+      "S6/acute/savi": {
+        "n": 171,
+        "n_detected": 46,
+        "detection_rate": 0.26900584795321636,
+        "wilson_ci95": [
+          0.2082,
+          0.34
+        ],
+        "median_delay_days": 30.0,
+        "event_far": 0.006911873611453962,
+        "level_id": "S6",
+        "family": "acute",
+        "index": "savi",
+        "bootstrap_ci95_fields": [
+          0.058823529411764705,
+          0.2777777777777778
+        ]
+      },
+      "S6/persistent/ndvi": {
+        "n": 171,
+        "n_detected": 17,
+        "detection_rate": 0.09941520467836257,
+        "wilson_ci95": [
+          0.063,
+          0.1534
+        ],
+        "median_delay_days": 45.0,
+        "event_far": 0.005183905208590471,
+        "level_id": "S6",
+        "family": "persistent",
+        "index": "ndvi",
+        "bootstrap_ci95_fields": [
+          0.0,
+          0.058823529411764705
+        ]
+      },
+      "S6/persistent/savi": {
+        "n": 171,
+        "n_detected": 49,
+        "detection_rate": 0.28654970760233917,
+        "wilson_ci95": [
+          0.2241,
+          0.3584
+        ],
+        "median_delay_days": 30.0,
+        "event_far": 0.009627252530239447,
+        "level_id": "S6",
+        "family": "persistent",
+        "index": "savi",
+        "bootstrap_ci95_fields": [
+          0.0625,
+          0.2777777777777778
+        ]
+      }
+    },
+    "mdm80": {
+      "acute/ndvi": {
+        "value": ">S6",
+        "sentinel": 7,
+        "censored": true,
+        "bootstrap_ci95_sentinel": [
+          7.0,
+          7.0
+        ]
+      },
+      "acute/savi": {
+        "value": ">S6",
+        "sentinel": 7,
+        "censored": true,
+        "bootstrap_ci95_sentinel": [
+          7.0,
+          7.0
+        ]
+      },
+      "persistent/ndvi": {
+        "value": ">S6",
+        "sentinel": 7,
+        "censored": true,
+        "bootstrap_ci95_sentinel": [
+          7.0,
+          7.0
+        ]
+      },
+      "persistent/savi": {
+        "value": ">S6",
+        "sentinel": 7,
+        "censored": true,
+        "bootstrap_ci95_sentinel": [
+          7.0,
+          7.0
+        ]
+      }
+    },
+    "event_far_clean": {
+      "event_far": 0.00370278943470748,
+      "n_events": 15,
+      "n_false_events": 15,
+      "n_scored_bins": 4051,
+      "gap_bins": 2
+    },
+    "clean_far_cycle_level": 0.023391812865497075,
+    "n_cycles": 171,
+    "n_fields": 128
+  },
+  "target": {
+    "pre_registered_primary_cell": "S3/acute/ndvi",
+    "a_margin_observed": -0.005847953216374269,
+    "a_met_test": false,
+    "a_dev_3seed": {
+      "cell": "S3/acute/ndvi",
+      "main_per_seed": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "b1_per_seed": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "gap_nonoverlap": 0.0,
+      "met": false
+    },
+    "b_pairs": {
+      "acute/ndvi": {
+        "main": ">S6",
+        "b1": ">S6",
+        "main_sentinel": 7,
+        "b1_sentinel": 7,
+        "main_leq_b1": true,
+        "evaluable": false
+      },
+      "acute/savi": {
+        "main": ">S6",
+        "b1": ">S6",
+        "main_sentinel": 7,
+        "b1_sentinel": 7,
+        "main_leq_b1": true,
+        "evaluable": false
+      },
+      "persistent/ndvi": {
+        "main": ">S6",
+        "b1": ">S6",
+        "main_sentinel": 7,
+        "b1_sentinel": 7,
+        "main_leq_b1": true,
+        "evaluable": false
+      },
+      "persistent/savi": {
+        "main": ">S6",
+        "b1": ">S6",
+        "main_sentinel": 7,
+        "b1_sentinel": 7,
+        "main_leq_b1": true,
+        "evaluable": false
+      }
+    },
+    "b_met_test": false,
+    "b_dev_3seed": {
+      "pairs": {
+        "acute/ndvi": {
+          "main_sentinels": [
+            7,
+            7,
+            7
+          ],
+          "b1_sentinels": [
+            7,
+            7,
+            7
+          ],
+          "evaluable": false,
+          "met": false
+        },
+        "acute/savi": {
+          "main_sentinels": [
+            7,
+            7,
+            7
+          ],
+          "b1_sentinels": [
+            7,
+            7,
+            7
+          ],
+          "evaluable": false,
+          "met": false
+        },
+        "persistent/ndvi": {
+          "main_sentinels": [
+            7,
+            7,
+            7
+          ],
+          "b1_sentinels": [
+            7,
+            7,
+            7
+          ],
+          "evaluable": false,
+          "met": false
+        },
+        "persistent/savi": {
+          "main_sentinels": [
+            7,
+            7,
+            7
+          ],
+          "b1_sentinels": [
+            7,
+            7,
+            7
+          ],
+          "evaluable": false,
+          "met": false
+        }
+      },
+      "met": false
+    },
+    "met": false,
+    "note": "(a) margin \u2265 0.05 at the pre-registered S3/acute/ndvi cell; (b) MDM80(main) \u2264 MDM80(B1); a both-censored tie is NOT an advantage and does not meet (b). Dev-side: 3-seed ranges."
+  },
+  "ladder_rung_result": "L2",
+  "claim_noun": "synthetic anomaly",
+  "ladder_rung_claim": "L2",
+  "note": "Severity sweep on locked test (synthetic anomalies; 'stress' naming not used). L3 only when the pre-registered dual-axis target holds; L4 (real-stress agreement) remains future work."
+}

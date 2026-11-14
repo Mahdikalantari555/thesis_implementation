@@ -374,3 +374,92 @@ def partial_auc_pr(
     recall = tp / n_pos
     recall_prev = np.concatenate([[0.0], recall[:-1]])
     return float(np.sum((recall - recall_prev) * precision))
+
+
+# ---------------------------------------------------------------------------
+# Event-level FAR + Wilson CI (change literature-grounded-severity-protocol)
+# ---------------------------------------------------------------------------
+def decluster_events(alarm_bins: list[int], gap: int = 2) -> list[tuple[int, int]]:
+    """Merge alarmed bins into events (POT declustering precedent).
+
+    Two consecutive alarmed bins belong to the same event when their
+    bin-index distance is ≤ ``gap`` (spec scenario 'Event declustering':
+    'gap ≤ 2 bins' → one event); a larger separation starts a new event.
+    Returns ``(first_bin, last_bin)`` spans in time order.
+    """
+    if not alarm_bins:
+        return []
+    bins = sorted(int(b) for b in alarm_bins)
+    spans: list[tuple[int, int]] = [(bins[0], bins[0])]
+    for b in bins[1:]:
+        first, last = spans[-1]
+        if b - last <= gap:
+            spans[-1] = (first, b)
+        else:
+            spans.append((b, b))
+    return spans
+
+
+def event_far_from_paths(
+    paths: np.ndarray,                 # (N, T) per-bin alarm statistic, NaN = unscored
+    injection_windows: list,           # per cycle: None (clean) or [(onset, end_excl), …]
+    tau: float,
+    *,
+    gap: int = 2,
+) -> dict:
+    """Event-level false-alarm rate over a set of cycles (sktime
+    ``FalseAlarmRate`` semantics).
+
+    Per cycle: alarmed bins (finite score > τ) are declustered into events
+    (:func:`decluster_events`); an event is FALSE when it hits no injection
+    window of its cycle. Extra alarms inside an already-hit window are not
+    double-counted — an event overlapping any window is simply not false.
+    The denominator is the number of SCORED bins (finite statistic) summed
+    over cycles, i.e. FAR is in false events per scored 15-day bin.
+
+    ``injection_windows[i]`` entries are ``(onset, end_exclusive)`` bin-index
+    half-open intervals; ``None`` marks a clean cycle (every event false).
+    """
+    if len(injection_windows) != paths.shape[0]:
+        raise ValueError("one injection-window entry per cycle required")
+    n_events = n_false = n_scored = 0
+    for i in range(paths.shape[0]):
+        row = paths[i]
+        alarmed = [int(b) for b in np.where(np.isfinite(row) & (row > tau))[0]]
+        n_scored += int(np.isfinite(row).sum())
+        windows = injection_windows[i]
+        events = decluster_events(alarmed, gap=gap)
+        n_events += len(events)
+        for first, last in events:
+            hit = False
+            if windows:
+                for onset, end in windows:
+                    # Inclusive event span [first, last] vs half-open window
+                    # [onset, end): overlap = hit (not double-counted).
+                    if first <= end - 1 and last >= onset:
+                        hit = True
+                        break
+            if not hit:
+                n_false += 1
+    return {
+        "event_far": (n_false / n_scored) if n_scored else 0.0,
+        "n_events": n_events,
+        "n_false_events": n_false,
+        "n_scored_bins": n_scored,
+        "gap_bins": int(gap),
+    }
+
+
+def wilson_ci(k: int, n: int, z: float = 1.959963984540054) -> tuple[float, float]:
+    """Wilson score interval for a binomial proportion (per-level detection
+    rates are cells of n≈10–70 — asymptotic-normal CIs would be dishonest).
+
+    Returns (nan, nan) for n = 0; clamps to [0, 1].
+    """
+    if n <= 0:
+        return float("nan"), float("nan")
+    p = k / n
+    denom = 1.0 + z * z / n
+    center = (p + z * z / (2.0 * n)) / denom
+    half = z * np.sqrt(p * (1.0 - p) / n + z * z / (4.0 * n * n)) / denom
+    return float(max(0.0, center - half)), float(min(1.0, center + half))

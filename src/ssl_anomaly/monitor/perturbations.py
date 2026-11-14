@@ -1,17 +1,18 @@
-"""MAD-scaled synthetic perturbations for the development metric (design D6).
+"""Synthetic perturbations for the development metric.
 
-Severity is expressed in multiples of the TRAIN MAD of the affected band at
-the affected phase bin (0.5 / 1 / 1.5 / 2 × MAD), so a "1×MAD" perturbation
-means the same thing for every band and every phase. The onset bin is kept as
-ground truth; detection delay is measured from it.
+Two families (owner decision 2026-11-14, change literature-grounded-severity-protocol):
 
-Interim perturbation set (until the advisor answer, todo OQ6):
-  1. ndvi_drop      — gradual NDVI drop, partial recovery (P1)
-  2. lst_rise       — fast LST rise, full recovery (P2)
-  3. phenology_delay — growth phase shifted later (P4)
-  4. growth_stall   — canopy plateau at the onset level (P5)
-  5. early_senescence — progressive NDVI decline, no recovery (P6)
-  6. transient_drop — one-bin drop with recovery (P7-style)
+1. **Index-drop family (HEADLINE)** — absolute-Δ drops on NDVI (channel 0) and
+   SAVI (realized through the red/nir channels) at the levels of the verified
+   severity table (``severity_table.py``: S1 −0.02 … S6 −0.40), in two
+   duration variants: acute (1–4 bins, per-level) and persistent (the fixed
+   4–6-bin salinity-like chronic variant, labeled experimental — magnitude
+   unsourced in the literature). ``inject_index_drop`` / ``inject_index_drop_dataset``.
+2. **MAD-scaled interim types (LEGACY, D6)** — severity in multiples of the
+   TRAIN MAD of the affected band (0.5 / 1 / 1.5 / 2 × MAD), onset bin kept as
+   ground truth. Retired from the headline metric by finding 16 (no dynamic
+   range at the 5 % cycle FAR) and the 2026-11-14 owner decision; kept for the
+   finding-16 continuity report and ``lst_rise`` diagnostics.
 
 All injections operate on the raw (bins, channels) tensor + observation mask,
 modify only observed entries, and never touch CWSI/ETa (none exist in these
@@ -23,6 +24,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import numpy as np
+
+from ssl_anomaly.monitor.severity_table import (
+    PERSISTENT_DURATION_BINS,
+    PERSISTENT_FAMILY,
+    SEVERITY_TABLE,
+)
 
 INTERIM_TYPES: tuple[str, ...] = (
     "ndvi_drop",
@@ -40,7 +47,22 @@ CH_NDVI = 0
 CH_BLUE, CH_GREEN, CH_RED, CH_NIR, CH_SWIR1, CH_SWIR2 = 1, 2, 3, 4, 5, 6
 CH_LST = 7
 
-# Channels touched by each perturbation type.
+# ---------------------------------------------------------------------------
+# Index-drop family (change literature-grounded-severity-protocol, task 1.2)
+# ---------------------------------------------------------------------------
+# Absolute-Δ drops on NDVI (channel 0 — a real channel of the tensors) and on
+# SAVI. SAVI is NOT a channel of the tensors and is never fabricated: the
+# target ΔSAVI is realized by solving the red/nir scaling that produces it
+# (see ``_solve_savi_drop`` and finding 18 for the solver documentation).
+SAVI_L = 0.5
+# Physical ranges for flooring (reflectance bands mirror inputs.PHYSICAL_RANGES;
+# NDVI/SAVI are bounded indices).
+REFLECTANCE_PHYSICAL_RANGE = (-0.1, 1.6)
+NDVI_PHYSICAL_RANGE = (-1.0, 1.0)
+
+# Channels touched by each legacy perturbation type (flagged `legacy` for the
+# headline metric since the severity re-anchor; kept for finding-16 continuity
+# and lst_rise diagnostics — owner decision 2026-11-14).
 TYPE_CHANNELS: dict[str, tuple[int, ...]] = {
     "ndvi_drop": (CH_NDVI,),
     "lst_rise": (CH_LST,),
@@ -49,6 +71,59 @@ TYPE_CHANNELS: dict[str, tuple[int, ...]] = {
     "early_senescence": (CH_NDVI, CH_NIR),
     "transient_drop": (CH_NDVI,),
 }
+
+
+def savi_from_red_nir(red: float, nir: float, L: float = SAVI_L) -> float:
+    """SAVI = (1 + L) · (nir − red) / (nir + red + L)."""
+    return (1.0 + L) * (nir - red) / (nir + red + L)
+
+
+def grand_growth_median(x: np.ndarray, m: np.ndarray, channel: int = CH_NDVI) -> tuple[float | None, str]:
+    """The field's OWN grand-growth median of one channel (injection-time
+    reference for the % reporting column).
+
+    Grand-growth window = middle third of the cycle (bins T/3 … 2T/3), where
+    the sugarcane canopy is at maximum development (Dingre et al. 2021 anchor).
+    Falls back to all observed bins of the cycle when the window holds no
+    observation; returns (None, "absent") for a cycle with no observation of
+    the channel at all.
+    """
+    T = x.shape[0]
+    lo, hi = T // 3, (2 * T) // 3
+    vals = x[lo:hi, channel][m[lo:hi, channel]]
+    vals = vals[np.isfinite(vals)]
+    if vals.size:
+        return float(np.median(vals)), "grand_growth_bins"
+    vals = x[:, channel][m[:, channel]]
+    vals = vals[np.isfinite(vals)]
+    if vals.size:
+        return float(np.median(vals)), "all_observed_bins_fallback"
+    return None, "absent"
+
+
+def _solve_savi_drop(red: float, nir: float, delta: float) -> tuple[float, float] | None:
+    """Solve the red/nir pair realizing a target SAVI drop of ``delta``.
+
+    The vegetation signal is the red-edge balance (nir − red); the solver
+    shifts that balance while holding the summed reflectance nir + red
+    constant (a canopy-amount change at constant brightness — no brightness
+    artifact is smuggled into other channels):
+
+        SAVI  = (1+L)(nir − red) / (nir + red + L)
+        S     = nir + red (held)
+        D'    = (SAVI − Δ)(S + L) / (1+L)   (target nir − red difference)
+        nir'  = (S + D') / 2,  red' = (S − D') / 2
+
+    Returns None when the bin cannot realize the drop (nir + red + L ≤ 0,
+    i.e. a degenerate SAVI denominator). Flooring to the physical reflectance
+    range happens in the caller; the realized Δ is recomputed afterwards.
+    """
+    s = nir + red
+    if s + SAVI_L <= 0:
+        return None
+    target_savi = savi_from_red_nir(red, nir) - delta
+    d_new = target_savi * (s + SAVI_L) / (1.0 + SAVI_L)
+    return (s - d_new) / 2.0, (s + d_new) / 2.0  # (red', nir')
 
 
 @dataclass
@@ -60,6 +135,7 @@ class InjectionResult:
     severity: float
     phase: str
     source_row: int = -1  # index of the source cycle in the injected array
+    meta: dict = field(default_factory=dict)  # index-drop provenance (family, deltas, %)
 
 
 @dataclass
@@ -191,6 +267,124 @@ def inject_perturbation(
         raise ValueError(f"Unknown perturbation type {pert_type}")
 
     return InjectionResult(out, m, onset, pert_type, severity, "")
+
+
+def inject_index_drop(
+    x: np.ndarray,
+    m: np.ndarray,
+    *,
+    index: str,
+    onset_bin: int,
+    duration: int,
+    delta: float,
+    family: str = "acute",
+) -> InjectionResult:
+    """Inject one absolute-Δ index drop into a raw cycle tensor.
+
+    ``index`` is ``"ndvi"`` (channel 0 shifted by −Δ, floored at the NDVI
+    physical range) or ``"savi"`` (the target ΔSAVI realized through the
+    red/nir solver — the savi channel does not exist and is never fabricated).
+    Constant Δ over ``duration`` bins starting at ``onset_bin`` (no ramp, no
+    recovery — the severity table's honest reading of a level drop). Only
+    observed entries are modified; masks are never changed; the onset bin is
+    recorded as ground truth for delay measurement.
+
+    ``meta`` carries the provenance recorded at injection time:
+    family/index/delta target, per-bin realized deltas (after flooring),
+    skipped-bin count (SAVI bins missing red or nir), floored-bin count, and
+    the % of the field's OWN grand-growth median.
+    """
+    if index not in ("ndvi", "savi"):
+        raise ValueError(f"Unknown index {index!r} (expected 'ndvi' or 'savi')")
+    out = x.copy()
+    T = out.shape[0]
+    onset = int(onset_bin)
+    end = min(T, onset + int(duration))
+    realized: list[float] = []
+    n_floored = 0
+    n_skipped = 0
+
+    if index == "ndvi":
+        for b in range(onset, end):
+            if not m[b, CH_NDVI] or not np.isfinite(out[b, CH_NDVI]):
+                n_skipped += 1
+                continue
+            target = out[b, CH_NDVI] - delta
+            floored = min(max(target, NDVI_PHYSICAL_RANGE[0]), NDVI_PHYSICAL_RANGE[1])
+            if floored != target:
+                n_floored += 1
+            out[b, CH_NDVI] = floored
+            realized.append(float(x[b, CH_NDVI] - floored))
+    else:  # savi via red/nir solver
+        lo_r, hi_r = REFLECTANCE_PHYSICAL_RANGE
+        for b in range(onset, end):
+            if not (m[b, CH_RED] and m[b, CH_NIR]) or not (
+                np.isfinite(out[b, CH_RED]) and np.isfinite(out[b, CH_NIR])
+            ):
+                n_skipped += 1
+                continue
+            solved = _solve_savi_drop(float(out[b, CH_RED]), float(out[b, CH_NIR]), delta)
+            if solved is None:
+                n_skipped += 1
+                continue
+            red_new, nir_new = solved
+            for ch, val in ((CH_RED, red_new), (CH_NIR, nir_new)):
+                floored = min(max(val, lo_r), hi_r)
+                if floored != val:
+                    n_floored += 1
+                out[b, ch] = floored
+            realized.append(float(savi_from_red_nir(x[b, CH_RED], x[b, CH_NIR])
+                                  - savi_from_red_nir(out[b, CH_RED], out[b, CH_NIR])))
+
+    field_median, median_source = grand_growth_median(x, m, CH_NDVI)
+    pct = None if field_median in (None, 0) else 100.0 * delta / field_median
+    return InjectionResult(
+        out, m, onset, f"index_drop_{index}", delta, "", -1,
+        meta={
+            "family": family, "index": index, "delta_target": float(delta),
+            "delta_realized": realized, "n_bins_window": max(0, end - onset),
+            "n_skipped_bins": n_skipped, "n_floored_bins": n_floored,
+            "pct_of_field_median": pct, "field_median_source": median_source,
+            "field_grand_growth_median": field_median,
+            "savi_solver": "sum-preserving red/nir solve" if index == "savi" else None,
+        },
+    )
+
+
+def inject_index_drop_dataset(
+    X: np.ndarray,            # (N, bins, channels) raw values
+    M: np.ndarray,            # (N, bins, channels) observation mask
+    *,
+    level_id: str,
+    family: str,
+    index: str,
+    round_idx: int = 0,
+) -> list[InjectionResult]:
+    """Inject one severity level into EVERY cycle of the given array.
+
+    The severity sweep needs every (level × family × index) cell measured on
+    the same evaluation cycles, so (unlike ``inject_dataset``) all N cycles
+    receive one injection. Onset phases rotate deterministically through
+    early/mid/late with the round index (cycle i, round r → phase
+    ``(i + r) % 3``), giving the per-phase breakdown without random resampling.
+    """
+    delta = {lv.level_id: lv.delta_ndvi for lv in SEVERITY_TABLE}[level_id]
+    duration = (PERSISTENT_DURATION_BINS if family == PERSISTENT_FAMILY
+                else {lv.level_id: lv.duration_bins for lv in SEVERITY_TABLE}[level_id])
+    results: list[InjectionResult] = []
+    for i in range(X.shape[0]):
+        phase = PHASES[(i + round_idx) % len(PHASES)]
+        onset = phase_start_bin(phase, X.shape[1])
+        res = inject_index_drop(
+            X[i], M[i], index=index, onset_bin=onset, duration=duration,
+            delta=delta, family=family,
+        )
+        res.phase = phase
+        res.source_row = i
+        res.pert_type = f"index_drop_{index}_{level_id}"
+        res.meta["level_id"] = level_id
+        results.append(res)
+    return results
 
 
 def sample_strata(

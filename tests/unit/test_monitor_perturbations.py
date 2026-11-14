@@ -234,3 +234,154 @@ def test_no_forbidden_targets_in_dev_code() -> None:
                 if bad:
                     offenders.append(f"{f.name}:{node.lineno}: {bad}")
     assert not offenders, f"Forbidden targets referenced in dev code: {offenders}"
+
+
+# ---------------------------------------------------------------------------
+# Index-drop family (change literature-grounded-severity-protocol, task 1.2)
+# Absolute-Δ injections on NDVI (channel 0) and SAVI (realized through the
+# red/nir channels — never a fabricated savi channel).
+# ---------------------------------------------------------------------------
+def make_veg_cycle(seed=0) -> tuple[np.ndarray, np.ndarray]:
+    """Cycle with plausible NDVI/red/nir trajectories for SAVI-solver tests."""
+    rng = np.random.default_rng(seed)
+    x, m = make_cycle(seed=seed)
+    t = np.arange(T) / T
+    x[:, 0] = 0.2 + 0.5 * np.exp(-((t - 0.55) ** 2) / 0.04)  # NDVI hump ≈0.7 mid
+    x[:, 3] = np.clip(0.30 - 0.18 * np.exp(-((t - 0.55) ** 2) / 0.06), 0.05, None)  # red
+    x[:, 4] = np.clip(0.25 + 0.30 * np.exp(-((t - 0.55) ** 2) / 0.06), 0.05, None)  # nir
+    x[~m] = np.nan  # keep the mask/value consistency of the base fixture
+    return x, m
+
+
+def savi_of(x: np.ndarray, b: int, L: float = 0.5) -> float:
+    return (1.0 + L) * (x[b, 4] - x[b, 3]) / (x[b, 4] + x[b, 3] + L)
+
+
+def test_index_drop_ndvi_absolute_delta() -> None:
+    """Acute NDVI drop: constant absolute Δ over the window, onset recorded."""
+    x, m = make_veg_cycle()
+    before = x[10:12, 0].copy()
+    res = mpert.inject_index_drop(
+        x, m, index="ndvi", onset_bin=10, duration=2, delta=0.08,
+    )
+    assert np.allclose(res.x[10:12, 0], before - 0.08)
+    # Outside the window unchanged; other channels untouched.
+    assert np.allclose(res.x[12:, 0][m[12:, 0]], x[12:, 0][m[12:, 0]])
+    for c in range(1, C):
+        assert np.allclose(res.x[:, c][m[:, c]], x[:, c][m[:, c]])
+    assert np.array_equal(res.m, m)
+    assert res.onset_bin == 10
+
+
+def test_index_drop_persistent_variant() -> None:
+    """Persistent family: same Δ held over the fixed persistent duration."""
+    x, m = make_veg_cycle()
+    res = mpert.inject_index_drop(
+        x, m, index="ndvi", onset_bin=8, duration=mpert.PERSISTENT_DURATION_BINS,
+        delta=0.16, family="persistent",
+    )
+    lo, hi = 8, 8 + mpert.PERSISTENT_DURATION_BINS
+    assert np.allclose(res.x[lo:hi, 0], x[lo:hi, 0] - 0.16)
+    assert res.meta["family"] == "persistent"
+
+
+def test_index_drop_floors_at_physical_range_and_records_realized() -> None:
+    """A drop larger than the observed value floors at the NDVI physical
+    range and the REALIZED delta is recorded (never below range)."""
+    x, m = make_veg_cycle()
+    x[12, 0] = -0.7  # degenerate low NDVI: S6's −0.40 crosses the −1.0 floor
+    res = mpert.inject_index_drop(x, m, index="ndvi", onset_bin=12, duration=1, delta=0.40)
+    assert res.x[12, 0] == pytest.approx(mpert.NDVI_PHYSICAL_RANGE[0])
+    assert res.meta["delta_realized"][0] == pytest.approx(-0.7 - mpert.NDVI_PHYSICAL_RANGE[0])
+    assert res.meta["n_floored_bins"] == 1
+
+
+def test_index_drop_respects_mask_and_never_erases() -> None:
+    x, m = make_veg_cycle()
+    m[13, 0] = False
+    x[13, 0] = np.nan
+    res = mpert.inject_index_drop(x, m, index="ndvi", onset_bin=12, duration=3, delta=0.05)
+    assert np.isnan(res.x[13, 0])
+    assert not res.m[13, 0]
+    assert np.all(np.isnan(res.x[~m]))
+
+
+def test_savi_axis_independent_of_ndvi_channel() -> None:
+    """SAVI is injected by solving red/nir — the ndvi CHANNEL must stay
+    exactly as observed (separate axes, no fabricated savi channel)."""
+    x, m = make_veg_cycle()
+    res = mpert.inject_index_drop(x, m, index="savi", onset_bin=10, duration=3, delta=0.08)
+    assert np.allclose(res.x[:, 0][m[:, 0]], x[:, 0][m[:, 0]])
+    changed = {c for c in range(C) if not np.allclose(res.x[:, c][m[:, c]], x[:, c][m[:, c]])}
+    assert changed == {3, 4}, f"SAVI axis touched channels {changed}, expected red(3)+nir(4)"
+
+
+def test_savi_solver_recovers_target_drop() -> None:
+    """The red/nir scaling solver must realize the target ΔSAVI on normal
+    bins (sum of reflectances held constant)."""
+    x, m = make_veg_cycle()
+    delta = 0.10
+    res = mpert.inject_index_drop(x, m, index="savi", onset_bin=10, duration=3, delta=delta)
+    for b in (10, 11, 12):
+        if m[b, 3] and m[b, 4] and x[b, 4] + x[b, 3] + 0.5 > 0:
+            assert savi_of(x, b) - savi_of(res.x, b) == pytest.approx(delta, abs=1e-6)
+            # Sum of reflectances preserved (brightness unchanged).
+            assert res.x[b, 3] + res.x[b, 4] == pytest.approx(x[b, 3] + x[b, 4], abs=1e-9)
+
+
+def test_savi_solver_skips_bins_missing_a_channel() -> None:
+    """Bins without BOTH red and nir observed cannot realize a SAVI drop —
+    they stay untouched and are counted."""
+    x, m = make_veg_cycle()
+    m[11, 4] = False  # nir unobserved
+    x[11, 4] = np.nan
+    res = mpert.inject_index_drop(x, m, index="savi", onset_bin=10, duration=3, delta=0.08)
+    assert np.isnan(res.x[11, 4])
+    assert res.meta["n_skipped_bins"] == 1
+
+
+def test_savi_solver_floors_physical_range() -> None:
+    """red/nir stay inside the reflectance physical range after the solve.
+
+    The sum-preserving solve cannot floor for normal vegetation bins (the
+    target SAVI always stays inside the range achievable at the held sum);
+    flooring is exercised on a degenerate bright-red bin (bare soil), where
+    S6's −0.40 pushes red past 1.6."""
+    x, m = make_veg_cycle()
+    x[10, 3] = 1.55  # bright red (bare-soil signature)
+    x[10, 4] = 0.20
+    res = mpert.inject_index_drop(x, m, index="savi", onset_bin=10, duration=1, delta=0.40)
+    lo, hi = mpert.REFLECTANCE_PHYSICAL_RANGE
+    assert lo <= res.x[10, 3] <= hi
+    assert lo <= res.x[10, 4] <= hi
+    assert res.meta["n_floored_bins"] >= 1
+
+
+def test_index_drop_pct_of_own_grand_growth_median() -> None:
+    """% drop is computed per field against ITS OWN grand-growth median."""
+    x, m = make_veg_cycle()
+    gg = x[12:24, 0][m[12:24, 0]]
+    med = float(np.median(gg))
+    res = mpert.inject_index_drop(x, m, index="ndvi", onset_bin=12, duration=2, delta=0.08)
+    assert res.meta["pct_of_field_median"] == pytest.approx(100.0 * 0.08 / med, rel=1e-6)
+    assert res.meta["field_median_source"] == "grand_growth_bins"
+
+
+def test_index_drop_dataset_covers_all_cycles_and_rotates_phases() -> None:
+    """One injection per cycle per round; onsets rotate through the phases."""
+    n = 9
+    X = np.stack([make_veg_cycle(seed=i)[0] for i in range(n)])
+    M = np.stack([make_veg_cycle(seed=i)[1] for i in range(n)])
+    results = mpert.inject_index_drop_dataset(
+        X, M, level_id="S3", family="acute", index="ndvi", round_idx=0,
+    )
+    assert len(results) == n
+    onsets = [r.onset_bin for r in results]
+    assert set(onsets) == {6, 18, 30}
+    assert all(abs(r.meta["delta_realized"][0] - 0.08) < 1e-6 or r.meta["n_floored_bins"] > 0
+               for r in results)
+    # Round 1 rotates the phase assignment deterministically.
+    results_r1 = mpert.inject_index_drop_dataset(
+        X, M, level_id="S3", family="acute", index="ndvi", round_idx=1,
+    )
+    assert [r.onset_bin for r in results_r1] != onsets
