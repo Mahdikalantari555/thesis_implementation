@@ -8,7 +8,8 @@ import Validation from "./views/Validation";
 import ModelComparison from "./views/ModelComparison";
 import Spatial from "./views/Spatial";
 import Reports from "./views/Reports";
-import { LayoutDashboard, Map as MapIcon, Activity, ScatterChart, ShieldCheck, GitCompareArrows, Globe2, FileText, Sun, Moon, Sprout, X, FlaskConical } from "lucide-react";
+import AnomalyDesk from "./views/AnomalyDesk";
+import { LayoutDashboard, Map as MapIcon, Activity, ScatterChart, ShieldCheck, GitCompareArrows, Globe2, FileText, Sun, Moon, Sprout, X, FlaskConical, CircleDot } from "lucide-react";
 import { cn } from "./utils/cn";
 import { MODELS, INDICATORS, DATES, FIELDS, COVERAGE, DATA_PROVENANCE } from "./data/data";
 import { useLocale, useT, LOCALES, type Locale } from "./i18n";
@@ -22,6 +23,7 @@ const NAV = [
   { id: "comparison", icon: GitCompareArrows },
   { id: "spatial", icon: Globe2 },
   { id: "reports", icon: FileText },
+  { id: "desk", icon: CircleDot },
 ] as const;
 
 /** Compact, accessible language switcher (spec: labels "EN" and "FA"). */
@@ -195,6 +197,7 @@ function Shell() {
             {view === "comparison" && <ModelComparison />}
             {view === "spatial" && <Spatial />}
             {view === "reports" && <Reports />}
+            {view === "desk" && <AnomalyDesk />}
           </main>
 
           <footer className="border-t border-slate-200 dark:border-slate-800 px-4 py-3 text-[10px] text-slate-500 flex flex-wrap gap-x-4 gap-y-1">

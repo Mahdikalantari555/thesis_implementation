@@ -183,6 +183,30 @@ body.lang-fa .recharts-default-legend {
   color: white;
 }
 
+/* ── Anomaly desk scoped theme (add-halqeh-anomaly-desk, design D5) ──────────
+   Halqeh's paper/ink/cane identity survives as CSS custom properties defined
+   ONLY on .desk-root — every other view and the app shell are untouched, and
+   the platform's self-hosted fonts (Inter / Vazirmatn) stay in force. The desk
+   keeps its paper palette in dark mode on purpose: it reads as an inset
+   review document, not as part of the dashboard chrome. The source build's
+   font packages (Newsreader/Outfit) are NOT added — display headings fall
+   back to a system serif stack instead (zero new dependencies). */
+.desk-root {
+  --desk-paper: #f3eee6;
+  --desk-card: #faf7f2;
+  --desk-ink: #1c1915;
+  --desk-muted: #5c534a;
+  --desk-line: #d9d0c3;
+  --desk-cane: #2f6b45;
+  --desk-slip: #a33b32;
+  background: var(--desk-paper);
+  color: var(--desk-ink);
+}
+
+.desk-serif {
+  font-family: Georgia, "Times New Roman", ui-serif, serif;
+}
+
 @media print {
   aside,
   header,
