@@ -16,7 +16,7 @@ all models/evaluations/freeze/final-test were re-run on the v2 manifest
 ## 0. Documents and open questions
 - [x] 0.1 AGENTS.md §6 (long-running jobs) and §7 (critical ML review checklist)
 - [x] 0.2 `docs/methods_explained.md` (Persian teaching document for the metrics and methods)
-- [ ] 0.3 Perturbation literature review → moved to `data-and-phenology-readiness` task 1.4
+- [x] 0.3 Perturbation literature review → moved to `data-and-phenology-readiness` task 1.4 (done there)
 - [ ] 0.4 Open question to advisor (todo.md OQ6): which perturbation types and magnitudes are realistic for Amirkabir sugarcane? Update the interim set in design D6 after the answer
 - [x] 0.5 Add `docs/vision.md` note on incremental training + active learning from farmer reports
 
@@ -69,10 +69,11 @@ all models/evaluations/freeze/final-test were re-run on the v2 manifest
 - [x] 7.2 User runs `--final-test` once; report with bootstrap CIs over fields; set `ladder_rung` to L3 only if the target holds on test
 
 ## 8. Platform integration (contract v5)
-- [ ] 8.1 Registry: add `gru_ae` slot, make `masked_transformer` model-backed, remove CWSI proxy fallback for SSL slots
-- [ ] 8.2 Exporter: causal per-observation scores, `stressFlag`, `stressFlagModel`, `ladderRung`
-- [ ] 8.3 `channels.ts` / `data.ts` mirror + legacy v4 handling; contract and bilingual tests; tsc and vite build; screenshot runtime gate
-- [ ] 8.4 Update `docs/platform_score_methods.md` with exact formulas and file:line references
+- [x] 8.1 Registry: add `gru_ae` slot, make `masked_transformer` model-backed, remove CWSI proxy fallback for SSL slots
+- [x] 8.2 Exporter: causal per-observation scores, `stressFlag`, `stressFlagModel`, `ladderRung`
+- [x] 8.3 `channels.ts` / `data.ts` mirror + legacy v4 handling; contract and bilingual tests; tsc and vite build; screenshot runtime gate
+      - 2026-11-14: all gates green (contract+bilingual 40 passed; tsc clean; vite green; screenshot gate console=0/page=0); exporter run: 164,517 model-backed cells, stressFlag 1,437 suspected_stress / 69,663 normal / 21,715 no_data / 170,805 unavailable
+- [x] 8.4 Update `docs/platform_score_methods.md` with exact formulas and file:line references
 
 ## 9. Incremental placeholder
 - [x] 9.1 `ssl_anomaly/train/incremental.py` stub raising `NotImplementedError` with docstring

@@ -4,9 +4,9 @@
 
 The system SHALL discover trained model checkpoints under `checkpoints/` by name (`masked_transformer_main.pt`, `gru_ae_main.pt`, and the legacy `sts_net_490.pt`, `tiny_cnn_mamba_490.pt`, `time2agri_490.pt`) and load each with its JSON sidecar (config, normalization statistics, threshold, persistence k, split hash, ladder rung).
 
-#### Scenario: Main checkpoint loads
-- **WHEN** `checkpoints/masked_transformer_main.pt` and its sidecar exist
-- **THEN** the exporter scores every observation causally with it and fills `scores.masked_transformer` and `stressFlag`
+#### Scenario: Checkpoint loads successfully
+- **WHEN** `checkpoints/masked_transformer_main.pt` or `checkpoints/gru_ae_main.pt` and its JSON sidecar exist
+- **THEN** the exporter scores every observation causally with them and fills `scores.masked_transformer` / `scores.gru_ae` and `stressFlag`
 
 #### Scenario: Checkpoint missing
 - **WHEN** a checkpoint for an SSL slot does not exist
@@ -15,6 +15,14 @@ The system SHALL discover trained model checkpoints under `checkpoints/` by name
 ### Requirement: Score provenance tracking
 
 The system SHALL write a per-score provenance map with values `"model"` or `"absent"` for SSL slots (`masked_transformer`, `gru_ae`, `sts_net`, `tiny_cnn_mamba`, `time2agri`). SSL slots SHALL NOT fall back to the CWSI proxy formula. Baseline heuristic slots (`b0_calendar`, `b1_dsh`, `b1_cusum`) MAY keep `"proxy"` only if their formula does not use CWSI.
+
+#### Scenario: All models available
+- **WHEN** all SSL checkpoints (main + legacy) load successfully
+- **THEN** every SSL score carries `"provenance": "model"` with the formula id from the sidecar (`<id>:causal_bin_mse` for main checkpoints)
+
+#### Scenario: Mixed availability
+- **WHEN** only some SSL checkpoints exist
+- **THEN** present checkpoints score `"model"` and every other SSL slot is `absent` (null score) — never a proxy value
 
 #### Scenario: Unmapped observation
 - **WHEN** an observation cannot be mapped to a cycle bin

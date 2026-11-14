@@ -88,3 +88,8 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
 - Platform = research validation dashboard for pipeline output; claims must match the validation-ladder rung.
 - Models must detect **phenology-phase anomalies** — the proxy rule is magnitude-only (CWSI affine); only checkpoint models are phase-aware. Keep this distinction in every validation claim.
 - `openspec archive wire-platform-to-real-data` pending after item 1 lands.
+8. **After the OQ6 advisor answer (carried over from the archived `2026-11-14-train-and-finalize-main-architecture`):**
+   - Update the interim perturbation set (design D6) per the answer; the extended-severity diagnostic in finding 16 says detectable anomalies start at ~6–8×MAD at cycle-level FAR 5% — decide severity scale (across-field MAD vs model-residual scale) and whether FAR stays cycle-level or moves to bin-level.
+   - Resume task 6.2 (single-change model tuning until plateau) — paused because the primary metric had no dynamic range at 1×MAD; tuning on it optimizes noise.
+   - Tasks 11.1–11.6 (skill adoption: scholar-evaluation, literature-review/citation-management, scientific-writing, benchmark-methodology/eval-harness, mle-workflow) — pending user approval (11.6 installs skills locally).
+   - Optional: winter-harvest segmentation tuning (findings 14/15 follow-up); `openspec archive wire-platform-to-real-data` still pending after its item 1 lands.
