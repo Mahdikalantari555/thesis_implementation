@@ -5,6 +5,11 @@ valid_frac < 0.5 acquisitions. Plus the 538-vs-539 date check and a cycle
 recount (docs/findings/02_phenology_cycles.md states 1704 non-censored;
 splits_490.json states 799).
 
+Fix (2026-11-14): the recount previously filtered stats_long on
+band == "ndvi", a band that does not exist, so every field was skipped and the
+report recorded cycle_recount_non_censored = 0 as if it were a real count.
+NDVI is now computed from red + nir and per-field skips/errors are reported.
+
 Outputs reports/data_quality.json (carries data_source, n, date range, seeds, git SHA).
 
 Usage:
@@ -58,28 +63,54 @@ def load_tables():
     return farms, inventory, stats_long
 
 
-def recount_cycles(farms, stats_long, max_fields=None):
-    """Non-censored cycle count via segmentation (src/ssl_anomaly/phenology/cycles.py)."""
+def recount_cycles(farms, stats_long):
+    """Non-censored cycle count via segmentation (src/ssl_anomaly/phenology/cycles.py).
+
+    NDVI is computed from red + nir bands per field. stats_long has NO 'ndvi'
+    band — the previous `band == "ndvi"` filter silently matched nothing and
+    reported cycle_recount_non_censored = 0 (fixed 2026-11-14). Per-field
+    failures are counted, not swallowed: the returned details must accompany
+    the count so a 0 can be told apart from "nothing scanned".
+    """
     if not _HAS_SEG:
-        return None, "segmentation import unavailable"
+        return None, "segmentation import unavailable", {}
     epoch = pd.Timestamp("1970-01-01")
-    field_ids = sorted(farms["field_id"].unique())
-    if max_fields:
-        field_ids = field_ids[:max_fields]
+    frames = {int(fid): f.sort_values("date") for fid, f in stats_long.groupby("field_id")}
+    field_ids = sorted(int(f) for f in farms["field_id"].unique())
     total = 0
+    skipped_no_data = errors = 0
     for fid in field_ids:
-        sf = stats_long[stats_long["field_id"] == fid].sort_values("date")
-        ndvi = sf[sf["band"] == "ndvi"]
-        if len(ndvi) < 30:
+        sf = frames.get(fid)
+        if sf is None:
+            skipped_no_data += 1
             continue
-        days = (pd.to_datetime(ndvi["date"]) - epoch).dt.days.values.astype("int64")
+        red = sf[sf["band"] == "red"][["date", "median"]].rename(columns={"median": "red"})
+        nir = sf[sf["band"] == "nir"][["date", "median"]].rename(columns={"median": "nir"})
+        m = pd.merge(red, nir, on="date", how="inner")
+        if len(m) < 30:
+            skipped_no_data += 1
+            continue
+        r = m["red"].to_numpy(dtype="float64")
+        n = m["nir"].to_numpy(dtype="float64")
+        denom = n + r
+        ndvi = np.full(len(m), np.nan)
+        good = np.abs(denom) > 1e-9
+        ndvi[good] = (n[good] - r[good]) / denom[good]
+        ok = np.isfinite(ndvi)
+        days = (pd.to_datetime(m.loc[ok, "date"]) - epoch).dt.days.values.astype("int64")
+        if len(days) < 30:
+            skipped_no_data += 1
+            continue
         try:
-            for c in segment_cycles(int(fid), days, ndvi["median"].to_numpy(dtype="float64")):
+            for c in segment_cycles(int(fid), days, ndvi[ok]):
                 if not c.censored:
                     total += 1
         except Exception:
+            errors += 1
             continue
-    return total, None
+    details = {"fields_scanned": len(field_ids), "fields_skipped_no_data": skipped_no_data,
+               "fields_errors": errors}
+    return total, None, details
 
 
 def build_report(smoke: bool) -> dict:
@@ -138,9 +169,13 @@ def build_report(smoke: bool) -> dict:
             "docs/findings/02=1704 vs splits_490.json=799 resolved by running --all"
         )
     else:
-        count, err = recount_cycles(farms, stats_long)
+        count, err, details = recount_cycles(farms, stats_long)
         report["cycle_recount_non_censored"] = count
-        report["cycle_recount_note"] = err or "ran via src/ssl_anomaly/phenology/cycles.py"
+        report["cycle_recount_details"] = details
+        report["cycle_recount_note"] = err or (
+            "NDVI computed from red+nir (stats_long has no 'ndvi' band); "
+            "count is non-censored cycles over scanned fields — see cycle_recount_details"
+        )
 
     REPORTS.mkdir(parents=True, exist_ok=True)
     out = REPORTS / "data_quality.json"
