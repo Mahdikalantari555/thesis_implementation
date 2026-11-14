@@ -167,6 +167,19 @@ two experiments.
      A ratio vs gru_ae's α≈0.45), D agreement with independent indicators (CWSI/ETa/ETrF/TVDI —
      proxy evidence, never stress proof; unavailable sources = `absent`). Pre-registered decision
      gates decide: predictive = main path, or fall back to D1. → finding 22.
+     **STATUS (2026-11-14, implementation COMPLETE, awaiting user-run training):** gru_pred arm
+     implemented + smoke-green (commit 60fc792: `DeepPredictiveScorer` — naturally causal single
+     pass, per-(bin,channel) masked smooth-L1 β=1.0 pre-registered in
+     `train_main.PREDICTIVE_OBJECTIVE`; 174,008 params = gru_ae's exact count; 10 unit tests).
+     Parts A–D scripts built + smoke-green (commit 521bb94: `trial_part_{a,b,c,d}_*.py` via
+     `trial_common.py`; part B recomputes all three arms on trial-scoped artifact copies and
+     crosschecks B1/gru_ae vs the recorded finding-18 rates at 0-mismatch; part D availability
+     runtime-verified — **CWSI_ET PRESENT as a 32-field subset in
+     `Data/Processed/satellite/stats_current.zarr` (cwsi_et, field×539 dates)**, CWSI_LST/ETa/ETrF
+     absent as processed field stats, TVDI derived proxy from existing per-scene LST/NDVI stats).
+     Five-gate evaluator ready (commit 5ee5feb, `scripts/trial_gates.py` — operationalizations
+     recorded before the full run). NEXT: user runs the three training commands (~1–2 min/seed,
+     handed off 2026-11-14) → `trial_part_b_severity.py` → A/C/D → `trial_gates.py` → finding 22.
   Advisor OQ6/A3 sign-off still applies before any retraining decision beyond this trial's scope.
 
 ### Resolved
