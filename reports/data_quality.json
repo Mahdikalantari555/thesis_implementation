@@ -1,8 +1,8 @@
 {
   "script": "scripts/data_quality_report.py",
-  "generated_at": "2026-11-11T09:28:34.838386+00:00",
+  "generated_at": "2026-11-14T06:57:20.088665+00:00",
   "data_source": "D:\\RS\\Thesis\\Data\\Processed",
-  "git_sha": "41f87f1c6d87a61dddc66de248f2b74f605f0ec2",
+  "git_sha": "b13be3af478e8171493bc1e53a1445caa7caa72c",
   "smoke": false,
   "scene_inventory_n": 538,
   "products_n": 539,
@@ -2815,6 +2815,11 @@
       "nan_bands_count": 70
     }
   ],
-  "cycle_recount_non_censored": 0,
-  "cycle_recount_note": "ran via src/ssl_anomaly/phenology/cycles.py"
+  "cycle_recount_non_censored": 800,
+  "cycle_recount_details": {
+    "fields_scanned": 490,
+    "fields_skipped_no_data": 0,
+    "fields_errors": 0
+  },
+  "cycle_recount_note": "NDVI computed from red+nir (stats_long has no 'ndvi' band); count is non-censored cycles over scanned fields \u2014 see cycle_recount_details"
 }

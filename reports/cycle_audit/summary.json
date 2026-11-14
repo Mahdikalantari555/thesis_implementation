@@ -1,0 +1,22 @@
+{
+  "script": "scripts/audit_cycles.py",
+  "generated_at": "2026-11-14T06:57:17.199677+00:00",
+  "git_sha": "b13be3af478e8171493bc1e53a1445caa7caa72c",
+  "seed": 20261111,
+  "smoke": false,
+  "n_population": 800,
+  "n_fields_scanned": 490,
+  "fields_no_ndvi_total": 0,
+  "fields_errors": 0,
+  "n_audited": 94,
+  "n_stratum": 60,
+  "n_flagged_extra": 34,
+  "plots_written": 94,
+  "flag_counts": {
+    "length_out_of_range": 35
+  },
+  "notes": [
+    "overlap_with_neighbour = same-field neighbouring-cycle overlap per D2 (cross-field variant was a bug; its 96.7% rate is void)",
+    "plots rendered with PIL (matplotlib savefig segfaults in this environment)"
+  ]
+}

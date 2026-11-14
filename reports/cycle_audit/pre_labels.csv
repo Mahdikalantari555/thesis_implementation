@@ -1,0 +1,95 @@
+field,cycle_id,selected_reason,length_days,pre_label,confidence,note
+301,1,stratum,316,correct,confident,
+148,1,stratum,307,correct,confident,
+268,2,stratum,365,correct,confident,
+278,1,stratum,370,correct,confident,
+202,1,stratum,377,correct,confident,
+170,1,stratum,377,correct,confident,
+480,1,stratum,421,correct,confident,
+428,1,stratum,388,correct,confident,
+370,1,stratum,414,correct,confident,
+485,1,stratum,390,correct,confident,
+415,1,stratum,373,correct,confident,
+247,1,stratum,356,correct,confident,
+416,1,stratum,400,correct,confident,
+370,2,stratum,363,correct,confident,
+413,2,stratum,315,harvest_shift_gt30d,suspect,end boundary ~1-2 acquisitions past the trough; next cycle regrowth visible inside window
+349,1,stratum,364,correct,confident,start boundary at 0.35 (true trough 1 obs before window) - acceptable
+479,2,stratum,386,correct,confident,
+370,3,stratum,409,correct,confident,
+400,2,stratum,264,correct,confident,
+370,4,stratum,318,correct,confident,
+323,2,stratum,348,correct,confident,
+8,3,stratum,366,correct,confident,
+316,2,stratum,356,correct,confident,
+349,2,stratum,353,correct,confident,
+262,1,stratum,328,correct,confident,
+7,1,stratum,334,correct,confident,
+303,1,stratum,372,correct,confident,
+370,5,stratum,368,correct,confident,
+201,2,stratum,367,correct,confident,
+73,3,stratum,363,correct,confident,
+261,1,stratum,382,correct,confident,
+323,3,stratum,387,correct,confident,
+396,3,stratum,336,correct,confident,
+99,4,stratum,346,correct,confident,mid-cycle dip to 0.45 (2023-04) with recovery - possible shallow missed harvest; verify
+472,3,stratum,370,correct,confident,
+318,3,stratum,372,correct,confident,
+78,4,stratum,368,correct,confident,
+371,2,stratum,497,merged,suspect,dip to 0.45 (2023-04) + full regrow to 0.72 - likely missed shallow harvest
+453,1,stratum,339,harvest_shift_gt30d,suspect,window ends while NDVI ~0.5 and rising; end boundary ~30d early
+324,2,stratum,352,correct,confident,
+268,3,stratum,358,correct,confident,slow-establishing plant cane
+408,4,stratum,366,correct,confident,
+148,5,stratum,363,correct,confident,
+13,3,stratum,355,correct,confident,
+131,4,stratum,398,correct,confident,
+361,2,stratum,414,correct,confident,
+375,1,stratum,458,correct,confident,458d long but single-peaked with gradual senescence - legitimate late harvest
+205,3,stratum,393,correct,confident,
+105,3,stratum,396,correct,confident,
+464,2,stratum,338,correct,confident,
+105,4,stratum,274,correct,confident,
+304,4,stratum,368,correct,confident,
+47,1,stratum,397,correct,confident,
+476,6,stratum,387,correct,confident,
+283,2,stratum,384,correct,confident,
+157,1,stratum,432,merged,suspect,dip to 0.35 (2025-02/03) + full regrow - likely missed harvest
+58,6,stratum,383,correct,confident,
+384,3,stratum,315,correct,confident,
+400,4,stratum,271,correct,confident,
+437,2,stratum,305,correct,confident,
+19,1,flagged,185,correct,confident,short 185d; both boundaries at real troughs
+35,2,flagged,481,merged,confident,interior trough 0.4 (2023-04) + full regrow - missed harvest
+53,1,flagged,501,merged,confident,deep interior trough 0.2 (2020-02/03) + regrow - missed harvest
+60,4,flagged,219,correct,confident,short 219d; real boundaries
+67,2,flagged,485,merged,confident,crash to 0.15 + 4-month gap mid-cycle (2024-05); two seasons joined
+75,2,flagged,484,merged,confident,start mid-cycle at 0.5; interior trough 0.15 (2016-02) missed
+77,1,flagged,484,merged,confident,start mid-cycle at 0.5; interior trough 0.1 (2016-01/02) missed
+82,1,flagged,486,merged,confident,interior trough 0.15 (2017-03) missed
+99,5,flagged,215,split,suspect,neither boundary at a trough; ends mid-plateau rising
+112,1,flagged,485,merged,confident,interior trough 0.1 (2014-01/03) missed
+119,1,flagged,526,merged,confident,interior trough 0.15 (2021-12/2022-01) missed; end boundary also suspect
+148,3,flagged,200,correct,confident,short 200d; complete shape; pairs with 148_c4 (merged) - verify pairing
+148,4,flagged,503,merged,confident,interior trough 0.2 (2020-02) missed
+163,2,flagged,231,correct,confident,short 231d; real boundaries
+166,4,flagged,223,correct,confident,short 223d; real boundaries
+183,1,flagged,495,merged,confident,interior trough 0.25 (2019-02) missed
+194,1,flagged,493,merged,confident,interior trough 0.2 (2019-02/03) missed
+207,1,flagged,181,correct,confident,short 181d; complete shape with real boundaries
+223,1,flagged,508,merged,confident,interior troughs 0.2 (2023-02) and 0.25 (2023-11)
+236,3,flagged,499,merged,confident,interior trough 0.2 (2023-02); start mid-level 0.3
+267,1,flagged,213,correct,confident,short 213d; mid dip 0.5 recovered
+276,1,flagged,482,correct,confident,long 482d; slow-establishing plant cane; shallow mid-dip 0.5 only
+285,1,flagged,485,merged,confident,interior trough 0.1 (2014-01/03) missed
+305,3,flagged,212,correct,confident,short 212d; real boundaries
+321,2,flagged,187,correct,confident,short 187d; complete shape incl. peak 0.82
+340,3,flagged,532,merged,confident,interior trough 0.2 (2020-03) missed
+355,1,flagged,521,merged,confident,interior trough 0.2 (2020-02/03) missed
+385,2,flagged,185,split,suspect,start mid-level ~0.3; no establishment phase
+405,2,flagged,209,split,suspect,start mid-level 0.25; no establishment phase
+437,1,flagged,186,split,suspect,start mid-level 0.3; no establishment phase
+450,3,flagged,202,correct,confident,short 202d; establishment present
+452,1,flagged,488,merged,confident,interior trough 0.25 (2023-02) missed
+464,1,flagged,185,split,suspect,start 0.3; interior dip 0.3 = possible missed harvest
+490,4,flagged,206,split,suspect,start 0.2; interior dip 0.35 + recover
