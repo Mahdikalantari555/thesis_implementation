@@ -9,8 +9,9 @@
 
 ## 2. Cycle audit
 - [x] 2.1 `scripts/audit_cycles.py`: sanity flags for all cycles, stratified sample (seed recorded), per-cycle plots (plots skipped: matplotlib segfault on this build)
-- [ ] 2.2 Agent pre-labels sampled cycles; user confirms 20 on the platform
-- [ ] 2.3 Write `docs/findings/14_cycle_audit.md`: error rate with Wilson CI, per class, per year; apply D2 decision rule
+  - 2026-11-14 fix: the earlier run's `overlap_with_neighbour` flag compared cycles of DIFFERENT fields in the same block — design D2 requires the same field's neighbouring cycles. The 96.7 % flag rate and its "BLOCKING" verdict were void; artifacts had been gitignored as "deprioritized". Script rewritten: same-field overlap invariant, D2 stratification (start year × length tercile × block), full-population scan, PIL-rendered plots (matplotlib savefig segfault workaround). Regression tests: `tests/unit/test_cycle_audit_data_quality.py` (8 passed).
+- [ ] 2.2 Agent pre-labels sampled cycles; user confirms 20 on the platform — blocked on `--all` re-run (command handed to user; smoke green 2026-11-14: 60 fields → 97 cycles, 14 plots)
+- [ ] 2.3 Write `docs/findings/14_cycle_audit.md`: error rate with Wilson CI, per class, per year; apply D2 decision rule — the on-disk draft is superseded (built on the void cross-field overlap result); to be finalized from the re-run
 - [ ] 2.4 If planting/harvest records become available: segmentation error in days (optional, non-blocking)
 
 ## 3. Data quality
