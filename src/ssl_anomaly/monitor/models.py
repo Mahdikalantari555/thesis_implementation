@@ -69,6 +69,10 @@ DEFAULT_CONFIGS: dict[str, dict] = {
     # (masked_tf ≈165 k, gru_ae ≈174 k; asserted in test_monitor_causality).
     "masked_transformer": {"d_model": 80, "n_layers": 3, "d_ff": 160, "n_heads": 4, "dropout": 0.1},
     "gru_ae": {"d_model": 200, "n_layers": 1, "dropout": 0.1},
+    # gru_pred (change predictive-ssl-controlled-trial): the SAME trunk and
+    # budget as gru_ae_main — only the training objective differs (causal
+    # one-step-ahead prediction). Pre-registered: no architecture redesign.
+    "gru_pred": {"d_model": 200, "n_layers": 1, "dropout": 0.1},
 }
 
 
@@ -82,7 +86,7 @@ def build_model(model_id: str, d_in: int, n_out: int, cfg: dict | None = None) -
             n_layers=cfg["n_layers"], d_ff=cfg.get("d_ff", 160),
             dropout=cfg.get("dropout", 0.1),
         )
-    if model_id == "gru_ae":
+    if model_id in ("gru_ae", "gru_pred"):
         return CausalGRUAE(
             d_in=d_in, n_out=n_out,
             d_model=cfg["d_model"], n_layers=cfg.get("n_layers", 1),
@@ -260,6 +264,146 @@ class DeepCausalScorer:
             if was_training:
                 self.model.train()
         return float(loss.item())
+
+
+# ---------------------------------------------------------------------------
+# Predictive one-step-ahead scorer (change predictive-ssl-controlled-trial)
+# ---------------------------------------------------------------------------
+class DeepPredictiveScorer:
+    """One-step-ahead predictive scorer for the ``gru_pred`` arm.
+
+    ``pred(o) = f(z[<o])``: the trunk's output at position o is
+    ``head(h_{o-1})`` — a function of tokens < o only (naturally causal; NO
+    LOO withholding and no pretext masking at inference). ``loo_batch`` keeps
+    the :class:`DeepCausalScorer` signature so the UNCHANGED production
+    pipeline (causal offset correction → per-cell q95 → trailing channel-max
+    → τ) consumes it transparently — mirroring the probe's logic with a
+    learned forecaster.
+    """
+
+    def __init__(
+        self,
+        model_id: str,
+        model: torch.nn.Module,
+        n_channels: int = N_DATA_CHANNELS,
+        use_doy: bool = True,
+        device: str | torch.device = "cpu",
+    ) -> None:
+        self.model_id = model_id
+        self.model = model.to(device)
+        self.device = torch.device(device)
+        self.n_channels = n_channels
+        self.use_doy = use_doy
+
+    @torch.no_grad()
+    def loo_batch(
+        self,
+        z_batch: np.ndarray,   # (N, T, C) normalized values (zeros where unobserved)
+        m_batch: np.ndarray,   # (N, T, C) bool observation mask
+        doy_batch: np.ndarray | None,  # (N, T, 2) or None
+        *,
+        chunk: int = 512,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Single-pass one-step-ahead scoring for N cycles (same signature as
+        :meth:`DeepCausalScorer.loo_batch`).
+
+        Returns:
+            scores: (N, T) observed-mask-weighted squared error in z-space
+                    (the D5 secondary statistic; NaN where the bin is
+                    unobserved)
+            pred_z: (N, T, C) one-step-ahead predictions in z-space; pred at
+                    bin o is a function of bins < o only.
+        """
+        self.model.eval()
+        N, T, C = z_batch.shape
+        z = np.where(m_batch, z_batch, 0.0)  # sanitize: production z-space semantics
+        base = np.concatenate(
+            [z.astype(np.float32), m_batch.astype(np.float32),
+             (doy_batch.astype(np.float32) if (doy_batch is not None and self.use_doy) else
+              np.zeros((N, T, 0), dtype=np.float32))],
+            axis=-1,
+        )
+        base_t = torch.from_numpy(base).to(self.device)
+        scores = np.full((N, T), np.nan)
+        pred_z = np.zeros((N, T, C), dtype=np.float32)
+        for n0 in range(0, N, max(1, chunk // T)):
+            n1 = min(N, n0 + max(1, chunk // T))
+            recon = self.model(base_t[n0:n1])  # (bn, T, C); position t ← h_{t-1}
+            pred_z[n0:n1] = recon.cpu().numpy()
+            z_t = torch.from_numpy(z[n0:n1].astype(np.float32)).to(self.device)
+            m_t = torch.from_numpy(m_batch[n0:n1].astype(np.float32)).to(self.device)
+            err = (recon - z_t) ** 2
+            wsum = (err * m_t).sum(dim=-1)
+            wcnt = m_t.sum(dim=-1).clamp(min=1.0)
+            s = (wsum / wcnt).cpu().numpy()
+            unobs = ~m_batch[n0:n1].any(axis=-1)
+            s[unobs] = np.nan
+            scores[n0:n1] = s
+        return scores, pred_z
+
+    @torch.no_grad()
+    def score_cycle(self, z: np.ndarray, m: np.ndarray, doy: np.ndarray | None) -> np.ndarray:
+        """(T,) per-bin one-step-ahead score for one cycle; NaN where unobserved."""
+        s, _ = self.loo_batch(
+            z[None].astype(np.float32), m[None].astype(bool),
+            (doy[None] if doy is not None else None),
+        )
+        return s[0].astype(np.float64)
+
+    def _as_tensor(self, x) -> torch.Tensor:
+        if isinstance(x, torch.Tensor):
+            return x
+        x = np.asarray(x)
+        if x.dtype == np.bool_:
+            return torch.from_numpy(x)
+        return torch.from_numpy(x.astype(np.float32))
+
+    def predictive_losses(
+        self,
+        tokens_batch,          # (B, T, d_in) UNMASKED tokens (values + mask flags + doy)
+        target,                # (B, T, C) z values
+        channel_mask,          # (B, T, C) bool observation mask
+        *,
+        delta: float = 1.0,
+        nonfinite_guard: bool = False,
+    ) -> torch.Tensor:
+        """Causal one-step-ahead training loss: smooth-L1 (Huber, ``delta``)
+        over OBSERVED (bin, channel) pairs — per-pair granularity (the
+        pre-registered objective; the loss choice is recorded in
+        ``train_main.PREDICTIVE_OBJECTIVE`` BEFORE training, no post-hoc
+        switching).
+
+        The prediction at bin o is the model output at o = head(h_{o-1}), a
+        function of tokens < o only — no pretext masking is needed (unlike
+        reconstruction, there is no trivial identity to prevent: the target
+        bin's value never enters its own prediction).
+
+        ``nonfinite_guard``: raise FloatingPointError when a NON-FINITE value
+        sits at an OBSERVED pair (malformed input — fail loudly). NaN garbage
+        at UNOBSERVED pairs is sanitized (token value channels → 0, matching
+        the production z-space semantics) so it cannot poison the recurrence;
+        their loss contribution is excluded by the mask.
+        """
+        tokens_batch = self._as_tensor(tokens_batch).float().to(self.device)
+        target = self._as_tensor(target).float().to(self.device)
+        channel_mask = self._as_tensor(channel_mask).bool().to(self.device)
+        if nonfinite_guard:
+            bad_target = ~torch.isfinite(target) & channel_mask
+            if bool(bad_target.any()):
+                idx = bad_target.nonzero()[0].tolist()
+                raise FloatingPointError(
+                    f"non-finite target at an observed (bin, channel) pair: {idx}")
+        n_out = self.model.n_out
+        vals = tokens_batch[..., :n_out]
+        vals = torch.where(channel_mask, vals, torch.zeros_like(vals))
+        tokens_clean = torch.cat([vals, tokens_batch[..., n_out:]], dim=-1)
+        recon = self.model(tokens_clean)
+        import torch.nn.functional as F
+
+        err = F.smooth_l1_loss(recon, target, reduction="none", beta=delta)
+        err = torch.where(channel_mask, err, torch.zeros_like(err))
+        n = channel_mask.sum().clamp(min=1)
+        return err.sum() / n
 
 
 # ---------------------------------------------------------------------------

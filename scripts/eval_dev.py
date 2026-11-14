@@ -61,7 +61,7 @@ MDM80_CENSORED = 7  # numeric sentinel for ">S6" (ordering only; reported as ">S
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--run-id", required=True, help="training run id (checkpoints/dev/<run_id>/)")
-    p.add_argument("--model", required=True, choices=["masked_transformer", "gru_ae", "b1"])
+    p.add_argument("--model", required=True, choices=["masked_transformer", "gru_ae", "gru_pred", "b1"])
     p.add_argument("--protocol", choices=["severity", "legacy"], default="severity",
                    help="severity = literature-grounded sweep (headline); legacy = finding-16 MAD-scaled continuity")
     p.add_argument("--scorer", choices=SCORER_CHOICES, default="recon_only",
@@ -108,7 +108,10 @@ def load_scorer(model: str, seed: int, run_id: str, device: str) -> tuple:
         k: cfg[k] for k in ("d_model", "n_layers", "d_ff", "n_heads", "dropout") if k in cfg
     })
     torch_model.load_state_dict(payload["state_dict"])
-    scorer = mmodels.DeepCausalScorer(
+    # gru_pred (predictive-ssl-controlled-trial): the one-step-ahead scorer —
+    # same loo_batch signature, naturally causal single pass.
+    scorer_cls = mmodels.DeepPredictiveScorer if model == "gru_pred" else mmodels.DeepCausalScorer
+    scorer = scorer_cls(
         model, torch_model, use_doy=bool(cfg.get("use_doy", True)), device=device,
     )
     return scorer, mmodels.count_parameters(torch_model), int(cfg["n_out"])

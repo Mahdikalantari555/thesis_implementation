@@ -61,7 +61,13 @@ from ssl_anomaly.monitor import scoring as mscoring  # noqa: E402
 from ssl_anomaly.monitor import severity_table as sev  # noqa: E402
 from ssl_anomaly.monitor import splits as msplits  # noqa: E402
 
-MODEL_ID_MAP = {"masked_transformer": "masked_transformer_main", "gru_ae": "gru_ae_main"}
+MODEL_ID_MAP = {
+    "masked_transformer": "masked_transformer_main",
+    "gru_ae": "gru_ae_main",
+    # predictive-ssl-controlled-trial: the gru_pred arm freezes with the same
+    # sidecar schema (τ, k, per-bin q95, frozen seed, hashes).
+    "gru_pred": "gru_pred_main",
+}
 BAND_NAMES = ["ndvi", "blue", "green", "red", "nir", "swir1", "swir2", "lst"]
 MDM80_TARGET = 0.80
 MDM80_CENSORED = 7  # numeric sentinel for ">S6" (ordering only)
@@ -70,7 +76,7 @@ PRIMARY_CELL = ("S3", "acute", "ndvi")  # pre-registered target cell (moderate v
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--model", required=True, choices=["masked_transformer", "gru_ae"])
+    p.add_argument("--model", required=True, choices=["masked_transformer", "gru_ae", "gru_pred"])
     p.add_argument("--run-id", required=True)
     p.add_argument("--final-test", action="store_true",
                    help="run the locked final test ONCE (user-only) and set ladder_rung")
@@ -97,7 +103,8 @@ def load_scorer_and_norm(model: str, seed: int, run_id: str, device: str):
         k: cfg[k] for k in ("d_model", "n_layers", "d_ff", "n_heads", "dropout") if k in cfg
     })
     torch_model.load_state_dict(payload["state_dict"])
-    scorer = mmodels.DeepCausalScorer(model, torch_model, use_doy=bool(cfg.get("use_doy", True)), device=device)
+    scorer_cls = mmodels.DeepPredictiveScorer if model == "gru_pred" else mmodels.DeepCausalScorer
+    scorer = scorer_cls(model, torch_model, use_doy=bool(cfg.get("use_doy", True)), device=device)
     return scorer, norm, mmodels.count_parameters(torch_model), cfg
 
 
@@ -204,15 +211,45 @@ def bootstrap_ci_fields(det_flags: list[int], field_rows: list[int], field_ids: 
     return float(np.percentile(stats, 2.5)), float(np.percentile(stats, 97.5))
 
 
+def _severity_seed_entry(metrics: dict) -> tuple[dict, str]:
+    """Frozen-seed selection from SEVERITY dev metrics (gru_pred freeze; the
+    trial has no legacy metrics file). Pre-registered rule, recorded verbatim
+    in the sidecar notes: LOWEST sum of the four MDM80 sentinels (censored
+    ">S6" = 7), ties → higher detection at S6/persistent/ndvi, ties → lower
+    seed. Dev-side only (no test access)."""
+    per_seed = metrics["per_seed"]
+    best = min(per_seed, key=lambda r: (
+        sum(r["mdm80"][k]["sentinel"]
+            for k in ("acute/ndvi", "acute/savi", "persistent/ndvi", "persistent/savi")),
+        -r["cells"]["S6/persistent/ndvi"]["detection_rate"],
+        r["seed"],
+    ))
+    rule = ("frozen seed = lowest sum of the four MDM80 sentinels in the dev severity sweep "
+            "(censored >S6 = 7); ties → higher S6/persistent/ndvi detection, then lower seed")
+    return best, rule
+
+
 def freeze(args) -> int:
     manifest = msplits.load_splits_locked()
     metrics_path = mproto.DEV_DIR / args.run_id / f"metrics_{args.model}.json"
+    if not metrics_path.exists():
+        # gru_pred (predictive-ssl-controlled-trial): no legacy-protocol file —
+        # select the frozen seed from the run's severity metrics instead.
+        sev_path = _severity_metrics_path(args.model, args.run_id, args.scorer)
+        if not sev_path.exists():
+            raise FileNotFoundError(
+                f"neither {metrics_path} nor {sev_path} exists — run scripts/eval_dev.py first")
+        metrics_path = sev_path
     metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
 
-    # Best seed by primary metric (ties → lowest seed); ties and ranges are
-    # part of the report, the sidecar carries all seeds' numbers.
-    per_seed = metrics["per_seed"]
-    best = max(per_seed, key=lambda r: (r["detection_rate_1mad"], -r["seed"]))
+    if "detection_rate_1mad" in metrics["per_seed"][0]:
+        # Legacy path: best seed by primary metric (ties → lowest seed); ties
+        # and ranges are part of the report, the sidecar carries all seeds'.
+        per_seed = metrics["per_seed"]
+        best = max(per_seed, key=lambda r: (r["detection_rate_1mad"], -r["seed"]))
+        seed_rule = "best dev detection_rate_1mad (ties → lowest seed)"
+    else:
+        best, seed_rule = _severity_seed_entry(metrics)
     seed = best["seed"]
     device = metrics.get("device", "cpu")
 
@@ -224,6 +261,7 @@ def freeze(args) -> int:
     # of scope here (task 10.6 requires the field; honest labelling applies).
     flops_est = {
         "gru_ae": 2 * params * 36,
+        "gru_pred": 2 * params * 36,
         "masked_transformer": 2 * params * 36,
     }[args.model]
 
@@ -260,13 +298,23 @@ def freeze(args) -> int:
         "splits_locked_sha256": manifest["manifest_sha256"],
         "seeds": metrics["seeds"],
         "frozen_seed": seed,
-        "dev_metrics_summary": {
-            "primary_mean": metrics["primary"]["mean"],
-            "primary_std": metrics["primary"]["std"],
-            "median_delay_days": metrics["median_delay_days"]["mean"],
-            "aucpr_partial": per_seed[0]["aucpr_partial"],
-            "nrmse_per_band": per_seed[0]["nrmse_per_band"],
-        },
+        "frozen_seed_selection_rule": seed_rule,
+        "dev_metrics_summary": (
+            {
+                "primary_mean": metrics["primary"]["mean"],
+                "primary_std": metrics["primary"]["std"],
+                "median_delay_days": metrics["median_delay_days"]["mean"],
+                "aucpr_partial": per_seed[0]["aucpr_partial"],
+                "nrmse_per_band": per_seed[0]["nrmse_per_band"],
+            } if "primary" in metrics else
+            {
+                "protocol": metrics.get("protocol"),
+                "mdm80_frozen_seed": {k: v["value"] for k, v in best["mdm80"].items()},
+                "mdm80_aggregate": _aggregate_mdm80(metrics["per_seed"]),
+                "aucpr_partial": best["aucpr_partial"],
+                "nrmse_per_band": best["nrmse_per_band"],
+            }
+        ),
         "dev_metrics_file": str(metrics_path.relative_to(REPO_ROOT)),
         "training_run_id": args.run_id,
         "notes": args.notes,
@@ -277,8 +325,12 @@ def freeze(args) -> int:
     sidecar_path = REPO_ROOT / "checkpoints" / f"{model_id}.json"
     sidecar_path.write_text(json.dumps(sidecar, indent=2), encoding="utf-8")
     print(f"[freeze] {ckpt_dst}")
-    print(f"[freeze] sidecar {sidecar_path} (ladder_rung=L2, seed {seed} "
-          f"det@1MAD={best['detection_rate_1mad']:.3f})")
+    if "detection_rate_1mad" in best:
+        print(f"[freeze] sidecar {sidecar_path} (ladder_rung=L2, seed {seed} "
+              f"det@1MAD={best['detection_rate_1mad']:.3f})")
+    else:
+        print(f"[freeze] sidecar {sidecar_path} (ladder_rung=L2, seed {seed}, "
+              f"selection: {seed_rule})")
     return 0
 
 
@@ -652,6 +704,12 @@ def final_test_severity(args) -> int:
         rounds=1, seed_base=88_000 + seed, bootstrap=args.bootstrap)
 
     # ---- Dual-axis pre-registered target --------------------------------
+    # gru_pred (predictive-ssl-controlled-trial): the finding-18 dual-axis
+    # target is NOT imported into this trial — the trial's own five gates
+    # govern the decision; the final test records the sweep for the report
+    # only and the rung stays L2 (all trial claims are L2 synthetic-anomaly
+    # claims).
+    trial_mode = args.model == "gru_pred"
     primary_key = "/".join(PRIMARY_CELL)
     a_margin = main_res["cells"][primary_key]["detection_rate"] - b1_res["cells"][primary_key]["detection_rate"]
     a_evaluable = (main_res["cells"][primary_key]["n"] > 0 and b1_res["cells"][primary_key]["n"] > 0)
@@ -677,11 +735,15 @@ def final_test_severity(args) -> int:
     target_b = bool(primary_pair["evaluable"] and primary_pair["main_leq_b1"])
 
     # Dev-side 3-seed ranges (the spec's non-overlap wording lives on dev):
-    dev_a = _dev_margin_check(main_metrics, b1_metrics, PRIMARY_CELL)
-    dev_b = _dev_mdm80_check(main_metrics, b1_metrics)
-
-    overall = bool(target_a or target_b or dev_a["met"] or dev_b["met"])
-    ladder = "L3" if overall else "L2"
+    if trial_mode:
+        dev_a = dev_b = None
+        overall = None
+        ladder = "L2"
+    else:
+        dev_a = _dev_margin_check(main_metrics, b1_metrics, PRIMARY_CELL)
+        dev_b = _dev_mdm80_check(main_metrics, b1_metrics)
+        overall = bool(target_a or target_b or dev_a["met"] or dev_b["met"])
+        ladder = "L3" if overall else "L2"
 
     report = {
         "type": "final_test_severity",
@@ -711,9 +773,15 @@ def final_test_severity(args) -> int:
             "a_dev_3seed": dev_a,
             "b_pairs": b_pairs, "b_met_test": target_b, "b_dev_3seed": dev_b,
             "met": overall,
+            "trial_mode": bool(trial_mode),
             "note": ("(a) margin ≥ 0.05 at the pre-registered S3/acute/ndvi cell; "
                      "(b) MDM80(main) ≤ MDM80(B1); a both-censored tie is NOT an "
-                     "advantage and does not meet (b). Dev-side: 3-seed ranges."),
+                     "advantage and does not meet (b). Dev-side: 3-seed ranges.")
+                    if not trial_mode else
+                    ("gru_pred trial mode: the finding-18 dual-axis target is NOT "
+                     "imported — the predictive-ssl-controlled-trial's five "
+                     "pre-registered gates govern; this report records the locked "
+                     "test sweep for the trial readout; ladder stays L2."),
         },
         "ladder_rung_result": ladder,
         "claim_noun": "synthetic anomaly",
@@ -738,9 +806,13 @@ def final_test_severity(args) -> int:
         "target_a_margin": a_margin, "target_a_met": target_a,
         "target_b_pairs": {k: (v["main"], v["b1"], v["evaluable"]) for k, v in b_pairs.items()},
         "target_b_met": target_b, "ladder_rung_result": ladder,
+        "trial_mode": trial_mode,
     }, indent=2, default=str))
     print(f"[final-test] report → {out}")
-    if not overall:
+    if trial_mode:
+        print("[final-test] gru_pred trial mode: five gates of "
+              "predictive-ssl-controlled-trial govern; rung stays L2.")
+    elif not overall:
         print("[final-test] dual-axis target NOT met — honest negative recorded "
               "(spec: no goalpost moving, rung stays L2).")
     return 0

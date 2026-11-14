@@ -43,10 +43,23 @@ from ssl_anomaly.monitor import splits as msplits  # noqa: E402
 
 SEEDS_DEFAULT = (13, 42, 2026)
 
+# Pre-registered gru_pred objective (change predictive-ssl-controlled-trial,
+# task 1.1): the loss choice is recorded BEFORE training — no post-hoc
+# switching. Huber/Smooth-L1 with beta=1.0: the SAME loss family and beta as
+# gru_ae_main's masked reconstruction loss, so the controlled trial changes
+# ONE thing (what is predicted) and not two (also the loss shape).
+PREDICTIVE_OBJECTIVE = {
+    "objective": "one_step_ahead",
+    "loss": "smooth_l1_beta1.0",
+    "loss_rationale": ("same family and beta as gru_ae_main's masked "
+                       "reconstruction loss; MSE vs Huber decided BEFORE "
+                       "training (design: no post-hoc switching)"),
+}
+
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--model", required=True, choices=["masked_transformer", "gru_ae", "b1"])
+    p.add_argument("--model", required=True, choices=["masked_transformer", "gru_ae", "gru_pred", "b1"])
     p.add_argument("--seed", type=int, default=13)
     p.add_argument("--epochs", type=int, default=60)
     p.add_argument("--batch-size", type=int, default=32)
@@ -148,8 +161,11 @@ def main(argv: list[str] | None = None) -> int:
     params = mmodels.count_parameters(model)
     if params > 500_000:
         raise ValueError(f"{args.model} has {params} parameters (>500k cap)")
-    scorer = mmodels.DeepCausalScorer(args.model, model, use_doy=use_doy, device=device)
-    print(f"[model] {args.model} params={params:,} d_in={d_in} doy={use_doy}")
+    scorer_cls = mmodels.DeepPredictiveScorer if args.model == "gru_pred" else mmodels.DeepCausalScorer
+    scorer = scorer_cls(args.model, model, use_doy=use_doy, device=device)
+    print(f"[model] {args.model} params={params:,} d_in={d_in} doy={use_doy}"
+          + (f" objective={PREDICTIVE_OBJECTIVE['objective']} loss={PREDICTIVE_OBJECTIVE['loss']}"
+             if args.model == "gru_pred" else ""))
 
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
     ckpt_path = ckpt_dir / f"{args.model}_seed{args.seed}.pt"
@@ -203,24 +219,36 @@ def main(argv: list[str] | None = None) -> int:
             x = Xtr[idx]
             m = Mtr[idx]
             d = Dtr[idx] if Dtr is not None else None
-            pretext_np = _sample_pretext(M_all[is_train][idx], args.mask_ratio, rng)
-            pretext = torch.from_numpy(pretext_np)
-            tokens_np = mmodels.build_tokens(
-                x.numpy(), m.numpy(),
-                d.numpy() if d is not None else None,
-            )
-            # Withheld bins: value channels zeroed in the input (GRU) or
-            # replaced by the mask embedding inside the model (transformer).
-            tokens_np = tokens_np.copy()
-            tokens_np[pretext_np, :C] = 0.0
-            tokens = torch.from_numpy(tokens_np).float()
-            target = x
-            channel_mask = m.bool()
-            if args.model == "masked_transformer":
-                kp = key_pad_tr[idx]
-                loss = scorer.recon_losses(tokens, pretext, target, channel_mask, key_padding=kp)
+            if args.model == "gru_pred":
+                # One-step-ahead objective (pre-registered): NO pretext
+                # masking — the prediction at bin o is head(h_{o-1}), a
+                # function of tokens < o only, so there is no trivial identity
+                # to prevent. Masked smooth-L1 over observed (bin, channel)
+                # pairs; the loss choice was recorded before training.
+                tokens = torch.from_numpy(mmodels.build_tokens(
+                    x.numpy(), m.numpy(),
+                    d.numpy() if d is not None else None,
+                )).float()
+                loss = scorer.predictive_losses(tokens, x, m.bool(), nonfinite_guard=True)
             else:
-                loss = scorer.recon_losses(tokens, pretext, target, channel_mask)
+                pretext_np = _sample_pretext(M_all[is_train][idx], args.mask_ratio, rng)
+                pretext = torch.from_numpy(pretext_np)
+                tokens_np = mmodels.build_tokens(
+                    x.numpy(), m.numpy(),
+                    d.numpy() if d is not None else None,
+                )
+                # Withheld bins: value channels zeroed in the input (GRU) or
+                # replaced by the mask embedding inside the model (transformer).
+                tokens_np = tokens_np.copy()
+                tokens_np[pretext_np, :C] = 0.0
+                tokens = torch.from_numpy(tokens_np).float()
+                target = x
+                channel_mask = m.bool()
+                if args.model == "masked_transformer":
+                    kp = key_pad_tr[idx]
+                    loss = scorer.recon_losses(tokens, pretext, target, channel_mask, key_padding=kp)
+                else:
+                    loss = scorer.recon_losses(tokens, pretext, target, channel_mask)
             opt.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
@@ -234,30 +262,38 @@ def main(argv: list[str] | None = None) -> int:
 
         train_loss = float(np.mean(losses)) if losses else float("nan")
 
-        # Dev masked-reconstruction loss (deterministic pretext).
+        # Dev loss (deterministic): masked reconstruction for the recon arms,
+        # the same one-step-ahead masked loss for gru_pred (no pretext, hence
+        # deterministic by construction).
         model.eval()
         dev_losses: list[float] = []
         with torch.no_grad():
             for b0 in range(0, n_dev, args.batch_size):
                 x = Xdev_t[b0:b0 + args.batch_size]
                 m = Mdev_t[b0:b0 + args.batch_size]
-                pretext = dev_pretext[b0:b0 + args.batch_size]
                 d = Ddev_t[b0:b0 + args.batch_size] if Ddev_t is not None else None
-                tokens_np = mmodels.build_tokens(x.numpy(), m.numpy(), d.numpy() if d is not None else None).copy()
-                tokens_np[pretext, :C] = 0.0  # pretext is already a numpy array
-                tokens = torch.from_numpy(tokens_np).float()
-                channel_mask = m.bool()
-                if args.model == "masked_transformer":
-                    kp = key_pad_dev[b0:b0 + args.batch_size]
-                    vl = scorer.eval_recon_loss(tokens, pretext, x, channel_mask, key_padding=kp)
+                if args.model == "gru_pred":
+                    tokens = torch.from_numpy(mmodels.build_tokens(
+                        x.numpy(), m.numpy(), d.numpy() if d is not None else None)).float()
+                    vl = float(scorer.predictive_losses(tokens, x, m.bool(), nonfinite_guard=True))
                 else:
-                    vl = scorer.eval_recon_loss(tokens, pretext, x, channel_mask)
+                    pretext = dev_pretext[b0:b0 + args.batch_size]
+                    tokens_np = mmodels.build_tokens(x.numpy(), m.numpy(), d.numpy() if d is not None else None).copy()
+                    tokens_np[pretext, :C] = 0.0  # pretext is already a numpy array
+                    tokens = torch.from_numpy(tokens_np).float()
+                    channel_mask = m.bool()
+                    if args.model == "masked_transformer":
+                        kp = key_pad_dev[b0:b0 + args.batch_size]
+                        vl = scorer.eval_recon_loss(tokens, pretext, x, channel_mask, key_padding=kp)
+                    else:
+                        vl = scorer.eval_recon_loss(tokens, pretext, x, channel_mask)
                 dev_losses.append(vl)
         dev_loss = float(np.mean(dev_losses)) if dev_losses else float("nan")
 
         eta = time.time() - t_start
         rec = {
-            "epoch": epoch + 1, "train_loss": train_loss, "dev_recon_loss": dev_loss,
+            "epoch": epoch + 1, "train_loss": train_loss,
+            ("dev_one_step_loss" if args.model == "gru_pred" else "dev_recon_loss"): dev_loss,
             "epoch_s": round(time.time() - t_ep, 2), "wall_s": round(eta, 1),
             "eta_s": round(eta / (epoch + 1 - start_epoch) * max(1, args.epochs - epoch - 1), 1),
         }
@@ -288,9 +324,9 @@ def main(argv: list[str] | None = None) -> int:
                 "optimizer": opt.state_dict(),
                 "epoch": epoch + 1,
                 "best_dev_loss": best_dev,
-                "config": {"d_in": d_in, "n_out": n_out, "use_doy": use_doy, **cfg},
+                "config": _ckpt_config(args, d_in, n_out, use_doy, cfg),
                 "seed": args.seed,
-                "mask_ratio": args.mask_ratio,
+                "mask_ratio": (0.0 if args.model == "gru_pred" else args.mask_ratio),
             },
             ckpt_path,
         )
@@ -306,9 +342,9 @@ def main(argv: list[str] | None = None) -> int:
             "state_dict": model.state_dict(),
             "epoch": history[-1]["epoch"] if history else 0,
             "best_dev_loss": best_dev,
-            "config": {"d_in": d_in, "n_out": n_out, "use_doy": use_doy, **cfg},
+            "config": _ckpt_config(args, d_in, n_out, use_doy, cfg),
             "seed": args.seed,
-            "mask_ratio": args.mask_ratio,
+            "mask_ratio": (0.0 if args.model == "gru_pred" else args.mask_ratio),
         },
         ckpt_path,
     )
@@ -316,6 +352,16 @@ def main(argv: list[str] | None = None) -> int:
     print(f"[done] {args.model} seed {args.seed}: best dev loss {best_dev:.4f}, wall {wall:.1f}s")
     print(f"[done] checkpoint: {ckpt_path}")
     return 0
+
+
+def _ckpt_config(args, d_in: int, n_out: int, use_doy: bool, cfg: dict) -> dict:
+    """Checkpoint config: shared keys + the pre-registered objective block for
+    gru_pred (the loss choice travels with the checkpoint — no post-hoc
+    switching can be hidden)."""
+    out = {"d_in": d_in, "n_out": n_out, "use_doy": use_doy, **cfg}
+    if args.model == "gru_pred":
+        out.update(PREDICTIVE_OBJECTIVE)
+    return out
 
 
 def _sample_pretext(m: np.ndarray, mask_ratio: float, rng: np.random.Generator) -> np.ndarray:
@@ -371,6 +417,9 @@ def _write_manifest(
         "lr": args.lr, "mask_ratio": args.mask_ratio, "use_doy": not args.no_doy,
         "seed": args.seed, "smoke": bool(args.smoke),
     }
+    if args.model == "gru_pred":
+        cfg["objective"] = PREDICTIVE_OBJECTIVE["objective"]
+        cfg["loss"] = PREDICTIVE_OBJECTIVE["loss"]
     payload = {
         "run_id": args.run_id or f"{args.model}_s{args.seed}",
         "created": time.strftime("%Y-%m-%d %H:%M:%S"),
