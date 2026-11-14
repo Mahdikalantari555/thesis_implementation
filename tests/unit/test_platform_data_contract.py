@@ -679,3 +679,204 @@ def test_build_cycle_split_map():
         x=np.zeros((36, 8), dtype=np.float32), mask=np.zeros((36, 8), dtype=bool),
     )
     assert cycle_split_tag(c, split_map) == "monitoring"
+
+
+# ── Anomaly desk payload contract (add-halqeh-anomaly-desk) ──────────────────
+# The desk payload must be a complete, honest replay of the frozen
+# stage-conditioned run: every case (no curation), values from the parquet,
+# totals recomputed (naive counts computed, never quoted), envelopes +
+# provenance from summary.json, registry identity equal to the farms payload.
+
+DESK_PATH = DATA_DIR / "desk_khuzestan.json"
+STAGE_PARQUET_PATH = ROOT / "reports/stage_conditioned_anomaly/stage_conditioned_anomaly.parquet"
+STAGE_SUMMARY_PATH = ROOT / "reports/stage_conditioned_anomaly/summary.json"
+DESK_STAGE_SHORT = {
+    "S1_establishment_growth": "S1",
+    "S2_vegetative_reproductive": "S2",
+    "S3_maturity_senescence": "S3",
+    "S4_harvest_dormancy": "S4",
+}
+DESK_NAIVE_CUT = 0.40
+
+
+def _desk() -> dict:
+    return json.loads(DESK_PATH.read_text(encoding="utf-8"))
+
+
+def _stage_rows() -> "pd.DataFrame":
+    import pandas as pd
+
+    return pd.read_parquet(STAGE_PARQUET_PATH)
+
+
+def test_desk_payload_exists_and_is_nan_free():
+    raw = DESK_PATH.read_text(encoding="utf-8")
+    for token in ("NaN", "Infinity", "-Infinity"):
+        assert token not in raw, f"desk payload contains literal {token}"
+    desk = _desk()
+    assert desk["contractVersion"] == 1
+    assert set(desk) >= {"totals", "envelopes", "stageRows", "cases", "places", "provenance"}
+
+
+def test_desk_complete_replay_no_curation():
+    """One case per (field, cycle); every parquet bin appears exactly once, in order."""
+    desk = _desk()
+    df = _stage_rows()
+    cases = {c["id"]: c for c in desk["cases"]}
+    parquet_ids = {f"{int(f)}-{int(c)}" for f, c in df.groupby(["field", "cycle_id"]).groups}
+    assert len(desk["cases"]) == len(parquet_ids) == 799
+    assert set(cases) == parquet_ids
+    seen_bins: set[tuple] = set()
+    for case in desk["cases"]:
+        bin_ids = [b["i"] for b in case["bins"]]
+        assert bin_ids == sorted(bin_ids), f"{case['id']}: bins not in bin order"
+        for b in case["bins"]:
+            key = (case["field"], case["cycle"], b["i"])
+            assert key not in seen_bins, f"bin {key} appears twice in the payload"
+            seen_bins.add(key)
+    parquet_bins = set(zip(df["field"].astype(int), df["cycle_id"].astype(int), df["bin_index"].astype(int)))
+    assert seen_bins == parquet_bins, "payload bins ≠ parquet bins (dropped or invented rows)"
+    assert len(seen_bins) == len(df) == 17143
+
+
+def test_desk_bin_values_match_parquet():
+    desk = _desk()
+    df = _stage_rows()
+    lookup = {
+        (int(r.field), int(r.cycle_id), int(r.bin_index)): r
+        for r in df.itertuples()
+    }
+    for case in desk["cases"]:
+        for b in case["bins"]:
+            row = lookup[(case["field"], case["cycle"], b["i"])]
+            assert b["stage"] == DESK_STAGE_SHORT[row.stage]
+            for key, expected in (
+                ("p", round(float(row.progress), 4)),
+                ("v", round(float(row.ndvi), 4)),
+                ("lo", round(float(row.envelope_lower), 4)),
+                ("hi", round(float(row.envelope_upper), 4)),
+                ("med", round(float(row.envelope_median), 4)),
+                ("d", str(row.bin_date)),
+                ("f", bool(row.is_anomaly)),
+            ):
+                assert b[key] == expected, f"{case['id']} bin {b['i']} {key}: {b[key]} != {expected}"
+
+
+def test_desk_totals_recompute_from_parquet():
+    desk = _desk()
+    df = _stage_rows()
+    summary = json.loads(STAGE_SUMMARY_PATH.read_text(encoding="utf-8"))
+    totals = desk["totals"]
+    flags = int(df["is_anomaly"].sum())
+    naive = int((df["ndvi"] < DESK_NAIVE_CUT).sum())
+    overlap = int(((df["ndvi"] < DESK_NAIVE_CUT) & df["is_anomaly"].astype(bool)).sum())
+    assert totals["rows"] == len(df) == 17143
+    assert totals["flags"] == flags == 1774
+    assert totals["cycles"] == df.groupby(["field", "cycle_id"]).ngroups == 799
+    assert totals["fieldsInRun"] == df["field"].nunique() == 370
+    assert totals["fieldsInRegistry"] == len(_farms()) == 490
+    assert totals["validObsReported"] == summary["n_valid_obs"] == 18505
+    # The published rate is the run's own denominator (valid obs), carried from
+    # summary.json — the replay rate over stage-assigned rows is different by
+    # construction and must NOT silently replace it.
+    assert totals["flagRate"] == summary["flag_rate"]
+    # Naive-cut counts are computed from the parquet, not quoted.
+    assert totals["overlap"] == overlap
+    assert totals["naiveOnly"] == naive - overlap
+    assert totals["envelopeOnly"] == flags - overlap
+    assert totals["naiveCut"] == DESK_NAIVE_CUT
+    assert totals["binDays"] == summary["bin_days"] == 15
+    assert totals["envelopeK"] == summary["envelope_k"] == 2.0
+
+
+def test_desk_envelopes_match_summary():
+    desk = _desk()
+    summary = json.loads(STAGE_SUMMARY_PATH.read_text(encoding="utf-8"))
+    for long_id, short_id in DESK_STAGE_SHORT.items():
+        s_env = summary["stage_envelopes"][long_id]
+        p_env = desk["envelopes"][short_id]
+        assert p_env["n"] == s_env["n"]
+        for p_key, s_key in (("median", "median"), ("mad", "mad"), ("lo", "lower"), ("hi", "upper")):
+            assert abs(p_env[p_key] - float(s_env[s_key])) <= 1e-4, f"{short_id}.{p_key}"
+
+
+def test_desk_stage_rows_match_parquet():
+    desk = _desk()
+    df = _stage_rows()
+    for row in desk["stageRows"]:
+        g = df[df["stage"] == [k for k, v in DESK_STAGE_SHORT.items() if v == row["s"]][0]]
+        assert row["n"] == len(g)
+        assert row["flags"] == int(g["is_anomaly"].sum())
+        assert row["naive"] == int((g["ndvi"] < DESK_NAIVE_CUT).sum())
+    assert sum(r["n"] for r in desk["stageRows"]) == len(df)
+
+
+def test_desk_case_derived_fields_match_bins():
+    desk = _desk()
+    df = _stage_rows()
+    cycle_meta = {
+        (int(f), int(c)): (int(g["cycle_length_days"].iloc[0]), bool(g["censored"].iloc[0]))
+        for (f, c), g in df.groupby(["field", "cycle_id"])
+    }
+    for case in desk["cases"]:
+        bins = case["bins"]
+        assert case["start"] == bins[0]["d"] and case["end"] == bins[-1]["d"]
+        length, censored = cycle_meta[(case["field"], case["cycle"])]
+        assert case["lengthDays"] == length
+        assert case["censored"] == censored
+        assert case["flags"] == sum(1 for b in bins if b["f"])
+        assert case["naive"] == sum(1 for b in bins if b["v"] < DESK_NAIVE_CUT)
+        assert case["kind"] == ("slip" if case["flags"] else "spared")
+        if case["flags"]:
+            deepest = round(max(b["lo"] - b["v"] for b in bins if b["f"]), 3)
+            assert case["deepest"] == deepest
+        else:
+            assert case["deepest"] == 0.0
+        s2 = [b["v"] for b in bins if b["stage"] == "S2"]
+        s3 = [b["v"] for b in bins if b["stage"] == "S3"]
+        assert case["s2max"] == (round(max(s2), 3) if s2 else None)
+        assert case["s3min"] == (round(min(s3), 3) if s3 else None)
+
+
+def test_desk_case_metadata_matches_farms_payload():
+    """Registry identity equals the farms payload row, or is null — never invented."""
+    desk = _desk()
+    farms = {f["id"]: f for f in _farms()}
+    for case in desk["cases"]:
+        farm = farms[case["fieldId"]]
+        assert case["code"] == (farm["code"] or None)
+        assert case["name"] == (farm["name"] or None)
+        assert case["farm"] == (farm["farm"] or None)
+        assert case["municipality"] == (farm["municipality"] or None)
+        assert case["variety"] == farm["variety"]
+        assert case["areaHa"] == farm["areaHa"]
+        assert case["lat"] == farm["centroid"][0] and case["lng"] == farm["centroid"][1]
+
+
+def test_desk_provenance_matches_summary():
+    desk = _desk()
+    summary = json.loads(STAGE_SUMMARY_PATH.read_text(encoding="utf-8"))
+    prov = desk["provenance"]
+    assert prov["gitSha"] == summary["git_sha"]
+    assert prov["generatedAt"] == summary["generated_at"]
+    assert prov["dataSource"] == summary["data_source"]
+    assert prov["seed"] == summary["seed"]
+    assert prov["binDays"] == summary["bin_days"]
+    assert prov["envelopeK"] == summary["envelope_k"]
+    assert prov["naiveCut"] == DESK_NAIVE_CUT
+    assert desk["generated"] == str(summary["generated_at"])[:10]
+    # Source paths point at the tracked run artifacts.
+    assert (ROOT / prov["parquet"]).exists()
+    assert (ROOT / prov["summary"]).exists()
+    assert prov["parquet"].endswith("stage_conditioned_anomaly.parquet")
+
+
+def test_desk_places_match_farms_payload():
+    desk = _desk()
+    farms = _farms()
+    places = {p["n"]: p for p in desk["places"]}
+    assert len(places) == len(farms) == 490
+    assert set(places) == set(range(1, 491))
+    for f in farms:
+        p = places[int(f["id"][2:])]
+        assert p["lat"] == f["centroid"][0] and p["lng"] == f["centroid"][1]

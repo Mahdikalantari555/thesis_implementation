@@ -58,9 +58,32 @@ from cycle_inputs import (  # type: ignore
 
 REVISIT_DAYS = 9.3  # informational: Landsat revisit cadence (kept for docs)
 
+# ── Anomaly desk payload (add-halqeh-anomaly-desk) ────────────────────────────
+# The desk replays the frozen 2026-11-11 stage-conditioned run: every case of
+# the run's parquet (no curation — design D1), the run's summary envelopes and
+# the farm registry identity. Naive-cut counts are computed here, never quoted.
+DESK_NAIVE_CUT = 0.40
+DESK_STAGE_SHORT = {
+    "S1_establishment_growth": "S1",
+    "S2_vegetative_reproductive": "S2",
+    "S3_maturity_senescence": "S3",
+    "S4_harvest_dormancy": "S4",
+}
+DESK_PARQUET_PATH = ROOT_DIR / "reports/stage_conditioned_anomaly/stage_conditioned_anomaly.parquet"
+DESK_SUMMARY_PATH = ROOT_DIR / "reports/stage_conditioned_anomaly/summary.json"
+DESK_PAYLOAD_PATH = PLATFORM_DATA_DIR / "desk_khuzestan.json"
+
 
 class ContractViolation(ValueError):
     pass
+
+
+def clean_text(v) -> str:
+    """Registry text verbatim; NaN/None -> "" (never a generated default)."""
+    if v is None or (isinstance(v, float) and np.isnan(v)):
+        return ""
+    s = str(v).strip()
+    return "" if s.lower() in ("nan", "none") else s
 
 
 def validate_observation(field_id: int, sample_date: str, channel: str, value: float | None) -> None:
@@ -86,12 +109,215 @@ def parse_args() -> argparse.Namespace:
         help="Skip checkpoint inference entirely; every score slot is null with provenance 'absent'",
     )
     p.add_argument(
+        "--desk-only",
+        action="store_true",
+        help="Only export the anomaly-desk payload (desk_khuzestan.json) from the "
+        "stage-conditioned run artifacts + farm registry; skips zarr/checkpoint scoring",
+    )
+    p.add_argument(
         "--checkpoints-dir",
         type=Path,
         default=ROOT_DIR / "checkpoints",
         help="Directory holding the model checkpoints + sidecars (default: checkpoints/)",
     )
     return p.parse_args()
+
+
+def build_desk_registry(merged: "gpd.GeoDataFrame") -> dict[str, dict]:
+    """Desk-side farm registry: identity fields keyed ``F-###``.
+
+    Mirrors the farm_records composition below exactly (same clean_text rules,
+    same name/municipality join) minus polygon/baselineHealth — the desk payload
+    contract test asserts desk metadata == the farms payload, so any divergence
+    between the two compositions fails the gate.
+    """
+    registry: dict[str, dict] = {}
+    for _, row in merged.iterrows():
+        fid = int(row["field_id"])
+        code = clean_text(row.get("farm"))
+        block = clean_text(row.get("block"))
+        office = clean_text(row.get("office"))
+        management = clean_text(row.get("management"))
+        variety = clean_text(row.get("variety")) or None
+        area_raw = row.get("area_ha")
+        area = float(area_raw) if area_raw is not None and pd.notna(area_raw) else None
+        geom = row["geometry"]
+        registry[f"F-{fid:03d}"] = {
+            "code": code or None,
+            "name": (f"{code} · {office}" if office else code) or None,
+            "farm": block or None,
+            "municipality": " · ".join(x for x in (office, management) if x) or None,
+            "variety": variety,
+            "areaHa": round(area, 1) if area is not None else None,
+            "lat": round(float(geom.centroid.y), 5),
+            "lng": round(float(geom.centroid.x), 5),
+        }
+    return registry
+
+
+def export_desk_payload(registry: dict[str, dict], out_path: Path) -> dict:
+    """Replay the frozen stage-conditioned run into ``desk_khuzestan.json``.
+
+    Every (field, cycle) case of the run's parquet (design D1 — the Grok
+    build's 12-case hand-pick is replaced by the complete replay), per-bin
+    envelope values verbatim from the parquet, run totals recomputed from the
+    parquet (naive-cut counts computed, never quoted), envelopes + provenance
+    from the run's summary.json, and registry identity from the farms source.
+    Missing run artifacts are a hard error — no stale or partial replay.
+    """
+    missing = [p for p in (DESK_PARQUET_PATH, DESK_SUMMARY_PATH) if not p.exists()]
+    if missing:
+        raise ContractViolation(
+            "desk export needs the stage-conditioned run artifacts, missing: "
+            + ", ".join(str(p) for p in missing)
+            + " — run scripts/stage_conditioned_anomaly.py --all first"
+        )
+
+    df = pd.read_parquet(DESK_PARQUET_PATH)
+    with open(DESK_SUMMARY_PATH, encoding="utf-8") as f:
+        summary = json.load(f)
+
+    flag_mask = df["is_anomaly"].astype(bool)
+    naive_mask_all = df["ndvi"] < DESK_NAIVE_CUT
+    overlap = int((naive_mask_all & flag_mask).sum())
+    flags_total = int(flag_mask.sum())
+    naive_total = int(naive_mask_all.sum())
+
+    stage_rows: dict[str, dict] = {s: {"n": 0, "flags": 0, "naive": 0} for s in DESK_STAGE_SHORT.values()}
+    cases: list[dict] = []
+    for (fid, cycle), g in df.groupby(["field", "cycle_id"], sort=True):
+        g = g.sort_values("bin_index", kind="stable")
+        flags = int(g["is_anomaly"].sum())
+        naive = int((g["ndvi"] < DESK_NAIVE_CUT).sum())
+        reg = registry.get(f"F-{fid:03d}")
+        s2 = g.loc[g["stage"] == "S2_vegetative_reproductive", "ndvi"]
+        s3 = g.loc[g["stage"] == "S3_maturity_senescence", "ndvi"]
+        flagged = g.loc[flag_mask.loc[g.index]]
+        deepest = float((flagged["envelope_lower"] - flagged["ndvi"]).max()) if flags else 0.0
+        case = {
+            "id": f"{int(fid)}-{int(cycle)}",
+            "field": int(fid),
+            "fieldId": f"F-{fid:03d}",
+            "code": reg["code"] if reg else None,
+            "name": reg["name"] if reg else None,
+            "farm": reg["farm"] if reg else None,
+            "municipality": reg["municipality"] if reg else None,
+            "variety": reg["variety"] if reg else None,
+            "areaHa": reg["areaHa"] if reg else None,
+            "lat": reg["lat"] if reg else None,
+            "lng": reg["lng"] if reg else None,
+            "cycle": int(cycle),
+            "lengthDays": int(g["cycle_length_days"].iloc[0]),
+            "censored": bool(g["censored"].iloc[0]),
+            "start": str(g["bin_date"].iloc[0]),
+            "end": str(g["bin_date"].iloc[-1]),
+            "flags": flags,
+            "naive": naive,
+            "deepest": round(deepest, 3),
+            "s2max": round(float(s2.max()), 3) if len(s2) else None,
+            "s3min": round(float(s3.min()), 3) if len(s3) else None,
+            "kind": "slip" if flags else "spared",
+            "bins": [
+                {
+                    "i": int(r.bin_index),
+                    "p": round(float(r.progress), 4),
+                    "stage": DESK_STAGE_SHORT[r.stage],
+                    "v": round(float(r.ndvi), 4),
+                    "lo": round(float(r.envelope_lower), 4),
+                    "hi": round(float(r.envelope_upper), 4),
+                    "med": round(float(r.envelope_median), 4),
+                    "d": str(r.bin_date),
+                    "f": bool(r.is_anomaly),
+                }
+                for r in g.itertuples()
+            ],
+        }
+        for st, gg in g.groupby("stage", sort=True):
+            row = stage_rows[DESK_STAGE_SHORT[st]]
+            row["n"] += int(len(gg))
+            row["flags"] += int(gg["is_anomaly"].sum())
+            row["naive"] += int((gg["ndvi"] < DESK_NAIVE_CUT).sum())
+        cases.append(case)
+
+    # Prime directive 2: NaN never reaches the payload — fail loudly instead.
+    def _finite(x, where: str) -> None:
+        if x is None or isinstance(x, (str, bool)):
+            return
+        if not math.isfinite(float(x)):
+            raise ContractViolation(f"desk payload: non-finite value at {where}")
+
+    for case in cases:
+        for key in ("lat", "lng", "areaHa", "deepest", "s2max", "s3min"):
+            _finite(case[key], f"{case['id']}.{key}")
+        for b in case["bins"]:
+            for key in ("p", "v", "lo", "hi", "med"):
+                _finite(b[key], f"{case['id']}.bin{b['i']}.{key}")
+
+    envelopes = {}
+    for long_id, short_id in DESK_STAGE_SHORT.items():
+        e = summary["stage_envelopes"][long_id]
+        envelopes[short_id] = {
+            "median": round(float(e["median"]), 4),
+            "mad": round(float(e["mad"]), 4),
+            "lo": round(float(e["lower"]), 4),
+            "hi": round(float(e["upper"]), 4),
+            "n": int(e["n"]),
+        }
+
+    places = [
+        {"n": int(fid[2:]), "lat": rec["lat"], "lng": rec["lng"]}
+        for fid, rec in sorted(registry.items())
+    ]
+
+    payload = {
+        "contractVersion": 1,
+        "generated": str(summary["generated_at"])[:10],
+        "source": "reports/stage_conditioned_anomaly/stage_conditioned_anomaly.parquet",
+        "provenance": {
+            "gitSha": summary.get("git_sha"),
+            "generatedAt": summary["generated_at"],
+            "dataSource": summary["data_source"],
+            "seed": int(summary["seed"]),
+            "binDays": int(summary["bin_days"]),
+            "envelopeK": float(summary["envelope_k"]),
+            "naiveCut": DESK_NAIVE_CUT,
+            "parquet": "reports/stage_conditioned_anomaly/stage_conditioned_anomaly.parquet",
+            "summary": "reports/stage_conditioned_anomaly/summary.json",
+            "registry": "Data/Processed/coordinates/farms.geojson + Data/Processed/coordinates/farms.parquet",
+            "exporter": "scripts/export_platform_data.py",
+        },
+        "totals": {
+            "fieldsInRun": int(df["field"].nunique()),
+            "fieldsInRegistry": len(registry),
+            "cycles": int(df.groupby(["field", "cycle_id"]).ngroups),
+            "validObsReported": int(summary["n_valid_obs"]),
+            "rows": int(len(df)),
+            "flags": flags_total,
+            "flagRate": float(summary["flag_rate"]),
+            "binDays": int(summary["bin_days"]),
+            "envelopeK": float(summary["envelope_k"]),
+            "naiveCut": DESK_NAIVE_CUT,
+            "naiveOnly": naive_total - overlap,
+            "envelopeOnly": flags_total - overlap,
+            "overlap": overlap,
+        },
+        "envelopes": envelopes,
+        "stageRows": [
+            {"s": s, **stage_rows[s]} for s in sorted(stage_rows)
+        ],
+        "cases": cases,
+        "places": places,
+    }
+
+    atomic_dump(out_path, payload)
+    size_kb = out_path.stat().st_size / 1024
+    log.info(
+        "Desk payload: %d cases, %d bins, %d flags (%d naive-only / %d envelope-only / "
+        "%d overlap) → %s (%.0f KB)",
+        len(cases), sum(len(c["bins"]) for c in cases), flags_total,
+        naive_total - overlap, flags_total - overlap, overlap, out_path, size_kb,
+    )
+    return payload
 
 
 def to_contract_v5(series_by_field: dict[str, list[dict]], ladder_rung: str | None = None) -> dict:
@@ -151,6 +377,15 @@ def to_contract_v5(series_by_field: dict[str, list[dict]], ladder_rung: str | No
     }
 
 
+def atomic_dump(path: Path, obj: dict) -> None:
+    """Write JSON atomically. ``allow_nan=False``: NaN/Infinity never serialize —
+    a non-finite value is a defect to fix at the source, not to ship."""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(obj, f, ensure_ascii=False, allow_nan=False)
+    os.replace(tmp, path)
+
+
 def main() -> None:
     args = parse_args()
     PLATFORM_DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -163,6 +398,17 @@ def main() -> None:
     log.info("Loading farm polygons and metadata...")
     gdf = gpd.read_file(geojson_path)
     df_meta = pd.read_parquet(parquet_path)
+
+    # Registry merge happens up front so both the full export and --desk-only
+    # share the identical farm-identity composition.
+    if gdf.crs != "EPSG:4326":
+        gdf = gdf.to_crs("EPSG:4326")
+    merged = gdf.merge(df_meta, on="field_id", how="left")
+
+    if args.desk_only:
+        registry = build_desk_registry(merged)
+        export_desk_payload(registry, DESK_PAYLOAD_PATH)
+        return
 
     # Real weather (ERA5 reanalysis) joined on the acquisition date below.
     # precip <- precipitation_sum, temp <- temperature_mean; observation dates
@@ -193,11 +439,6 @@ def main() -> None:
         "unresolved slots are null + 'absent')",
         loaded_ids or "[]", missing_ids or "[]", failed_ids or "[]",
     )
-
-    if gdf.crs != "EPSG:4326":
-        gdf = gdf.to_crs("EPSG:4326")
-
-    merged = gdf.merge(df_meta, on="field_id", how="left")
 
     sys.path.insert(0, str(ROOT_DIR / "src"))
     from ssl_anomaly.io.stats_zarr import load_stats_zarr
@@ -327,13 +568,6 @@ def main() -> None:
             )
     else:
         log.info("No causal main checkpoint loaded — stressFlag stays null for every observation")
-
-    def clean_text(v) -> str:
-        """Registry text verbatim; NaN/None -> "" (never a generated default)."""
-        if v is None or (isinstance(v, float) and np.isnan(v)):
-            return ""
-        s = str(v).strip()
-        return "" if s.lower() in ("nan", "none") else s
 
     log.info("Building farm records...")
     farm_records = []
@@ -581,15 +815,26 @@ def main() -> None:
     log.info("Stress flag tally: %s", flag_tally)
     log.info("Split tally: %s", split_tally)
 
-    def atomic_dump(path, obj):
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(obj, f, ensure_ascii=False)
-        os.replace(tmp, path)
-
     farms_json_path = PLATFORM_DATA_DIR / "farms_khuzestan.json"
     atomic_dump(farms_json_path, farm_records)
     log.info("Saved %d Khuzestan farm definitions to %s", len(farm_records), farms_json_path)
+
+    # Desk payload (add-halqeh-anomaly-desk): registry identity from the just-
+    # built farm_records, run artifacts from the frozen 2026-11-11 replay.
+    desk_registry = {
+        fr["id"]: {
+            "code": fr["code"] or None,
+            "name": fr["name"] or None,
+            "farm": fr["farm"] or None,
+            "municipality": fr["municipality"] or None,
+            "variety": fr["variety"],
+            "areaHa": fr["areaHa"],
+            "lat": fr["centroid"][0],
+            "lng": fr["centroid"][1],
+        }
+        for fr in farm_records
+    }
+    export_desk_payload(desk_registry, DESK_PAYLOAD_PATH)
 
     series_json_path = PLATFORM_DATA_DIR / "series_khuzestan.json"
     atomic_dump(series_json_path, to_contract_v5(series_by_field, ladder_rung=ladder_rung))
