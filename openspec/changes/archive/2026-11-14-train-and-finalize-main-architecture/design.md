@@ -114,7 +114,7 @@ Decisions agreed with the user on 2026-11-10. Anything marked **(proposed)** is 
 
 ## D11. Data-readiness decision record (from data-and-phenology-readiness D1–D5)
 
-Decisions below are adopted from `docs/findings/13_literature_phenology_and_perturbations.md` (R1–R8) and `docs/findings/14_stage_conditioned_thresholds.md` (findings 14). They gate the start of training sections 2–5 of this change.
+Decisions below are adopted from `docs/findings/13_literature_phenology_and_perturbations.md` (R1–R8) and `docs/findings/17_stage_conditioned_thresholds.md` (stage-conditioned thresholds; path updated 2026-11-14 after the duplicate finding-14 renumber — the file was `14_stage_conditioned_thresholds.md` when this change was written). They gate the start of training sections 2–5 of this change.
 
 **R1 — Segmentation:** Keep current harvest-driven cycle segmentation (`src/ssl_anomaly/phenology/cycles.py` + `smoothing.py`): Whittaker λ by CV on full series, `find_peaks(−NDVI)` prominence ≥ 0.15, prior-plateau ≥ 0.7 max, post-trough rise ≥ 0.15 in 180 days, length 180–540 days, replant detected by NDVI < 0.3 for 120 days. Matches Kavats 2020 / Joshi 2024 logic.
 

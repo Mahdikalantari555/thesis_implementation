@@ -1,4 +1,8 @@
-# Findings 14 — Stage-Conditioned Anomaly Detection with Confidence Envelope
+# Finding 17 — Stage-Conditioned Anomaly Detection with Confidence Envelope
+
+> **Renumbered 14 → 17 (2026-11-14):** two findings had been assigned number 14;
+> `14_cycle_audit.md` keeps 14 (referenced as "finding 14" by the D2 exclusion
+> decision). This file's external references were updated to the new path.
 
 ## Problem
 

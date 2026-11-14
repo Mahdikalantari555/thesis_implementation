@@ -38,7 +38,7 @@ Before `train-and-finalize-main-architecture` starts, two things decide whether 
 - New docs:
   - `docs/findings/13_literature_phenology_and_perturbations.md`
   - `docs/findings/14_cycle_audit.md`
-  - `docs/findings/14_stage_conditioned_thresholds.md`
+  - `docs/findings/17_stage_conditioned_thresholds.md` (originally numbered 14; renumbered 2026-11-14 to fix the duplicate)
   - `docs/methods_explained.md` (new sections)
 - New scripts (small, agent-runnable):
   - `scripts/audit_cycles.py` (sampling, sanity flags, plots)

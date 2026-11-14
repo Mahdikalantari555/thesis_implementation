@@ -23,5 +23,5 @@
 
 ## 5. Stage-conditioned anomaly detection
 - [x] 5.1 `scripts/stage_conditioned_anomaly.py`: stage-conditioned thresholds with npphen-style confidence envelope; does not flag natural phenological decline as anomaly
-- [x] 5.2 Write `docs/findings/14_stage_conditioned_thresholds.md` (results: 370 fields, 799 cycles, 18,505 valid obs, 1,774 flagged, 9.59% flag rate)
-- [x] 5.3 Add row 14 to `docs/findings/00_index.md`
+- [x] 5.2 Write `docs/findings/17_stage_conditioned_thresholds.md` (results: 370 fields, 799 cycles, 18,505 valid obs, 1,774 flagged, 9.59% flag rate) — originally `14_stage_conditioned_thresholds.md`; renumbered 14→17 on 2026-11-14 to fix the duplicate finding number (`14_cycle_audit.md` keeps 14)
+- [x] 5.3 Add row 14 to `docs/findings/00_index.md` — row now 17 after the renumber
