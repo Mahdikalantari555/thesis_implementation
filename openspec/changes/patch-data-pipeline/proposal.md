@@ -53,6 +53,10 @@ scoring, no platform behavior.
   run), `--resume` (per-date incremental writes with a completion
   manifest), CPU-executable, progress output, and a provenance manifest
   (source products, QA bit list, scale factors, hashes).
+- **Extraction ≠ training (owner standing invariant, 2026-11-15)** — the
+  store covers ALL fields because evaluation needs them; training consumers
+  SHALL exclude holdout farms/dates via the fail-closed assertion of
+  `training-holdout-invariant` (holdout fixed BEFORE implementation, always).
 - **Explicit non-goals:** no METRIC-derived per-pixel products beyond the 8
   B1 channels (ndvi + blue, green, red, nir, swir1, swir2, lst); no
   Landsat 7 support; no model/scoring/platform changes; no ETa/CWSI

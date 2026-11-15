@@ -13,7 +13,10 @@
 - [ ] 1.3 `src/ssl_anomaly/train/patch_data.py`: Dataset over patches.zarr
       (sample = field-cycle), frozen normalization read, covariate builder
       (sin/cos DOY, cycle age, days-since-last-valid, log1p n_obs, sensor
-      one-hot L8/L9), NaN-as-absent masking; collate tests.
+      one-hot L8/L9), NaN-as-absent masking; holdout filter + fail-closed
+      assertion via the shared `monitor/holdout.py` helper
+      (`training-holdout-invariant`: holdout farms/dates never reach
+      training, even though the store contains them); collate tests.
 - [ ] 1.4 `scripts/train_patch.py`: hybrid objective (w = 1, 0.5, 0.25 +
       0.3 aux), 8-bin burn-in, trimmed top-5% after 10-epoch warm-up,
       AdamW/cosine/clip; tqdm + progress.jsonl + final wall-time summary;
