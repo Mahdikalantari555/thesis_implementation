@@ -194,8 +194,12 @@ two experiments.
   "no parallel architecture trials" prohibition for THIS program only. Architecture source:
   `research/Architecture_Selection_for_Self_Supervised_Spatiotemporal_Anomaly.md` (2D CNN stem →
   per-location GRU, prediction primary + masked-recon aux, ~90k params, no pooled latent).
-  Execution order: 1 `patch-data-pipeline` (patches.zarr) → 2 `patch-level-controlled-trial`
-  (subset PoC, gates G1–G5, finding 23) → 3 `patch-scoring-ensemble` (E8 + C1/C2/M3) +
+  Execution order: 0 `training-holdout-invariant` (STANDING invariant, owner
+  2026-11-15: holdout farms/dates frozen BEFORE implementation, fail-closed in
+  every training path, pixel-level included) → 1 `patch-data-pipeline` (patches.zarr) → 2 `patch-level-controlled-trial`
+  (subset PoC, gates G1–G5, finding 23) → 3 `compare-spatial-representation-strategies`
+  (representation ladder R0 zonal / R1 patch-32 / R2 sub-crops / R3 multi-scale; gated on PoC
+  gates; owns the scale sweep delegated from E5; finding 24) + `patch-scoring-ensemble` (E8 + C1/C2/M3) +
   `gradual-severity-shape` (3rd temporal shape + secondary peak/recovery shapes) → 4
   `patch-contamination-absorption` (E7) +
   `patch-full-run-and-ablations` (scale-up + E2–E6 + TCN/Mamba challengers + SSL-off control +
@@ -261,6 +265,11 @@ two experiments.
 
 ## Thesis-level reminders
 
+- **Standing holdout invariant (owner, 2026-11-15):** farms and dates completely
+  excluded from training are identified and frozen BEFORE any implementation —
+  holdout = test-block farms (whole-field, all periods) + post-2024 dates + all
+  future acquisitions/fields; fail-closed enforcement in EVERY training path,
+  pixel-level included (`training-holdout-invariant`). Always observed.
 - Platform = research validation dashboard for pipeline output; claims must match the validation-ladder rung.
 - **Claims weighting (owner validation guide, 2026-11-15):** main thesis claims on L1–L3; L4 =
   external consistency evidence (weather + neighbors + indicators); L5 = benchmark comparison.
