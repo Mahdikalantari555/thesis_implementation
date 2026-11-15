@@ -72,6 +72,7 @@ platform/.tmpbuild/
 .opencode
 .zcode
 .qoder
+notes.md
 
 # Data artifacts
 data/.tmp*
