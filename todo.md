@@ -94,7 +94,6 @@ Full evidence: `D:\RS\Thesis\research\ssl-stress-advantage\REPORT.md` (27 source
 - **A3. Sign-off on the honest-negative framing + the 3-move plan** (M1 severity protocol /
   M2 normal-bank scorer / M3 event-FAR + POT declustering) — **blocks** committing the normal-bank
   arm as the official task-6.2 direction (more reconstruction tuning would optimize noise, finding 16).
-- **A4. Validation-ladder full write-up** (5 levels + criteria) — user will send; blocks item 5's spec. [existing]
 
 ### B. User-gated (repo / product / workflow decisions)
 
@@ -129,6 +128,13 @@ Full evidence: `D:\RS\Thesis\research\ssl-stress-advantage\REPORT.md` (27 source
 - **C7. Environmental 0xc06d007f crashes** (test_daily_anomaly_map / test_eval /
   test_baseline_comparators / test_data_scarcity) — environment/load-order, not code; suite runs with
   `--ignore` for these 5 files → 203 passed 1 failed (=real_archive data-state, C6 family).
+- **C8. Temporal selection window (owner validation guide §2, 2026-11-15):** the guide proposes
+  train ≤2021 / val 2022–2023 / test 2024–2026; the LOCKED splits (9aa5eb11) use test start
+  2024-01-01 with dev cycles cut at that boundary — no 2021/2022 boundary exists. Agent
+  recommendation (recorded): KEEP the locked splits for comparability with findings 18/21/22;
+  adopt 2022–2023 as the SELECTION sub-window within dev for the final architecture decision IF
+  the dev 2022–23 cycle count supports it (counting the dev cycles by period = the decision's
+  first task). Changing the locked splits mid-program would break the pre-registered trials.
 
 ### D. Follow-up research paths from finding 20 (user-directed; changes CREATED 2026-11-14, awaiting execution)
 
@@ -182,8 +188,38 @@ two experiments.
      handed off 2026-11-14) → `trial_part_b_severity.py` → A/C/D → `trial_gates.py` → finding 22.
   Advisor OQ6/A3 sign-off still applies before any retraining decision beyond this trial's scope.
 
+- **D3. Patch-level program (created 2026-11-15; 10 changes PROPOSED, all valid, NONE applied).**
+  Owner directive (notes.md 2026-11-15 + validation guide same day): add patch-level analysis,
+  subset-first, with runtime estimation + checkpoint/resume built in; the owner request AMENDS the
+  "no parallel architecture trials" prohibition for THIS program only. Architecture source:
+  `research/Architecture_Selection_for_Self_Supervised_Spatiotemporal_Anomaly.md` (2D CNN stem →
+  per-location GRU, prediction primary + masked-recon aux, ~90k params, no pooled latent).
+  Execution order: 1 `patch-data-pipeline` (patches.zarr) → 2 `patch-level-controlled-trial`
+  (subset PoC, gates G1–G5, finding 23) → 3 `patch-scoring-ensemble` (E8 + C1/C2/M3) +
+  `gradual-severity-shape` (3rd temporal shape + secondary peak/recovery shapes) → 4
+  `patch-contamination-absorption` (E7) +
+  `patch-full-run-and-ablations` (scale-up + E2–E6 + TCN/Mamba challengers + SSL-off control +
+  classical baselines + error analysis + pre-registered final criterion) → 5
+  `patch-generalization-suite` (L3 matrix) + `patch-independent-indicators` (E10 + physical CWSI +
+  weather/neighbor external consistency) + `patch-xai-attribution` (patch-level XAI, new
+  capability). Conditional fallback: `anomaly-definition-path-b` — pre-registered, applies ONLY if
+  BOTH path-C trials fail their detection gates.
+
 ### Resolved
 
+- **2026-11-15 — B6 (five-shape protocol) DECIDED (user):** recommendation adopted —
+  peak-disruption + recovery-disruption promoted as pre-registered SECONDARY diagnostic shapes
+  (folded into `gradual-severity-shape`; primary gates stay on the index-drop family, no
+  goalpost movement); growth-delay stays inside path-B gating (D1 unchanged). With the three
+  primary shapes + two secondary shapes, the validation guide's five synthetic types are fully
+  mapped.
+- **2026-11-15 — A4 (validation-ladder write-up) DELIVERED (user):** the full validation guide
+  arrived and is mapped onto the existing L1–L5 ladder (identical levels): claims weighted L1–L3
+  primary + L4 external consistency + L5 benchmark; synthetic detection = sensitivity evidence,
+  never stress proof; External Consistency Analysis (weather + neighbors) added to
+  `patch-independent-indicators`; model selection without GT = sensitivity/stability/FAR-burden
+  balance; novelty = the COMBINATION, held as hypothesis (queued item 12). Guide content stored
+  in agent memory (validation-guide-2026-11-15); operational pieces landed in the D3 changes.
 - **2026-11-14 — OQ5 / B4 (date count) RESOLVED (user):** one date's metadata was corrupted —
   `data/DATA_SUMMARY.md` §5 names it: **2022-08-07 metadata GeoJSON missing** → **538 usable dates is
   the canonical count** (539 scene files on disk). Counts updated in data/README.md,
@@ -214,10 +250,22 @@ two experiments.
 - M2 normal-bank scorer as an *experimental* arm (openspec change; final adoption gated on A1/A3).
 - M3 event-FAR + POT declustering re-computation of finding-16 metrics (analysis-only, no retraining).
 - Items 1–3, 6–11 openspec candidates once their user-gated questions (B1) are answered.
+- **Item 12 `novelty-positioning-verification`** (owner guide §10, 2026-11-15): the claim "first
+  unsupervised agricultural anomaly detection" is NOT defensible — 2017 unsupervised RS anomaly
+  paper, 2024 aerial-MIM AD (already in corpus: Shikhar & Sobti 2404.08931), Oct-2026
+  Mediterranean water-use screening (Scientific Reports). Verify the 2017 + 2026 papers against
+  the 84-paper matrix, then phrase novelty as the COMBINATION (long-term per-farm Landsat +
+  per-farm historical pattern learning + phenology-cycle awareness + SSL temporal representation +
+  label-free growth-deviation detection + multi-level validation) — hypothesis pending
+  verification, not a proven claim — in method_design_ssl.md and the thesis text.
 
 ## Thesis-level reminders
 
 - Platform = research validation dashboard for pipeline output; claims must match the validation-ladder rung.
+- **Claims weighting (owner validation guide, 2026-11-15):** main thesis claims on L1–L3; L4 =
+  external consistency evidence (weather + neighbors + indicators); L5 = benchmark comparison.
+  Synthetic detection is sensitivity evidence, never stress proof — the thesis deliverable is a
+  trustworthy GROWTH-ANOMALY detection system, not a stress classifier.
 - Models must detect **phenology-phase anomalies** — the proxy rule is magnitude-only (CWSI affine); only checkpoint models are phase-aware. Keep this distinction in every validation claim.
 - ~~`openspec archive wire-platform-to-real-data` pending~~ — archived 2026-11-14 (ff3ccd6).
 8. **After the OQ6 advisor answer (carried over from the archived `2026-11-14-train-and-finalize-main-architecture`):**
