@@ -20,8 +20,8 @@
 - [ ] 2.2 E6 LST-off checkpoint (feeds patch-independent-indicators).
 - [ ] 2.3 E4 covariates ladder (+weather last, conditioned AND
       unconditioned reported).
-- [ ] 2.4 E5 inner-buffer + burn-in variants; S=16 tiled only if the
-      compute question is still open.
+- [ ] 2.4 E5 inner-buffer + burn-in variants (the scale/representation sweep
+      lives in `compare-spatial-representation-strategies`).
 - [ ] 2.5 Sensor-offset estimation script (near-coincident L8/L9 pairs over
       the AOI) + applied/not-applied comparison.
 - [ ] 2.6 E3 challengers if triggered: TCN + TinyCNNMamba; record the

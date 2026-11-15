@@ -52,10 +52,9 @@ plus the conditions under which learned models do and do not help
   away regionally-driven anomalies — document §9 E4).
 - **E5 patch/window variants** — inner buffer on/off (1 px; removes ~22%
   of a median field's pixels but most mixed edge pixels); burn-in length
-  {4, 8, 12}; S=16 tiled variant OPTIONAL and only if the compute question
-  is still open (honest note: measured geometry — median side 16.7 px —
-  means S=16 needs tiling for ~half the fields; the measured data already
-  justifies S=32, so this ablation is not on the critical path).
+  {4, 8, 12}. The patch-SIZE/representation scale sweep (S=16 tiled, sub-
+  crops, multi-scale) is DELEGATED to
+  `compare-spatial-representation-strategies` — not duplicated here.
 - **E6 channel ablation** — LST-off (7 channels) vs 8-channel; the LST-off
   checkpoint is ALSO the input-independence arm required by
   `patch-independent-indicators` (E10).
