@@ -49,6 +49,14 @@ VERIFICATION_VALUES: tuple[str, ...] = (
 
 ACUTE_FAMILY = "acute"
 PERSISTENT_FAMILY = "persistent"
+# Third PRIMARY temporal shape (change gradual-severity-shape): a linear ramp
+# over D bins to the level's δ, then held to cycle end. The ramp length cycles
+# through these values across rounds so one sweep covers all three.
+GRADUAL_FAMILY = "gradual"
+GRADUAL_RAMP_BINS: tuple[int, ...] = (3, 4, 6)
+PRIMARY_FAMILIES: tuple[str, ...] = (ACUTE_FAMILY, PERSISTENT_FAMILY, GRADUAL_FAMILY)
+# SECONDARY diagnostic shapes — never enter a primary gate.
+SECONDARY_FAMILIES: tuple[str, ...] = ("peak_disruption", "recovery_disruption")
 # Persistent variant duration: design.md "4–6 bins, same Δ"; the midpoint 5
 # keeps the family disjoint from every acute duration (S6 acute ends at 4).
 PERSISTENT_DURATION_BINS = 5
