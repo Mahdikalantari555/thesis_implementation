@@ -195,7 +195,14 @@ two experiments.
   "no parallel architecture trials" prohibition for THIS program only. Architecture source:
   `research/Architecture_Selection_for_Self_Supervised_Spatiotemporal_Anomaly.md` (2D CNN stem →
   per-location GRU, prediction primary + masked-recon aux, ~90k params, no pooled latent).
-  Progress 2026-11-16: `training-holdout-invariant` IMPLEMENTED in code
+  Progress 2026-11-16: `patch-data-pipeline` PARTIALLY implemented — geometry
+  (`FieldWindow`, bbox crop/pad without resampling, neighbour-excluding
+  `in_field` mask), per-pixel per-bin aggregation (`aggregate_bin`), the zarr
+  store schema/writer/validator (`io/patches.py`), the leakage-free
+  normalization artifact and the provenance record are done and tested
+  (40 unit tests); the `scripts/extract_patches.py` scene loop still needs the
+  Landsat archive and is the next code task.
+  `training-holdout-invariant` IMPLEMENTED in code
   (`monitor/holdout.py`, `scripts/build_holdout_manifest.py`, wired into
   `train_main.py`, 37 unit tests green with synthetic manifests) — the frozen
   manifest still needs ONE user run on the data machine
