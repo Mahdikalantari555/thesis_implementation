@@ -195,6 +195,11 @@ two experiments.
   "no parallel architecture trials" prohibition for THIS program only. Architecture source:
   `research/Architecture_Selection_for_Self_Supervised_Spatiotemporal_Anomaly.md` (2D CNN stem →
   per-location GRU, prediction primary + masked-recon aux, ~90k params, no pooled latent).
+  Progress 2026-11-16: `training-holdout-invariant` IMPLEMENTED in code
+  (`monitor/holdout.py`, `scripts/build_holdout_manifest.py`, wired into
+  `train_main.py`, 37 unit tests green with synthetic manifests) — the frozen
+  manifest still needs ONE user run on the data machine
+  (`python scripts/build_holdout_manifest.py --archive-end 2026-09-10`).
   Execution order: 0 `training-holdout-invariant` (STANDING invariant, owner
   2026-11-15: holdout farms/dates frozen BEFORE implementation, fail-closed in
   every training path, pixel-level included) → 1 `patch-data-pipeline` (patches.zarr) → 2 `patch-level-controlled-trial`

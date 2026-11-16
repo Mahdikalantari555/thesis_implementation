@@ -14,6 +14,10 @@ Full single seed::
 What it does
 ------------
 - Loads the locked splits (hash-verified) and slices train+dev only.
+- Asserts the frozen holdout manifest (hash-verified) before the first batch:
+  no holdout farm or holdout-period cycle may reach training — fail-closed
+  (change training-holdout-invariant; manifest sha recorded in the run
+  manifest).
 - Fits train-only robust normalization (per band × phase bin).
 - Trains the causal model with masked reconstruction of observed bins
   (no injected-anomaly pretext), early stopping on dev masked reconstruction
@@ -36,6 +40,7 @@ import numpy as np
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
+from ssl_anomaly.monitor import holdout as mholdout  # noqa: E402
 from ssl_anomaly.monitor import inputs as minputs  # noqa: E402
 from ssl_anomaly.monitor import models as mmodels  # noqa: E402
 from ssl_anomaly.monitor import protocol as mproto  # noqa: E402
@@ -94,6 +99,25 @@ def main(argv: list[str] | None = None) -> int:
     manifest = msplits.load_splits_locked()
     data = minputs.load_masked_cycles()
     sel = mproto.select_splits(data, manifest, splits=("train", "dev"))
+
+    # ---- Standing holdout invariant (training-holdout-invariant) ----------
+    # Fail-closed: the frozen manifest is hash-verified and every cycle about to
+    # be seen by this training path is checked against it BEFORE the first
+    # batch. A violation aborts training with the offending (field, cycle)
+    # pairs named; it is never a warning.
+    holdout_manifest = mholdout.load_holdout_manifest()
+    mholdout.assert_train_only(
+        [int(f) for f in sel["field_ids"]],
+        list(sel["cycle_keys"]),
+        [str(d) for d in sel["start_dates"]],
+        manifest=holdout_manifest,
+        context=f"train_main.py(model={args.model}, seed={args.seed})",
+    )
+    n_holdout_farms = len(set(int(f) for f in sel["field_ids"])
+                         & set(holdout_manifest["holdout_farms"]))
+    print(f"[holdout] manifest {holdout_manifest['manifest_sha256'][:12]}… verified; "
+          f"0 holdout farms / cycles in the training inputs")
+
     is_train = np.array([k in set(manifest["cycles"]["train"]) for k in sel["cycle_keys"]])
     X_all, M_all = sel["X"], sel["M"]  # raw values + observation masks
     if args.no_lst:
@@ -126,6 +150,8 @@ def main(argv: list[str] | None = None) -> int:
     minputs.save_norm(stats, norm_path, meta={
         "run_id": run_id, "model_id": args.model, "seed": args.seed,
         "n_train_cycles": n_train, "splits_locked_sha256": manifest["manifest_sha256"],
+        "holdout_manifest_sha256": holdout_manifest["manifest_sha256"],
+        "n_holdout_farms": n_holdout_farms,
     })
 
     z_all = minputs.apply_norm(stats, X_all, M_all)
