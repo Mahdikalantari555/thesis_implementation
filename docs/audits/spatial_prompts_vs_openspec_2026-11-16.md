@@ -326,3 +326,48 @@ that already exists.
 - Neither prompt is "applied" in code: all 13 changes are proposals, all tasks open.
   Fixing A1–A3 in the specs **before** implementation is cheap; fixing them after the
   PoC runs is not, because they change what the first comparison table means.
+
+---
+
+## 6. Amendments applied (2026-11-16, same session)
+
+All amendments below are **specification-only** — no code, no runs, no
+change of any recorded number. Nothing has been applied to code.
+
+| Amendment | Where it landed | Gap closed |
+|---|---|---|
+| **A1** R0.5 zonal distribution statistics (`std`, `p10`, `iqr`, existing `stats.zarr`; `b1_dist`, `b0_dist`, `p10`-only path-max; regression guard that median-only reproduces today's `b1`) + the three-row R0/R0.5/R1 structure | `compare-spatial-representation-strategies`: proposal, design §R0.5, spec req. "Zonal distribution-statistics representation (R0.5)", tasks §2 | GAP-1 (+1.14, 1.15, 1.21) |
+| **A2a** Farm-boundary isolation requirement + tests (`M_in = pixel_valid ∧ in_field`; out-of-field perturbation invariance; GroupNorm/dilation justified under the invariance test) | `patch-level-controlled-trial`: spec req. "Farm-boundary isolation of patch inputs and scores", tasks 1.1b | GAP-8 |
+| **A2b** Basis labelling (farm-local vs population-ranked) + farm-local default + independence tests | new change `farm-local-anomaly-scoring`; `patch-scoring-ensemble` spec req. "Scoring-basis labelling and farm-local default" + tasks 2.4–2.6 | GAP-10 |
+| **A3** Per-field shrunk σ arm (`w_f = n_f/(n_f+κ_σ)`, floor, fallback order, history tiers), no retraining; the 223/370 limitation stated in-spec | `farm-local-anomaly-scoring` spec req. "Per-field standardised scoring arm", tasks §2 | GAP-9 |
+| **A4** Heterogeneity battery: static-pattern control, white-noise null (diagnostic only, excluded from every gate), per-pixel alarm frequency | `compare-spatial-representation-strategies` spec req. "Heterogeneity and noise disambiguation battery", design, tasks §3 | GAP-3 (1.9, 1.11) |
+| **A5** R0-subset re-score on the shared evaluation panel + explicit training-set-size confound | `compare-spatial-representation-strategies` spec (ladder req. + scenario "Reused baselines are paired honestly"), tasks 2.5 | GAP-2 |
+| **A6** Extent sweep {0.1, 0.3, 0.6, 1.0} + per-severity detectability-crossing table | `compare-spatial-representation-strategies` spec req. "Extent axis and detectability crossing", tasks §4; applier parameterised in `patch-level-controlled-trial` task 2.3 | GAP-6, GAP-5 |
+| **A7** Resolution arithmetic as a required report field | `compare-spatial-representation-strategies` spec req. "Spatial resolution is a reported quantity", design §Resolution arithmetic, task 8.2 | GAP-4 |
+| **A8** Ratoon/variety cell in E4; scale-stratum question separated into the new change | `patch-full-run-and-ablations` tasks 2.3 + spec; `farm-local-anomaly-scoring` spec req. "Optional agronomic stratum for scaling", tasks §3 | GAP-7 |
+| **A9** Farm-level anomaly summary object (area fraction, components, extent in ha, centroid, severity, persistence) | `farm-local-anomaly-scoring` spec req. "Farm-level anomaly summary", tasks §4 | GAP-11 |
+| — | Indicator z-unit labelled population-referenced + farm-own variant | `patch-independent-indicators` spec + task 1.2 | GAP-10 (item 4) |
+| — | Missing `.openspec.yaml` for `predictive-ssl-controlled-trial` added (it was the only change without one) | `openspec/changes/predictive-ssl-controlled-trial/.openspec.yaml` | hygiene |
+
+### Structural validation performed
+
+No `openspec` CLI is available offline in this environment (`npx
+@openspec/cli` cannot resolve), so the delta format was validated with a
+script: every active change has `proposal.md`, `design.md`, `tasks.md`,
+`.openspec.yaml` and at least one `specs/<capability>/spec.md` beginning
+with `## ADDED Requirements`; every requirement has at least one scenario;
+every scenario has `WHEN` and `THEN`; every `tasks.md` uses numbered
+`- [ ]` items. Result: **0 problems across 14 changes**.
+
+### What was deliberately NOT changed
+
+- No task was checked off, no change archived, no code written — the
+  program is still specification-only, and A1–A9 all attach to work that has
+  not started, so nothing is re-done.
+- The `predictive-ssl-controlled-trial` gates, the severity protocol, the
+  locked splits/holdout manifest, the injection sets and every recorded
+  finding number are untouched.
+- Prompt-1 requirement 1.5 (a 20–30-farm panel) is **not** reproduced
+  literally: the PoC's ~100-field subset / 38-field dev panel is kept, now
+  with the confound stated and the R0-subset pairing added. Recorded as a
+  deliberate deviation rather than silently narrowed.

@@ -47,6 +47,40 @@ SHALL be read only by the locked final-test path.
   improves, and otherwise the pixel-wise variant continues with the
   negative recorded
 
+### Requirement: Farm-boundary isolation of patch inputs and scores
+
+The patch arms SHALL treat the farm polygon as the analysis boundary: values
+of pixels with `in_field = 0` (padding and neighbouring fields inside the
+field's bounding box) SHALL be masked — never passed to the stem as values —
+so that the CNN stem consumes `concat[X·M_in, M_in]` with
+`M_in = pixel_valid ∧ in_field`, and no convolution, norm, or aggregation
+SHALL be able to mix observations from different farms. The score of an
+in-field pixel SHALL be invariant to any change in out-of-field or
+other-field pixels inside the same 32×32 patch. The patch arm's spatial
+modules (per-location GRU, GroupNorm, the R3a dilation branches) are
+individually justified: GroupNorm is retained because masked pixels corrupt
+batch statistics (and, independently, because it carries no cross-field
+state); the temporal module runs per pixel location with no spatial
+coupling; the multi-scale dilation variant is enabled only under the
+invariance test above. Adjacent farms SHALL NOT be treated as spatially
+connected even where their boundaries touch.
+
+#### Scenario: Out-of-field pixels cannot influence an in-field score
+
+- **WHEN** the values of pixels with `in_field = 0` are perturbed, or a
+  synthetic neighbouring field is placed inside the patch's bounding box
+- **THEN** the per-pixel scores of all in-field pixels are byte-identical,
+  and a regression test enforces this for the stem, the multi-horizon heads
+  and the R3a dilation variant
+
+#### Scenario: The mask is the boundary
+
+- **WHEN** a patch contains a neighbouring field's pixels inside the stored
+  bounding box
+- **THEN** those values never reach any model computation (masked, not
+  zero-as-observed), and the in-field pixel count reported per patch equals
+  the polygon mask's pixel count
+
 #### Scenario: Identical-condition comparability
 
 - **WHEN** the severity protocol runs for the patch arms and the existing

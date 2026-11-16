@@ -25,6 +25,20 @@
 - [ ] 2.3 M3: POT declustering (gap ≤ 2) event-FAR as a required column in
       every arm report; retrofit to the existing report writers.
 
+## 2b. Scoring basis (delegated from farm-local-anomaly-scoring)
+
+- [ ] 2.4 Declare the basis tier of every component (`s_pred`, `s_rec`,
+      `s_lat` = locally anchored; `s_hyb`, `z_f(t)`, common-mode subtraction
+      = population-ranked) and add `basis` as an axis of the 3.1 selection
+      matrix; unit test that a component without a declared basis fails the
+      report build.
+- [ ] 2.5 Enumeration guard: `s_hyb` / `z_f(t)` may only enter the default
+      score if the farm-local alternatives lose under the pre-registered
+      rule — the comparison is recorded, never implicit.
+- [ ] 2.6 Per-field σ arm (`--sigma-basis farmlocal|shrunk`) evaluation is
+      owned by `farm-local-anomaly-scoring`; this change only consumes its
+      `basis` labels in the reports.
+
 ## 3. Selection + reports
 
 - [ ] 3.1 Pre-registered selection matrix (components × aggregation rules ×

@@ -188,7 +188,8 @@ two experiments.
      handed off 2026-11-14) → `trial_part_b_severity.py` → A/C/D → `trial_gates.py` → finding 22.
   Advisor OQ6/A3 sign-off still applies before any retraining decision beyond this trial's scope.
 
-- **D3. Patch-level program (created 2026-11-15; 10 changes PROPOSED, all valid, NONE applied).**
+- **D3. Patch-level program (created 2026-11-15; 11 changes PROPOSED, all valid, NONE applied;
+  2026-11-16 audit added `farm-local-anomaly-scoring` and extended the comparison study).**
   Owner directive (notes.md 2026-11-15 + validation guide same day): add patch-level analysis,
   subset-first, with runtime estimation + checkpoint/resume built in; the owner request AMENDS the
   "no parallel architecture trials" prohibition for THIS program only. Architecture source:
@@ -198,8 +199,16 @@ two experiments.
   2026-11-15: holdout farms/dates frozen BEFORE implementation, fail-closed in
   every training path, pixel-level included) → 1 `patch-data-pipeline` (patches.zarr) → 2 `patch-level-controlled-trial`
   (subset PoC, gates G1–G5, finding 23) → 3 `compare-spatial-representation-strategies`
-  (representation ladder R0 zonal / R1 patch-32 / R2 sub-crops / R3 multi-scale; gated on PoC
-  gates; owns the scale sweep delegated from E5; finding 24) + `patch-scoring-ensemble` (E8 + C1/C2/M3) +
+  (representation ladder R0 zonal mean / **R0.5 zonal distribution statistics (std, p10, iqr —
+  already in stats.zarr, no training)** / R1 patch-32 / R2 sub-crops / R3 multi-scale, plus the
+  heterogeneity battery (static-pattern control, white-noise null, per-pixel alarm frequency), the
+  extent sweep {0.1,0.3,0.6,1.0}, the paired detectability-crossing table and required 30 m
+  resolution arithmetic; gated on PoC gates; owns the scale sweep delegated from E5; finding 24) +
+  `patch-scoring-ensemble` (E8 + C1/C2/M3; basis labels) +
+  `farm-local-anomaly-scoring` (NEW 2026-11-16: farm-local vs population-ranked basis labelling,
+  per-field shrunk σ arm, cross-farm independence tests, ratoon/variety scale strata, farm-level
+  anomaly summary; answers the owner's "compare each patch with the same farm's own history"
+  requirement) +
   `gradual-severity-shape` (3rd temporal shape + secondary peak/recovery shapes) → 4
   `patch-contamination-absorption` (E7) +
   `patch-full-run-and-ablations` (scale-up + E2–E6 + TCN/Mamba challengers + SSL-off control +
@@ -211,6 +220,19 @@ two experiments.
 
 ### Resolved
 
+- **2026-11-16 — spatial prompts audited against the written changes (agent):** the owner's two
+  spatial research prompts (controlled representation comparison; farm-internal detection) were
+  mapped requirement-by-requirement in `docs/audits/spatial_prompts_vs_openspec_2026-11-16.md`.
+  Outcome: prompt 1 ≈80% covered, prompt 2 ≈60% covered, nothing implemented (all changes open).
+  Amendments applied the same day: `compare-spatial-representation-strategies` gained R0.5
+  distribution statistics, the heterogeneity/noise battery, the extent axis, the crossing table,
+  honest R0 pairing and the resolution-report requirement; `patch-level-controlled-trial` gained
+  the farm-boundary input-masking requirement + invariance tests; `patch-scoring-ensemble` gained
+  basis labelling with a farm-local default; `patch-independent-indicators` gained the
+  population-referenced indicator-z label and a farm-own variant; `patch-full-run-and-ablations`
+  E4 gained the ratoon/variety cell; and the new change `farm-local-anomaly-scoring` owns the
+  per-field σ arm, independence tests and farm-level summary. Remaining known limits recorded in
+  the audit (223/370 fields have ≥2 cycles ⇒ partial pooling is forced, not chosen).
 - **2026-11-15 — B6 (five-shape protocol) DECIDED (user):** recommendation adopted —
   peak-disruption + recovery-disruption promoted as pre-registered SECONDARY diagnostic shapes
   (folded into `gradual-severity-shape`; primary gates stay on the index-drop family, no

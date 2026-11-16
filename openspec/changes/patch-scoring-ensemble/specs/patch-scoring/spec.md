@@ -50,3 +50,32 @@ as the required FAR accounting for every arm (M3).
 - **THEN** exactly one rule is frozen into the operational configuration,
   the comparison table is committed under reports/, and the loser stays
   available as a reported variant only
+
+### Requirement: Scoring-basis labelling and farm-local default
+
+Every component of the ensemble SHALL carry its scoring basis as declared by
+`farm-local-anomaly-scoring`: `s_pred`, `s_rec` and `s_lat` are locally
+anchored (a farm's residual divided by frozen pooled scales); `s_hyb`
+(within-phenophase percentile ranks over the dev population), the
+persistence `z_f(t)` robust z against all fields at the same phenophase, the
+date-wise cross-field common-mode subtraction and the indicator across-field
+z-unit are population-ranked. The selection matrix SHALL include `basis` as
+a pre-registered axis, the frozen final configuration SHALL use a farm-local
+basis, and any population-ranked component admitted to a report SHALL state
+the cross-farm values it reads. `s_hyb` and `z_f(t)` therefore SHALL NOT be
+silently combined into the default score.
+
+#### Scenario: Population ranking is visible, not default
+
+- **WHEN** the component selection matrix is pre-registered
+- **THEN** it lists each component with its basis tier, farm-local
+  combinations are enumerated separately from population-ranked ones, and a
+  component whose score depends on other farms' contemporaneous values is
+  never the unflagged default
+
+#### Scenario: Cross-farm dependence is stated
+
+- **WHEN** a report contains a population-ranked component
+- **THEN** the report names the cross-farm read (percentile reference
+  population, cross-field robust z, or date-wise cross-field median) and the
+  independence test that the component is expected to fail

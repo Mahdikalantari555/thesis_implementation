@@ -6,6 +6,13 @@
       (perturbing future bins changes nothing); state-carry test (GRU state
       unchanged where pixel_valid = 0); NaN safety; GroupNorm regression
       test on degenerate masked batches (no BatchNorm anywhere).
+- [ ] 1.1b Farm-boundary isolation tests (spec "Farm-boundary isolation of
+      patch inputs and scores"): stem input is `concat[X·M_in, M_in]` with
+      `M_in = pixel_valid ∧ in_field` (asserted on a patch containing a
+      neighbouring field inside the bbox); perturbing out-of-field values
+      leaves every in-field per-pixel score byte-identical; the same for
+      the R3a dilation variant; in-field pixel count equals the polygon
+      mask's count.
 - [ ] 1.2 `src/ssl_anomaly/models/patch_cnn_gru.py`: stem + per-location
       GRU + k=1–3 prediction heads + masked-recon aux head; param-count
       assertion ≈90k ±20% with a hard ≤500k gate; CNN-off flag =
@@ -36,7 +43,12 @@
       exported for localization metrics.
 - [ ] 2.3 Patch-tensor injection applier in `monitor/perturbations.py`:
       same S1–S6 ladder × {acute, persistent} × {ndvi, savi}, footprint
-      1.0 (protocol) / 0.3 (localization probe), the existing
+      1.0 (protocol) / 0.3 (localization probe) — parameterised so the
+      extent sweep {0.1, 0.3, 0.6, 1.0} of
+      `compare-spatial-representation-strategies` needs no code change; a
+      `spatial="white"` diagnostic mode (random in-field pixel subset,
+      seed-fixed, same mean footprint) used ONLY by that change's noise
+      null and excluded from every severity gate; the existing
       sum-preserving red/nir SAVI solver per pixel; injection-hash equality
       test against the field-level protocol sets.
 - [ ] 2.4 eval_dev.py: scorer choices patch_cnn_gru / patch_pixelwise;

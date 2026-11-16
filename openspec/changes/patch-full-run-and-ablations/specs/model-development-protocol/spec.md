@@ -12,7 +12,9 @@ standard error go to the simpler/faster variant), covariate additions
 only if it cuts false alarms at fixed recall, both conditioned and
 unconditioned reported), inner-buffer and burn-in variants (S=16 tiled
 variant optional, off the critical path), LST-off channels checkpoint
-(reused by the independent-indicators change), and locally re-estimated
+(reused by the independent-indicators change), agronomic strata (ratoon
+number / variety group from the cycle table, absent from the current
+covariate sets) as one covariate cell, and locally re-estimated
 L8↔L9 band offsets applied vs not applied. Every run SHALL record params,
 MACs, minutes/epoch, peak RAM, peak VRAM and inference seconds per
 field-cycle in the manifest and reports, with complete provenance (seeds,
