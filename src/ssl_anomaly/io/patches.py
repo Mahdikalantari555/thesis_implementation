@@ -24,9 +24,10 @@ import hashlib
 import json
 import logging
 import warnings
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 import numpy as np
 
@@ -137,7 +138,7 @@ def field_window(
     height, width = row1 - row0, col1 - col0
     if height > size or width > size:
         raise ValueError(
-            f"field bounding box {height}×{width} px exceeds the {size}×{size} patch. "
+            f"field bounding box {height} x {width} px exceeds the {size} x {size} patch. "
             "The 32 px patch was sized from the measured field distribution (median 16.7, "
             "max 19.6 px); a larger field means either --patch-size must grow or the "
             "geometry memo is out of date — do not silently crop."
@@ -394,12 +395,12 @@ def create_store(
         else:
             # 1-D arrays (field_ids): one chunk, matching the array's rank.
             chunks = tuple(int(s) for s in shape)
-        opts = dict(
-            shape=tuple(int(s) for s in shape),
-            dtype=dtype,
-            chunks=chunks,
-            fill_value=(float("nan") if np.dtype(dtype).kind == "f" else 0),
-        )
+        opts = {
+            "shape": tuple(int(s) for s in shape),
+            "dtype": dtype,
+            "chunks": chunks,
+            "fill_value": (float("nan") if np.dtype(dtype).kind == "f" else 0),
+        }
         # zarr 3 exposes create_array; zarr 2 only create_dataset.
         creator = getattr(root, "create_array", None)
         if creator is not None:
@@ -438,7 +439,7 @@ def validate_store(root, *, expected_fields: int | None = None) -> dict:
     if n_ch != N_CHANNELS:
         raise ValueError(f"values channel axis is {n_ch}, expected {N_CHANNELS}")
     if size != size2:
-        raise ValueError(f"patch is not square: {size}×{size2}")
+        raise ValueError(f"patch is not square: {size} x {size2}")
     if expected_fields is not None and n_fields != expected_fields:
         raise ValueError(f"store holds {n_fields} fields, registry says {expected_fields}")
 
@@ -493,7 +494,7 @@ def fit_patch_norm(
         raise ValueError(f"{len(sids)} sensor ids for {len(vals)} rows")
 
     out: dict[str, dict[str, list[float]]] = {}
-    for sid in sorted(set(int(s) for s in sids) | {SENSOR_IDS["unknown"]}):
+    for sid in sorted({int(s) for s in sids} | {SENSOR_IDS["unknown"]}):
         sel = sids == sid
         per_channel = {}
         for ci, name in enumerate(channel_order):
@@ -530,7 +531,7 @@ def build_patch_norm(
     import numpy as np
 
     field_ids = np.asarray(root["field_ids"][:], dtype=np.int64)
-    want = set(int(f) for f in train_field_ids)
+    want = {int(f) for f in train_field_ids}
     rows = [i for i, f in enumerate(field_ids) if int(f) in want]
     if not rows:
         raise ValueError("no train fields present in the store — refusing to fit norm stats")
@@ -696,19 +697,19 @@ __all__ = [
     "BIN_DAYS",
     "CHANNELS",
     "DEFAULT_PATCH_SIZE",
-    "FieldWindow",
     "MANIFEST_NAME",
     "MAX_CYCLE_DAYS",
+    "NORM_STATS_NAME",
     "N_BINS",
     "N_CHANNELS",
-    "NORM_STATS_NAME",
     "PATCH_SIZE",
     "PATCH_STORE_NAME",
     "PROVENANCE_NAME",
-    "Provenance",
     "QA_BITS_USED",
     "SENSOR_IDS",
     "SENSOR_NAMES",
+    "FieldWindow",
+    "Provenance",
     "aggregate_bin",
     "build_patch_norm",
     "create_store",

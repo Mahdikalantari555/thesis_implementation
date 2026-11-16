@@ -15,11 +15,17 @@
 
 ## 2. R0.5 zonal distribution statistics (rule-based, no training)
 
-- [ ] 2.1 Channel builder: per-(field, cycle, bin) `{median, std, p10, iqr}`
+- [x] 2.1 Channel builder: per-(field, cycle, bin) `{median, std, p10, iqr}`
       per band on the 36-bin grid, read from the EXISTING `stats.zarr` via
       `StatsZarrReader.get_stat` (no extraction, no new store); unit tests
       on a synthetic cube (bin aggregation matches `nanpercentile` on
       hand-built input, NaN-as-absent discipline, channel order).
+      → `src/ssl_anomaly/monitor/zonal_dist.py` (`channel_specs`,
+      `stat_channels`, `bin_cycle`), presets `level` (8 ch, = b1),
+      `lower` (8 ch, p10 only), `spread` (14 ch), `dist` (45 ch). No
+      std-of-NDVI channel is fabricated (a ratio's std is not the ratio of
+      stds) — documented and test-enforced. 27 tests in
+      `tests/unit/test_zonal_dist.py`.
 - [ ] 2.2 `StatsZarrReader._validate_schema` accepts the extra statistics
       without relaxing the field/date/band assertions; a test proves the
       median path is byte-identical to today after the change.
@@ -28,13 +34,27 @@
       `p10`-only path-max variant; each scored through the unchanged alarm
       rule; unit test that the median-only configuration reproduces the
       current `b1` numbers exactly (regression guard).
+      Partly done: `fit_score_b1` + the `level`-preset identity test
+      (`test_fit_score_b1_reproduces_the_reference_path`, plus the CLI's
+      `--self-check`) prove the b1 reproduction. **Still open:** the
+      `b0_calendar` DOY variant and the `p10`-only path-max scorer.
 - [ ] 2.4 Evaluation: R0.5 arms on the identical evaluation panel,
       injection sets and calibration budgets as the patch arms; MDM80 per
       temporal shape + event-FAR + delay reported in the comparison table.
+      The calibration half is done (`scripts/run_zonal_dist_study.py`:
+      τ at the 5 % cycle-FAR budget on dev clean cycles through the
+      unchanged alarm rule, alarm concentration, one markdown table, and a
+      `--self-check` that records `max|Δscore|` between the `level` arm and
+      the reference `b1` path). **Still open:** the severity/MDM80 sweep,
+      which needs the locked evaluation panel + injection machinery (user
+      data).
 - [ ] 2.5 R0-subset re-score: existing R0 arms scored on exactly the PoC
       evaluation panel with the identical injections, so the representation
       effect is not confounded with training-set size; confound stated next
       to any row that still reuses an all-train-field result.
+      **Precondition landed:** `build_distribution_cycles(..., reference_keys=)`
+      refuses to build unless the R0.5 cycle population equals the reference
+      arm's, cycle for cycle — the pairing the re-score depends on.
 
 ## 3. Heterogeneity + noise battery (analysis only, no retraining)
 

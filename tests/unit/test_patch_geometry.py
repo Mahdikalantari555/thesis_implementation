@@ -73,7 +73,7 @@ def test_large_field_offcentre_bbox_is_handled() -> None:
 
 def test_field_larger_than_patch_is_a_hard_error() -> None:
     mask = rect_mask(shape=(80, 80), r0=0, c0=0, h=40, w=40)
-    with pytest.raises(ValueError, match="exceeds the 32×32 patch"):
+    with pytest.raises(ValueError, match="exceeds the 32 x 32 patch"):
         P.field_window(mask, size=32)
 
 

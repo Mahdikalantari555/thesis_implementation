@@ -33,8 +33,9 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -255,8 +256,8 @@ def train_only_mask(
     fields = np.asarray(list(field_ids), dtype=np.int64)
     mask = np.ones(fields.shape, dtype=bool)
 
-    holdout_farms = set(int(f) for f in manifest.get("holdout_farms", ()))
-    known_farms = set(int(f) for f in manifest.get("known_farm_ids", ()))
+    holdout_farms = {int(f) for f in manifest.get("holdout_farms", ())}
+    known_farms = {int(f) for f in manifest.get("known_farm_ids", ())}
     if holdout_farms:
         mask &= ~np.isin(fields, list(holdout_farms))
     if known_farms:
@@ -321,8 +322,8 @@ def assert_train_only(
             f"cycle_keys length {len(cycle_keys)} != field_ids length {len(fields)}"
         )
 
-    holdout_farms = set(int(f) for f in manifest.get("holdout_farms", ()))
-    known_farms = set(int(f) for f in manifest.get("known_farm_ids", ()))
+    holdout_farms = {int(f) for f in manifest.get("holdout_farms", ())}
+    known_farms = {int(f) for f in manifest.get("known_farm_ids", ())}
     date_start = manifest.get("holdout_date_start")
     archive_end = manifest.get("archive_end_date")
 
