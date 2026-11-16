@@ -45,8 +45,8 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 from ssl_anomaly.monitor import inputs as minputs  # noqa: E402
 from ssl_anomaly.monitor import models as mmodels  # noqa: E402
 from ssl_anomaly.monitor import normal_bank as nbank  # noqa: E402
-from ssl_anomaly.monitor import perturbations as mpert  # noqa: E402
 from ssl_anomaly.monitor import patch_scores as mpscores  # noqa: E402
+from ssl_anomaly.monitor import perturbations as mpert  # noqa: E402
 from ssl_anomaly.monitor import protocol as mproto  # noqa: E402
 from ssl_anomaly.monitor import scoring as mscoring  # noqa: E402
 from ssl_anomaly.monitor import severity_table as sev  # noqa: E402

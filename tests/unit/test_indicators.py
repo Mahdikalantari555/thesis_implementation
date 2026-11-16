@@ -116,7 +116,7 @@ def test_unit_must_be_declared():
 
 
 def test_across_field_unit_requires_the_population():
-    with pytest.raises(ValueError, match="needs the .N, T. population"):
+    with pytest.raises(ValueError, match=r"needs the \(N, T\) population"):
         I.indicator_z(_series(), unit="across_field")
 
 

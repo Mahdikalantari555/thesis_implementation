@@ -6,11 +6,11 @@ data-free and unit-testable; the scripts that touch the archive only call it.
 The study's whole point is that a comparison table is only honest if the
 comparisons are paired and the arithmetic is stated. So this module owns:
 
-* :func:`spatial_support` — the fixed 30 m arithmetic (1 px = 0.09 ha, a 16×16
+* :func:`spatial_support` — the fixed 30 m arithmetic (1 px = 0.09 ha, a 16x16
   crop = 23 ha) and the minimum resolvable anomaly per representation, so no
   row can be published without its spatial support.
 * :func:`geometry_memo` — the measured field-size distribution that justifies
-  excluding the 64×64 window (median side 16.7 px, max 19.6 px).
+  excluding the 64x64 window (median side 16.7 px, max 19.6 px).
 * :func:`crossing_table` — the four-cell detectability crossing (patch-only /
   zonal-only / both / neither) per severity level with Wilson CIs and an exact
   two-sided sign test over the discordant pairs, because "patches detect what
@@ -45,8 +45,8 @@ HA_PER_PX = (GSD_M ** 2) / 10_000.0            # 0.09 ha
 CAPACITY_FLAG = 0.20                           # >±20 % deviation is flagged
 
 # Measured field-size distribution of the 490-field archive: median field side
-# 16.7 px, max 19.6 px. The 64×64 window is excluded by default because a
-# patch of that size would be 3.8× the median field, i.e. mostly neighbours.
+# 16.7 px, max 19.6 px. The 64x64 window is excluded by default because a
+# patch of that size would be 3.8x the median field, i.e. mostly neighbours.
 FIELD_SIDE_MEDIAN_PX = 16.7
 FIELD_SIDE_MAX_PX = 19.6
 EXCLUDED_WINDOW = 64
@@ -56,7 +56,7 @@ REPRESENTATIONS: tuple[str, ...] = ("R0", "R0.5", "R1", "R2", "R3")
 
 
 def spatial_support(size_px: int, *, gsd_m: float = GSD_M) -> dict:
-    """Spatial support of an ``size_px × size_px`` window, in px/m/ha."""
+    """Spatial support of an ``size_px x size_px`` window, in px/m/ha."""
     n = int(size_px)
     if n <= 0:
         raise ValueError(f"window size must be positive, got {size_px}")
@@ -76,8 +76,8 @@ def geometry_memo(*, median_side_px: float = FIELD_SIDE_MEDIAN_PX,
     """The recorded geometry decision (spec: measured, not assumed).
 
     A window is admissible only when the largest field still fits inside it;
-    a 32 px window has 1.63× margin over the largest measured field and is the
-    locked default. The 64 px window is 3.27× the median field — nearly all of
+    a 32 px window has 1.63x margin over the largest measured field and is the
+    locked default. The 64 px window is 3.27x the median field — nearly all of
     it would be neighbours — so it stays behind an explicit flag.
     """
     margin32 = 32 / max_side_px - 1.0
@@ -289,7 +289,7 @@ def static_pattern_normalizer(
 
     The per-pixel median across that field's clean cycles is the chronic
     offset; subtracting it asks "is this pixel anomalous FOR THIS PIXEL", as
-    opposed to the population-σ question. The scale is floored at the
+    opposed to the population-sigma question. The scale is floored at the
     ``floor_quantile`` percentile of the field's own per-pixel MAD so a
     suspiciously quiet pixel cannot manufacture infinite z scores.
     """
@@ -429,7 +429,7 @@ def render_comparison_table(rows: list[ComparisonRow], *, shapes: tuple[str, ...
             + ", ".join(flagged)
         )
     lines.append(
-        f"Spatial arithmetic: {int(GSD_M)} m GSD ⇒ 1 px = {HA_PER_PX:.2f} ha; a 16×16 crop "
+        f"Spatial arithmetic: {int(GSD_M)} m GSD ⇒ 1 px = {HA_PER_PX:.2f} ha; a 16x16 crop "
         f"= {spatial_support(16)['side_m']:.0f} m ≈ {spatial_support(16)['area_ha']:.0f} ha; "
         f"median field side {FIELD_SIDE_MEDIAN_PX} px. A {int(GSD_M)} m pixel bounds every "
         "localization claim regardless of model."

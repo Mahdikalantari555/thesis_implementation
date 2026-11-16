@@ -64,7 +64,7 @@ def band_occlusion(
 ) -> dict:
     """Per-band score drop when that band is replaced by its in-field median.
 
-    ``delta[c] = score(original) − score(band c occluded)``: a positive value
+    ``delta[c] = score(original) - score(band c occluded)``: a positive value
     means band c SUPPORTS the alarm. The baseline is the band's own in-field
     median (spec: "median baseline"), which keeps the occlusion physically
     plausible — occluding to zero would create an impossible reflectance.
@@ -116,7 +116,7 @@ def temporal_occlusion(
 ) -> dict:
     """Per-bin-window score drop (windows of ``window`` bins, stride 1).
 
-    ``delta[start]`` = score(original) − score(window ``start..start+window``
+    ``delta[start]`` = score(original) - score(window ``start..start+window``
     replaced by ``baseline``), so a positive value marks a window that
     SUPPORTS the alarm. Note the interaction: a window overlapping only part
     of a real anomaly can INCREASE the score (the series becomes jagged), so
@@ -231,7 +231,7 @@ def gradient_x_input(
     mask: np.ndarray,
     torch_score_fn,         # (tensor, mask_tensor) -> scalar tensor
 ) -> dict:
-    """Gradient × input attribution, ``(T, C, S, S)``.
+    """Gradient x input attribution, ``(T, C, S, S)``.
 
     Attributions are taken on the MASKED input, so out-of-field padding can
     never accrue attribution (the farm-boundary invariant extends to the
@@ -285,7 +285,7 @@ def gradient_finite_difference_agreement(
     values: np.ndarray,
     mask: np.ndarray,
     score_fn,               # numpy score function
-    gradient: np.ndarray,   # (T, C, S, S) ∂score/∂x — NOT grad×input
+    gradient: np.ndarray,   # (T, C, S, S) ∂score/∂x — NOT gradxinput
     *,
     n_probe: int = 8,
     eps: float = 1e-2,
@@ -484,7 +484,7 @@ def attribution_sample_plan(
 ) -> dict:
     """Stratified, hash-recorded sample of events for attribution.
 
-    Stratified by ``family`` × ``severity`` so a rare family cannot be
+    Stratified by ``family`` x ``severity`` so a rare family cannot be
     represented by one event, and the resulting sample is hashed so the
     selection cannot be revised after the results are seen (the
     pre-registration discipline the spec requires).

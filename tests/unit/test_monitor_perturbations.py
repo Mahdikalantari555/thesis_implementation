@@ -16,7 +16,6 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 from ssl_anomaly.monitor import perturbations as mpert  # noqa: E402
 from ssl_anomaly.monitor import scoring as mscoring  # noqa: E402
 
-
 T, C = 36, 8
 MAD_SCALE = np.full((T, C), 1.4826, dtype=np.float64)  # scale → MAD = 1.0 everywhere
 
@@ -60,7 +59,7 @@ def test_injection_respects_observation_mask() -> None:
 
 
 def test_severity_scales_monotonically() -> None:
-    """A 2×MAD perturbation moves values at least as far as 1×MAD."""
+    """A 2xMAD perturbation moves values at least as far as 1xMAD."""
     x, m = make_cycle()
     r1 = mpert.inject_perturbation(x, m, pert_type="ndvi_drop", onset_bin=10, duration=3, severity=1.0, mad=MAD_SCALE)
     r2 = mpert.inject_perturbation(x, m, pert_type="ndvi_drop", onset_bin=10, duration=3, severity=2.0, mad=MAD_SCALE)
@@ -80,7 +79,7 @@ def test_phenology_delay_never_erases_observations() -> None:
 
 
 def test_mad_sizing_uses_train_stats() -> None:
-    """severity × MAD: with scale=1.4826 (MAD=1), a 1-bin lst_rise adds 1.0 K."""
+    """severity x MAD: with scale=1.4826 (MAD=1), a 1-bin lst_rise adds 1.0 K."""
     x, m = make_cycle()
     before = float(x[12, 7])
     res = mpert.inject_perturbation(x, m, pert_type="lst_rise", onset_bin=12, duration=1, severity=1.0, mad=MAD_SCALE)
@@ -289,7 +288,7 @@ def test_index_drop_floors_at_physical_range_and_records_realized() -> None:
     """A drop larger than the observed value floors at the NDVI physical
     range and the REALIZED delta is recorded (never below range)."""
     x, m = make_veg_cycle()
-    x[12, 0] = -0.7  # degenerate low NDVI: S6's −0.40 crosses the −1.0 floor
+    x[12, 0] = -0.7  # degenerate low NDVI: S6's -0.40 crosses the -1.0 floor
     res = mpert.inject_index_drop(x, m, index="ndvi", onset_bin=12, duration=1, delta=0.40)
     assert res.x[12, 0] == pytest.approx(mpert.NDVI_PHYSICAL_RANGE[0])
     assert res.meta["delta_realized"][0] == pytest.approx(-0.7 - mpert.NDVI_PHYSICAL_RANGE[0])
@@ -346,7 +345,7 @@ def test_savi_solver_floors_physical_range() -> None:
     The sum-preserving solve cannot floor for normal vegetation bins (the
     target SAVI always stays inside the range achievable at the held sum);
     flooring is exercised on a degenerate bright-red bin (bare soil), where
-    S6's −0.40 pushes red past 1.6."""
+    S6's -0.40 pushes red past 1.6."""
     x, m = make_veg_cycle()
     x[10, 3] = 1.55  # bright red (bare-soil signature)
     x[10, 4] = 0.20
@@ -404,7 +403,7 @@ def test_gradual_family_is_registered_as_primary():
     assert set(GRADUAL_RAMP_BINS) == {3, 4, 6}
 
 
-@pytest.mark.parametrize("round_idx,d_expected", list(enumerate(GRADUAL_RAMP_BINS)))
+@pytest.mark.parametrize(("round_idx", "d_expected"), list(enumerate(GRADUAL_RAMP_BINS)))
 def test_gradual_ramp_matches_delta_times_min_one(round_idx, d_expected):
     x = np.zeros((4, 36, 8))
     x[:, :, 0] = 0.70
@@ -465,7 +464,8 @@ def test_acute_and_persistent_metadata_is_unchanged():
     pers = mpert.inject_index_drop_dataset(
         x, m, level_id="S4", family="persistent", index="ndvi",
     )[0]
-    assert acute.meta["n_bins_window"] == 2 and acute.meta["ramp_bins"] is None
+    assert acute.meta["n_bins_window"] == 2
+    assert acute.meta["ramp_bins"] is None
     assert pers.meta["n_bins_window"] == mpert.PERSISTENT_DURATION_BINS
     assert pers.meta["ramp_bins"] is None
     assert acute.meta["ramp_profile"] is None

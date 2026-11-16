@@ -167,12 +167,14 @@ def test_bin_cycle_matches_channel_by_channel_nanmedian() -> None:
     )
     assert out is not None
     x, m = out
-    assert x.shape == (36, 2) and m.shape == (36, 2)
+    assert x.shape == (36, 2)
+    assert m.shape == (36, 2)
     # Every observed bin holds the 15-day median of the raw values.
     b = 0
     sel = (times >= 0) & (times < 15)
     assert x[b, 0] == pytest.approx(float(np.nanmedian(vals[sel])))
-    assert m[b, 0] and m[b, 1]
+    assert m[b, 0]
+    assert m[b, 1]
     assert np.isnan(x[20:, 0]).all(), "bins past the cycle end stay unobserved"
 
 
@@ -183,8 +185,10 @@ def test_bin_cycle_nan_marks_unobserved_bins() -> None:
     out = zd.bin_cycle(chans, ["ndvi_median"], times_days=times,
                        start_day=0, end_day=90, harvest_day=0)
     x, m = out
-    assert np.isnan(x[2, 0]) and not m[2, 0], "a bin with only NaN stays unobserved"
-    assert m[0, 0] and x[0, 0] == pytest.approx(0.5)
+    assert np.isnan(x[2, 0]), "a bin with only NaN stays unobserved"
+    assert not m[2, 0]
+    assert m[0, 0]
+    assert x[0, 0] == pytest.approx(0.5)
 
 
 def test_bin_cycle_rejects_indicators_under_three_observed_bins() -> None:
@@ -406,7 +410,8 @@ def test_calendar_bins_are_in_range_and_monotone_in_day():
     bins = np.arange(zd.N_BINS)
     a = zd.calendar_doy_bins(bins, start_day=0)
     b = zd.calendar_doy_bins(bins, start_day=0)
-    assert a.min() >= 0 and a.max() < zd.N_BINS
+    assert a.min() >= 0
+    assert a.max() < zd.N_BINS
     np.testing.assert_array_equal(a, b)
     # a later cycle start shifts the calendar assignment, never the cycle bins
     c = zd.calendar_doy_bins(bins, start_day=60)
@@ -487,7 +492,7 @@ def test_pathmax_on_lower_still_sees_the_p10_signal():
     ndvi_p10 = names.index("ndvi_p10")
     base = zd.pathmax_scores(z2, [ndvi_p10], cyc["M"])
 
-    cyc2 = {k: v for k, v in cyc.items()}
+    cyc2 = dict(cyc.items())
     cyc2["X"] = cyc["X"].copy()
     cyc2["X"][1, 20, ndvi_p10] -= 1.0
     s2, scorer2 = zd.fit_score_b1(cyc2, train_mask=np.ones(6, bool))

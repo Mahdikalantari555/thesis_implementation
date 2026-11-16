@@ -6,13 +6,13 @@ rather than of rules. So this module produces exactly the interface
 ``DeepCausalScorer.loo_batch`` already produces, and nothing more:
 
     scores  (N, T)        per-bin field score, NaN where no pixel is observed
-    pred    (N, T, C, S, S) per-pixel predictions (for the σ tables and XAI)
+    pred    (N, T, C, S, S) per-pixel predictions (for the sigma tables and XAI)
 
 plus the per-pixel score maps the localization metrics need.
 
 Design decisions that are load-bearing:
 
-* **Per-pixel z² against a FROZEN σ table.** σ is ``1.4826 × MAD`` of the dev
+* **Per-pixel z² against a FROZEN sigma table.** sigma is ``1.4826 x MAD`` of the dev
   residual per (channel, 2-bin phenophase group, sensor), fitted on dev clean
   cycles only and hashed. Fitting on dev (not train) is deliberate: the
   residual scale of a *causal* predictor is a property of the predictor's own
@@ -22,7 +22,7 @@ Design decisions that are load-bearing:
   mean of the largest 20 % of in-field per-pixel z² values. Max = a single
   speckle decides the alarm (the task 3.1 "maximum aggregation rule" is
   rejected for exactly this reason); mean dilutes a 30 %-footprint anomaly by
-  3.3×. Top-20 % keeps a localized anomaly visible while a lone pixel cannot
+  3.3x. Top-20 % keeps a localized anomaly visible while a lone pixel cannot
   alarm.
 * **The in-field mask is the only aggregation domain.** Out-of-field pixels
   are excluded before any statistic, so the farm boundary holds at scoring
@@ -44,7 +44,7 @@ from ..io import patches as P
 # Aggregation: mean of the largest TOP_FRAC share of in-field per-pixel z².
 TOP_FRAC = 0.20
 
-# Phenophase grouping of the σ tables: 36 bins → 18 groups of 2 bins.
+# Phenophase grouping of the sigma tables: 36 bins → 18 groups of 2 bins.
 PHASE_BIN = 2
 
 # The three components declared by the scoring-basis registry (task 2.4 lives
@@ -139,7 +139,7 @@ def fit_patch_sigma(
 
 
 def sigma_table_sha256(sigma: np.ndarray, fallback: np.ndarray, count: np.ndarray) -> str:
-    """Stable hash of the frozen σ table (NaN-safe, dtype-normalized)."""
+    """Stable hash of the frozen sigma table (NaN-safe, dtype-normalized)."""
     import hashlib
 
     h = hashlib.sha256()
@@ -151,7 +151,7 @@ def sigma_table_sha256(sigma: np.ndarray, fallback: np.ndarray, count: np.ndarra
 
 
 def pixel_scores(
-    resid: np.ndarray,       # (N, T, C, S, S) residual (pred − truth) or z
+    resid: np.ndarray,       # (N, T, C, S, S) residual (pred - truth) or z
     obs: np.ndarray,         # (N, T, C, S, S) bool per-channel observation
     sigma: PatchSigmaTable,
     bins: np.ndarray,        # (T,) bin index (0..35)
@@ -230,7 +230,7 @@ def cusum_path(
     *,
     drift: float | None = None,
 ) -> np.ndarray:
-    """One-sided CUSUM of ``score − (kappa + drift)``; (T,), NaN where unseen.
+    """One-sided CUSUM of ``score - (kappa + drift)``; (T,), NaN where unseen.
 
     ``kappa`` is the reference value (the tolerated standardized level); the
     drift term defaults to 0. Alarm when the path exceeds a calibrated ``h``.
@@ -440,19 +440,19 @@ class PatchDeepScorer:
       *bidirectional* encoder causal. ``score_cycle``/``loo_batch`` keep the
       names for interface compatibility and document this.
     * ``scores`` is :func:`field_paths` of :func:`pixel_scores` — per-pixel z²
-      against the FROZEN σ table, aggregated by top-20 % over in-field pixels
+      against the FROZEN sigma table, aggregated by top-20 % over in-field pixels
       only. No cross-farm quantity is read (locally anchored).
     * ``pred_z`` is the per-pixel prediction collapsed to a per-field mean over
       in-field pixels. It exists only because the pipeline's ``z-space``
       bookkeeping expects a ``(T, C)`` prediction; the patch arm's real
-      predictions stay available through :meth:`predict_pixels` for the σ
+      predictions stay available through :meth:`predict_pixels` for the sigma
       tables and the XAI change.
     * The mask used for scoring is ``pixel_valid ∧ in_field`` — derived from
       the STORE, never from the values, so a cloudy bin cannot look
       in-field-observed just because it is finite.
 
-    Fail-closed rules: a channel count that disagrees with the σ table, a
-    missing in-field mask, or a bin count that disagrees with the σ table's
+    Fail-closed rules: a channel count that disagrees with the sigma table, a
+    missing in-field mask, or a bin count that disagrees with the sigma table's
     phenophase grouping all raise instead of silently re-indexing.
     """
 

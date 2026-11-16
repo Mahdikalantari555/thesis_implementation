@@ -1,4 +1,4 @@
-"""Patch scoring: frozen σ, aggregation rule, persistence, basis labelling.
+"""Patch scoring: frozen sigma, aggregation rule, persistence, basis labelling.
 
 Covers ``patch-level-controlled-trial`` tasks 2.1/2.2 and
 ``patch-scoring-ensemble`` tasks 1.3/2.4.
@@ -19,14 +19,14 @@ def _resid(n=4, seed=0, scale=1.0):
     return g.normal(0.0, scale, size=(n, T, C, S, S)), g.random((n, T, C, S, S)) > 0.3
 
 
-# --- σ table --------------------------------------------------------------
+# --- sigma table --------------------------------------------------------------
 def test_sigma_is_mad_scaled_and_positive():
     res, obs = _resid()
     st = PS.fit_patch_sigma(res, obs, np.ones((4, T), dtype=int))
     fin = st.sigma[np.isfinite(st.sigma)]
     assert fin.size > 0
     assert np.all(fin > 0)
-    # ~1.4826 × MAD of a N(0,1) sample ≈ 1.0
+    # ~1.4826 x MAD of a N(0,1) sample ≈ 1.0
     assert 0.7 < float(np.median(fin)) < 1.4
 
 

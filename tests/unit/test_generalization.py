@@ -73,7 +73,7 @@ def test_duplicate_field_across_folds_is_refused(monkeypatch):
     orig = G.pair_blocks_by_adjacency
     monkeypatch.setattr(G, "pair_blocks_by_adjacency",
                         lambda *a, **k: [(0, 0)] + orig(*a, **k)[1:])
-    with pytest.raises(ValueError, match="cannot be paired|held out by folds"):
+    with pytest.raises(ValueError, match=r"cannot be paired|held out by folds"):
         G.build_folds(block_of, xy)
 
 

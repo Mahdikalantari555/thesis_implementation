@@ -12,7 +12,6 @@ import importlib.util
 import json
 from pathlib import Path
 
-import numpy as np
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
@@ -118,7 +117,8 @@ def test_execute_dry_run_prints_the_plan(tmp_path, capsys):
     assert code == 0
     out = capsys.readouterr().out
     assert "would train" in out
-    assert "patch_cnn_gru" in out and "patch_pixelwise" in out
+    assert "patch_cnn_gru" in out
+    assert "patch_pixelwise" in out
 
 
 def test_no_mode_prints_help(tmp_path):

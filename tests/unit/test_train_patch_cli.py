@@ -157,7 +157,7 @@ def test_config_hash_mismatch_refuses_to_resume(env):
 def test_missing_store_is_a_loud_error_with_the_next_step(env, tmp_path):
     _tmp, _store, holdout = env
     tp = _load_train_patch()
-    with pytest.raises(SystemExit, match="extract_patches.py"):
+    with pytest.raises(SystemExit, match=r"extract_patches\.py"):
         tp.main(["--store", str(tmp_path / "nope.zarr"),
                  "--holdout-manifest", str(holdout)])
 
