@@ -45,6 +45,7 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 from ssl_anomaly.monitor import inputs as minputs  # noqa: E402
 from ssl_anomaly.monitor import models as mmodels  # noqa: E402
 from ssl_anomaly.monitor import normal_bank as nbank  # noqa: E402
+from ssl_anomaly.monitor import patch_scores as mpscores  # noqa: E402
 from ssl_anomaly.monitor import perturbations as mpert  # noqa: E402
 from ssl_anomaly.monitor import protocol as mproto  # noqa: E402
 from ssl_anomaly.monitor import scoring as mscoring  # noqa: E402
@@ -52,7 +53,18 @@ from ssl_anomaly.monitor import severity_table as sev  # noqa: E402
 from ssl_anomaly.monitor import splits as msplits  # noqa: E402
 
 BAND_NAMES = ["ndvi", "blue", "green", "red", "nir", "swir1", "swir2", "lst"]
-SCORER_CHOICES = ("recon_only", "bank", "fused_max", "fused_weighted")
+SCORER_CHOICES = ("recon_only", "bank", "fused_max", "fused_weighted",
+                  "patch_cnn_gru", "patch_pixelwise")
+PATCH_SCORERS = ("patch_cnn_gru", "patch_pixelwise")
+# Patch arms live on a different scale from the field-level arms, so no shared
+# tau exists. They are evaluated through the empirical-p-value adapter
+# (PatchArmScorer), which is why this list is separate rather than a branch
+# inside arm_paths().
+PATCH_ARTIFACTS = {
+    "model": "patch_model.pt",
+    "sigma": "patch_sigma.npz",
+    "norm": "patch_norm.json",
+}
 EVAL_PARTITION_SALT = "mdm80_eval_subset_v1"
 MDM80_TARGET = 0.80
 MDM80_CENSORED = 7  # numeric sentinel for ">S6" (ordering only; reported as ">S6")
@@ -66,6 +78,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="severity = literature-grounded sweep (headline); legacy = finding-16 MAD-scaled continuity")
     p.add_argument("--scorer", choices=SCORER_CHOICES, default="recon_only",
                    help="scoring arm (severity protocol; bank arms are Phase B of normal-bank-novelty-scoring)")
+    p.add_argument("--patch-store", default=None,
+                   help="patches.zarr for --scorer patch_* (default: data/processed/patches.zarr)")
+    p.add_argument("--patch-run", default=None,
+                   help="run id holding patch_model.pt / patch_sigma.npz / patch_norm.json "
+                        "(default: --run-id)")
     p.add_argument("--bank-k", type=int, choices=[1, 5], default=5)
     p.add_argument("--bank-distance", choices=["knn", "mahalanobis"], default="knn")
     p.add_argument("--seeds", default="13,42,2026", help="seeds to evaluate (default: 13,42,2026)")
@@ -77,10 +94,90 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--extended-severity", action="store_true", default=True,
                    help="legacy protocol only: diagnostic 4/6/8×MAD sweep (finding 16)")
     p.add_argument("--no-extended-severity", dest="extended_severity", action="store_false")
+    p.add_argument("--shapes", default="acute,persistent",
+                   help="temporal shapes for the severity sweep, comma-separated. "
+                        "'gradual' (change gradual-severity-shape) adds the third primary "
+                        "shape as EXTRA columns; the acute/persistent injection sets and "
+                        "their hashes are untouched, so recorded findings stay comparable. "
+                        "Allowed: acute, persistent, gradual.")
     p.add_argument("--smoke", action="store_true", help="tiny subset for agent smoke runs")
     p.add_argument("--device", default=None)
     p.add_argument("--notes", default="")
     return p.parse_args(argv)
+
+
+def load_patch_artifacts(run_id: str, *, norm_path: str | None = None,
+                         sigma_path: str | None = None) -> tuple:
+    """Load the patch checkpoint + frozen sigma + norm sidecar.
+
+    All three are REQUIRED and are read from the run's own directory: a patch
+    arm scored with another run's sigma table, or with statistics fitted after
+    the fact, would not be the arm that was trained. ``--patch-norm`` /
+    ``--patch-sigma`` exist only to point at a run whose artifacts live
+    elsewhere (e.g. a resumed run); they never make the files optional.
+    """
+    from ssl_anomaly.io import patches as P
+
+    root = mproto.CHECKPOINTS_DEV_DIR / run_id
+    model_path = root / PATCH_ARTIFACTS["model"]
+    sigma_file = Path(sigma_path) if sigma_path else root / PATCH_ARTIFACTS["sigma"]
+    norm_file = Path(norm_path) if norm_path else root / PATCH_ARTIFACTS["norm"]
+    for label, path in (("model", model_path), ("sigma", sigma_file), ("norm", norm_file)):
+        if not path.exists():
+            raise FileNotFoundError(
+                f"patch {label} artifact not found: {path} — the patch arm needs the "
+                "checkpoint, the frozen sigma table and the norm sidecar from the SAME "
+                "run; nothing is inferred or refitted here."
+            )
+
+    payload = __import__("torch").load(model_path, map_location="cpu", weights_only=False)
+    cfg = payload["config"]
+    from ssl_anomaly.models.patch_cnn_gru import build_patch_model
+
+    model = build_patch_model(
+        use_cnn=bool(cfg.get("use_cnn", True)),
+        n_channels=int(cfg["n_channels"]),
+        d_model=int(cfg.get("d_model", 64)),
+        n_covariates=int(cfg.get("n_covariates", 0)),
+        n_horizons=int(cfg.get("n_horizons", 3)),
+        stem_widths=tuple(cfg.get("stem_widths", (44, 60))),
+    )
+    model.load_state_dict(payload["state_dict"])
+
+    sd = np.load(sigma_file, allow_pickle=False)
+    sigma = mpscores.PatchSigmaTable(
+        sigma=sd["sigma"], fallback=sd["fallback"], n=sd["n"],
+        min_n=int(sd["min_n"]) if "min_n" in sd.files else 20,
+        sha256=str(sd["sha256"]) if "sha256" in sd.files else "",
+    )
+    norm = P.load_patch_norm(norm_file)
+    return model, sigma, norm, cfg
+
+
+def build_patch_arm(model: str, run_id: str, device: str, *, sigma, in_field: np.ndarray,
+                    n_channels: int) -> mpscores.PatchDeepScorer:
+    """Construct the patch scorer for one arm (``patch_cnn_gru`` or the control).
+
+    The control is the SAME network with the CNN stem collapsed to a 1x1 conv
+    (``patch_cnn_gru.scorer_id``), so the comparison isolates spatial context.
+    A checkpoint whose ``use_cnn`` disagrees with the requested arm is refused:
+    evaluating the CNN-off weights under the CNN arm's name would be a silent
+    relabelling of the result.
+    """
+    from ssl_anomaly.models.patch_cnn_gru import scorer_id
+
+    ckpt, sigma_tbl, _norm, cfg = load_patch_artifacts(run_id)
+    want_cnn = model == "patch_cnn_gru"
+    if bool(cfg.get("use_cnn", True)) is not want_cnn:
+        raise ValueError(
+            f"checkpoint was trained with use_cnn={cfg.get('use_cnn')} but "
+            f"--scorer {model} asks for use_cnn={want_cnn}; re-run with the arm "
+            "the checkpoint was trained as."
+        )
+    return mpscores.PatchDeepScorer(
+        scorer_id(want_cnn), ckpt, sigma,
+        in_field=in_field, n_channels=n_channels, device=device,
+    )
 
 
 def load_scorer(model: str, seed: int, run_id: str, device: str) -> tuple:
@@ -219,6 +316,8 @@ def arm_paths(
 def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, seeds: list[str],
                           device: str, data: dict | None = None) -> tuple[dict, list]:
     """The literature-grounded severity sweep + MDM80 (one run, all seeds)."""
+    if args.scorer in PATCH_SCORERS:
+        return run_patch_severity_protocol(args, manifest, sel, seeds, device, data=data)
     X, M = sel["X"], sel["M"]
     doy = minputs.doy_channels(sel["harvest_days"])
     N, T, C = X.shape
@@ -253,9 +352,21 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
 
     levels = sev.load_table()
     table_hash = sev.severity_table_hash()
+    families = [f.strip() for f in str(args.shapes).split(",") if f.strip()]
+    unknown_fams = [f for f in families if f not in sev.PRIMARY_FAMILIES]
+    if unknown_fams:
+        raise SystemExit(
+            f"--shapes got {unknown_fams}; allowed primary shapes are "
+            f"{list(sev.PRIMARY_FAMILIES)} (secondary diagnostic shapes never enter "
+            "this table — see gradual-severity-shape spec)."
+        )
+    if sev.ACUTE_FAMILY not in families or sev.PERSISTENT_FAMILY not in families:
+        print("[severity] NOTE: the frozen primary shapes are acute+persistent; "
+              f"running {families} only. Recorded findings are NOT reproduced by this run.")
+
     cells_all = [f"{lv.level_id}/{fam}/{idx}"
                  for lv in levels
-                 for fam in (sev.ACUTE_FAMILY, sev.PERSISTENT_FAMILY)
+                 for fam in families
                  for idx in ("ndvi", "savi")]
 
     # ---- Bank arm setup (Phase B, normal-bank-novelty-scoring) -----------
@@ -366,7 +477,7 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
         window_pools: dict[str, list] = {}
         path_pool: dict[str, list[np.ndarray]] = {}
         for lv in levels:
-            for fam in (sev.ACUTE_FAMILY, sev.PERSISTENT_FAMILY):
+            for fam in families:
                 for index in ("ndvi", "savi"):
                     key = f"{lv.level_id}/{fam}/{index}"
                     det_flags: list[int] = []
@@ -406,7 +517,10 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
                         "level_id": lv.level_id, "family": fam, "index": index,
                         "delta_ndvi": lv.delta_ndvi, "duration_bins":
                             (sev.PERSISTENT_DURATION_BINS if fam == sev.PERSISTENT_FAMILY
-                             else lv.duration_bins),
+                             else (results[0].meta.get("ramp_bins") or lv.duration_bins)
+                             if fam == sev.GRADUAL_FAMILY else lv.duration_bins),
+                        "ramp_bins": (results[0].meta.get("ramp_bins")
+                                      if fam == sev.GRADUAL_FAMILY else None),
                     }
                     det_pools[key] = det_flags
                     delay_pools[key] = delays
@@ -415,7 +529,7 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
 
         # ---- MDM80 per family × index (lowest level with det ≥ 0.80) --------
         mdm80: dict[str, dict] = {}
-        for fam in (sev.ACUTE_FAMILY, sev.PERSISTENT_FAMILY):
+        for fam in families:
             for index in ("ndvi", "savi"):
                 reached = None
                 for lv in levels:
@@ -529,6 +643,7 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
 
     return {
         "protocol": "severity_sweep_v1",
+        "shapes": families,
         "scorer": args.scorer,
         "severity_table_sha256": table_hash,
         "eval_subset_sha256": eval_hash,
@@ -541,13 +656,174 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
     }, per_seed
 
 
+def run_patch_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict,
+                                seeds: list[str], device: str,
+                                data: dict | None = None) -> tuple[dict, list]:
+    """The severity sweep for a PATCH arm (``patch_cnn_gru`` / control).
+
+    The cells, the severity table, the shapes and the MDM80 rule are the ones
+    the field-level arms use — only the scoring path differs, and it differs in
+    exactly two documented ways:
+
+    * The tensors come from ``patches.zarr`` joined on ``(field_id, cycle_id)``
+      (``patch_eval.patch_batch_for_cycles``), never by row position.
+    * The alarm path is an empirical p-value against the CALIBRATION subset's
+      clean paths (``PatchArmScorer``), because the two arms' raw statistics are
+      not on a common scale and a shared tau would be an artefact of units.
+
+    The split partition is the SAME hash partition, so the evaluation subset is
+    identical to the one the field-level runs used.
+    """
+    from ssl_anomaly.monitor import patch_eval as pE
+
+    store_path = Path(args.patch_store) if args.patch_store else (
+        REPO_ROOT / "data" / "processed" / "patches.zarr")
+    if not store_path.exists():
+        raise SystemExit(
+            f"patch store not found: {store_path} — the patch arm needs patches.zarr "
+            "(owner runs scripts/extract_patches.py; this is a data task, not a code task)"
+        )
+    from ssl_anomaly.io import patches as P
+
+    root = P.open_store(store_path)
+    patch_run = args.patch_run or args.run_id
+
+    # --- join the field-level cycle list to the store --------------------
+    cycle_keys = list(sel["cycle_keys"])
+    fids, cids = [], []
+    for key in cycle_keys:
+        # monitor.inputs builds keys as "<field>:<cycle_id>" (inputs.py:207)
+        parts = str(key).split(":")
+        if len(parts) != 2:
+            raise SystemExit(f"unexpected cycle key {key!r}; expected '<field>:<cycle_id>'")
+        fids.append(int(parts[0]))
+        cids.append(int(parts[1]))
+    fids_a, cids_a = np.asarray(fids, dtype=np.int64), np.asarray(cids, dtype=np.int64)
+
+    model, sigma, norm, cfg = load_patch_artifacts(patch_run)
+    batch = pE.patch_batch_for_cycles(root, fids_a, cids_a, norm=norm)
+    if batch["cycles_found"] != len(cycle_keys):
+        raise SystemExit(
+            f"{batch['cycles_found']} patch cycles for {len(cycle_keys)} dev cycles — "
+            "every dev cycle must exist in the store; dropping them would change the "
+            "evaluation population between arms"
+        )
+
+    calib_idx, eval_idx, eval_hash = partition_calib_eval(cycle_keys)
+    print(f"[patch-severity] {len(cycle_keys)} dev cycles joined to the store; "
+          f"calibration n={len(calib_idx)}, evaluation n={len(eval_idx)} (hash {eval_hash})")
+
+    scorer = build_patch_arm(args.scorer, patch_run, device, sigma=sigma,
+                             in_field=batch["in_field"], n_channels=int(cfg["n_channels"]))
+    # evaluate_subset slices -> each sample's in-field mask row must be named
+    row_of_sample = np.arange(len(cycle_keys))
+    ref_paths = pE.patch_reference_paths(
+        scorer, batch, reference_idx=np.asarray(calib_idx),
+        field_row=row_of_sample,
+    )
+    arm = mpscores.PatchArmScorer(scorer, ref_paths)
+    tau, k = 0.05, 1          # p-value scale: tau on the -log10(p) path
+    print(f"[patch-severity] reference paths: {ref_paths.shape}; "
+          f"alarm path = -log(empirical p) against the calibration subset")
+
+    levels = sev.load_table()
+    families = [f.strip() for f in str(args.shapes).split(",") if f.strip()]
+    cells: dict[str, dict] = {}
+    for lv in levels:
+        for fam in families:
+            for index in ("ndvi", "savi"):
+                key = f"{lv.level_id}/{fam}/{index}"
+                det_flags: list[int] = []
+                delays: list[float] = []
+                for rnd in range(max(1, args.rounds)):
+                    cell = pE.patch_arm_scores(
+                        arm, {kk: vv[eval_idx] for kk, vv in batch.items()
+                              if kk in ("X", "pixel_valid", "in_field")},
+                        level_id=lv.level_id, family=fam, index=index, round_idx=rnd,
+                        field_row=row_of_sample[eval_idx],
+                    )
+                    # -log10(p) is already the standardized path (p is uniform on
+                    # clean data, so q95(=-log10 0.05) normalizes it exactly);
+                    # the channel axis is a single channel and the mask is the
+                    # one the scorer used.
+                    paths = -np.log10(np.clip(cell["p_value"], 1e-12, 1.0))[:, :, None]
+                    q95 = np.full((paths.shape[1], 1), -np.log10(0.05))
+                    inj_paths = mscoring.cumulative_channel_max(
+                        paths,
+                        np.repeat(cell["observed"][:, :, None], 1, axis=2),
+                        q95,
+                    )
+                    for j in range(inj_paths.shape[0]):
+                        fb = mscoring.first_alarm_bin(inj_paths[j], tau, k, 0)
+                        det_flags.append(1 if fb >= 0 else 0)
+                        if fb >= 0:
+                            delays.append(float(fb * 15))
+                n = len(det_flags)
+                n_det = int(sum(det_flags))
+                lo, hi = mscoring.wilson_ci(n_det, n)
+                cells[key] = {
+                    "n": n, "n_detected": n_det, "detection_rate": n_det / max(1, n),
+                    "wilson_ci95": [round(lo, 4), round(hi, 4)],
+                    "median_delay_days": float(np.median(delays)) if delays else float("nan"),
+                    "level_id": lv.level_id, "family": fam, "index": index,
+                    "delta_ndvi": lv.delta_ndvi,
+                }
+
+    mdm80: dict[str, dict] = {}
+    for fam in families:
+        for index in ("ndvi", "savi"):
+            reached = next((lv.level_id for lv in levels
+                            if cells[f"{lv.level_id}/{fam}/{index}"]["detection_rate"]
+                            >= MDM80_TARGET), None)
+            mdm80[f"{fam}/{index}"] = (
+                {"value": ">S6", "sentinel": MDM80_CENSORED, "censored": True,
+                 "level_cell": None, "median_delay_days": float("nan")}
+                if reached is None else
+                {"value": reached, "sentinel": int(reached[1:]), "censored": False,
+                 "level_cell": f"{reached}/{fam}/{index}",
+                 "median_delay_days": cells[f"{reached}/{fam}/{index}"]["median_delay_days"],
+                 "detection_rate_at_mdm": cells[f"{reached}/{fam}/{index}"]["detection_rate"]}
+            )
+
+    per_seed = [{
+        "seed": int(seeds[0]) if seeds else 0,
+        "tau": float(tau), "k": int(k),
+        "alarm_statistic": "neg_log_empirical_p_vs_calibration_subset",
+        "mdm80": mdm80, "cells": cells,
+        "patch_sigma_sha256": sigma.sha256,
+        "patch_run": patch_run,
+        "axis": "patch-level representation (per-pixel, in-field aggregation)",
+        "n_calib_cycles": len(calib_idx), "n_eval_cycles": len(eval_idx),
+        "n_injected_total": int(sum(c["n"] for c in cells.values())),
+    }]
+    return {
+        "protocol": "severity_sweep_patch_v1",
+        "shapes": families, "scorer": args.scorer,
+        "eval_subset_sha256": eval_hash,
+        "n_calib_cycles": len(calib_idx), "n_eval_cycles": len(eval_idx),
+        "mdm80_target": MDM80_TARGET,
+        "cells_order": [f"{lv.level_id}/{fam}/{idx}" for lv in levels
+                        for fam in families for idx in ("ndvi", "savi")],
+        "severity_table_sha256": sev.severity_table_hash(),
+        "per_seed": per_seed, "seeds": seeds,
+    }, per_seed
+
+
 def aggregate_severity(per_seed: list[dict]) -> dict:
     """Seed aggregation for the severity protocol (mean ± std of the MDM80
     sentinels; pooled per-level detection with Wilson CIs)."""
     mdm_mean = {}
-    for fam in (sev.ACUTE_FAMILY, sev.PERSISTENT_FAMILY):
+    fams: list[str] = []
+    for r in per_seed:
+        for key in r["mdm80"]:
+            fam = key.split("/")[0]
+            if fam not in fams:
+                fams.append(fam)
+    for fam in fams:
         for index in ("ndvi", "savi"):
             key = f"{fam}/{index}"
+            if key not in per_seed[0]["mdm80"]:
+                continue
             vals = [r["mdm80"][key]["sentinel"] for r in per_seed]
             labels = [r["mdm80"][key]["value"] for r in per_seed]
             mean, std = mproto.mean_std([float(v) for v in vals])
@@ -586,6 +862,9 @@ def main(argv: list[str] | None = None) -> int:
             "severity_table_sha256": sev_metrics["severity_table_sha256"],
             "eval_subset_sha256": sev_metrics["eval_subset_sha256"],
             "ladder_rung": "L2",
+            "patch_run": (per_seed[0].get("patch_run") if per_seed else None),
+            "patch_sigma_sha256": (per_seed[0].get("patch_sigma_sha256")
+                                   if per_seed else None),
             "claim_noun": "synthetic anomaly",
             "data_source": "real490 (masked rebuild from stats.zarr)",
             "splits_locked_sha256": manifest["manifest_sha256"],
@@ -659,7 +938,12 @@ def main(argv: list[str] | None = None) -> int:
                 "data_source": "real490",
                 "splits_sha256": manifest["manifest_sha256"],
                 "ladder_rung": "L2",
-                "protocol": "severity_sweep_v1",
+                "patch_run": (per_seed[0].get("patch_run") if per_seed else None),
+                "patch_sigma_sha256": (per_seed[0].get("patch_sigma_sha256")
+                                       if per_seed else None),
+                "protocol": "severity_sweep_patch_v1" if args.scorer in PATCH_SCORERS
+                            else "severity_sweep_v1",
+                "shapes": sev_metrics["shapes"],
                 "scorer": args.scorer,
                 "severity_table_sha256": sev_metrics["severity_table_sha256"],
                 "eval_subset_sha256": sev_metrics["eval_subset_sha256"],
@@ -987,6 +1271,9 @@ def main(argv: list[str] | None = None) -> int:
             "data_source": "real490",
             "splits_sha256": manifest["manifest_sha256"],
             "ladder_rung": "L2",
+            "patch_run": (per_seed[0].get("patch_run") if per_seed else None),
+            "patch_sigma_sha256": (per_seed[0].get("patch_sigma_sha256")
+                                   if per_seed else None),
             "protocol": "legacy_mad_scaled_v1",
             "scorer": "recon_only",
             "severity_table_sha256": "",

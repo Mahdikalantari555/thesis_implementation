@@ -16,7 +16,6 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 from ssl_anomaly.monitor import perturbations as mpert  # noqa: E402
 from ssl_anomaly.monitor import scoring as mscoring  # noqa: E402
 
-
 T, C = 36, 8
 MAD_SCALE = np.full((T, C), 1.4826, dtype=np.float64)  # scale → MAD = 1.0 everywhere
 
@@ -60,7 +59,7 @@ def test_injection_respects_observation_mask() -> None:
 
 
 def test_severity_scales_monotonically() -> None:
-    """A 2×MAD perturbation moves values at least as far as 1×MAD."""
+    """A 2xMAD perturbation moves values at least as far as 1xMAD."""
     x, m = make_cycle()
     r1 = mpert.inject_perturbation(x, m, pert_type="ndvi_drop", onset_bin=10, duration=3, severity=1.0, mad=MAD_SCALE)
     r2 = mpert.inject_perturbation(x, m, pert_type="ndvi_drop", onset_bin=10, duration=3, severity=2.0, mad=MAD_SCALE)
@@ -80,7 +79,7 @@ def test_phenology_delay_never_erases_observations() -> None:
 
 
 def test_mad_sizing_uses_train_stats() -> None:
-    """severity × MAD: with scale=1.4826 (MAD=1), a 1-bin lst_rise adds 1.0 K."""
+    """severity x MAD: with scale=1.4826 (MAD=1), a 1-bin lst_rise adds 1.0 K."""
     x, m = make_cycle()
     before = float(x[12, 7])
     res = mpert.inject_perturbation(x, m, pert_type="lst_rise", onset_bin=12, duration=1, severity=1.0, mad=MAD_SCALE)
@@ -289,7 +288,7 @@ def test_index_drop_floors_at_physical_range_and_records_realized() -> None:
     """A drop larger than the observed value floors at the NDVI physical
     range and the REALIZED delta is recorded (never below range)."""
     x, m = make_veg_cycle()
-    x[12, 0] = -0.7  # degenerate low NDVI: S6's −0.40 crosses the −1.0 floor
+    x[12, 0] = -0.7  # degenerate low NDVI: S6's -0.40 crosses the -1.0 floor
     res = mpert.inject_index_drop(x, m, index="ndvi", onset_bin=12, duration=1, delta=0.40)
     assert res.x[12, 0] == pytest.approx(mpert.NDVI_PHYSICAL_RANGE[0])
     assert res.meta["delta_realized"][0] == pytest.approx(-0.7 - mpert.NDVI_PHYSICAL_RANGE[0])
@@ -346,7 +345,7 @@ def test_savi_solver_floors_physical_range() -> None:
     The sum-preserving solve cannot floor for normal vegetation bins (the
     target SAVI always stays inside the range achievable at the held sum);
     flooring is exercised on a degenerate bright-red bin (bare soil), where
-    S6's −0.40 pushes red past 1.6."""
+    S6's -0.40 pushes red past 1.6."""
     x, m = make_veg_cycle()
     x[10, 3] = 1.55  # bright red (bare-soil signature)
     x[10, 4] = 0.20
@@ -385,3 +384,111 @@ def test_index_drop_dataset_covers_all_cycles_and_rotates_phases() -> None:
         X, M, level_id="S3", family="acute", index="ndvi", round_idx=1,
     )
     assert [r.onset_bin for r in results_r1] != onsets
+
+
+# ---------------------------------------------------------------------------
+# Gradual family (change gradual-severity-shape)
+# ---------------------------------------------------------------------------
+from ssl_anomaly.monitor.severity_table import (  # noqa: E402
+    GRADUAL_FAMILY,
+    GRADUAL_RAMP_BINS,
+    PRIMARY_FAMILIES,
+    SECONDARY_FAMILIES,
+)
+
+
+def test_gradual_family_is_registered_as_primary():
+    assert GRADUAL_FAMILY in PRIMARY_FAMILIES
+    assert GRADUAL_FAMILY not in SECONDARY_FAMILIES
+    assert set(GRADUAL_RAMP_BINS) == {3, 4, 6}
+
+
+@pytest.mark.parametrize(("round_idx", "d_expected"), list(enumerate(GRADUAL_RAMP_BINS)))
+def test_gradual_ramp_matches_delta_times_min_one(round_idx, d_expected):
+    x = np.zeros((4, 36, 8))
+    x[:, :, 0] = 0.70
+    m = np.ones((4, 36, 8), dtype=bool)
+    results = mpert.inject_index_drop_dataset(
+        x, m, level_id="S4", family=GRADUAL_FAMILY, index="ndvi", round_idx=round_idx,
+    )
+    r = results[0]
+    assert r.meta["ramp_bins"] == d_expected
+    assert r.meta["n_bins_window"] == d_expected
+    got = x[0, :, 0] - r.x[:, 0]
+    for t in range(d_expected):
+        b = r.onset_bin + t
+        assert got[b] == pytest.approx(0.16 * (t + 1) / d_expected, abs=1e-9)
+    # held to cycle end (when the cycle still has bins after the ramp)
+    after = r.onset_bin + d_expected
+    if after < 36:
+        assert got[after] == pytest.approx(0.16, abs=1e-9)
+
+
+@pytest.mark.parametrize("round_idx", list(range(len(GRADUAL_RAMP_BINS))))
+def test_gradual_ramp_always_fits_inside_the_cycle(round_idx):
+    x = np.zeros((2, 36, 8))
+    x[:, :, 0] = 0.7
+    m = np.ones((2, 36, 8), dtype=bool)
+    results = mpert.inject_index_drop_dataset(
+        x, m, level_id="S6", family=GRADUAL_FAMILY, index="ndvi", round_idx=round_idx,
+    )
+    for r in results:
+        assert r.onset_bin + r.meta["ramp_bins"] <= 36
+        assert len(r.meta["ramp_profile"]) == r.meta["ramp_bins"]
+
+
+def test_gradual_savi_uses_the_solver_at_partial_magnitudes():
+    x = np.zeros((2, 36, 8))
+    x[:, :, 3] = 0.15
+    x[:, :, 4] = 0.55
+    m = np.ones((2, 36, 8), dtype=bool)
+    r = mpert.inject_index_drop_dataset(
+        x, m, level_id="S4", family=GRADUAL_FAMILY, index="savi", round_idx=1,
+    )[0]
+    base = mpert.savi_from_red_nir(0.15, 0.55)
+    d = r.meta["ramp_bins"]
+    for t in range(d):
+        b = r.onset_bin + t
+        got = base - mpert.savi_from_red_nir(r.x[b, 3], r.x[b, 4])
+        assert got == pytest.approx(0.16 * (t + 1) / d, abs=1e-6)
+        # brightness is preserved at every ramp bin
+        assert r.x[b, 3] + r.x[b, 4] == pytest.approx(0.70, abs=1e-9)
+
+
+def test_acute_and_persistent_metadata_is_unchanged():
+    """The gradual work must not move the frozen families' recorded numbers."""
+    x = np.zeros((2, 36, 8))
+    x[:, :, 0] = 0.7
+    m = np.ones((2, 36, 8), dtype=bool)
+    acute = mpert.inject_index_drop_dataset(x, m, level_id="S4", family="acute", index="ndvi")[0]
+    pers = mpert.inject_index_drop_dataset(
+        x, m, level_id="S4", family="persistent", index="ndvi",
+    )[0]
+    assert acute.meta["n_bins_window"] == 2
+    assert acute.meta["ramp_bins"] is None
+    assert pers.meta["n_bins_window"] == mpert.PERSISTENT_DURATION_BINS
+    assert pers.meta["ramp_bins"] is None
+    assert acute.meta["ramp_profile"] is None
+
+
+def test_gradual_active_span_is_recorded_beyond_the_ramp():
+    x = np.zeros((1, 36, 8))
+    x[:, :, 0] = 0.7
+    m = np.ones((1, 36, 8), dtype=bool)
+    r = mpert.inject_index_drop_dataset(
+        x, m, level_id="S4", family=GRADUAL_FAMILY, index="ndvi", round_idx=0,
+    )[0]
+    assert r.meta["n_bins_active"] > r.meta["n_bins_window"]
+    assert r.meta["n_bins_active"] == 36 - r.onset_bin
+
+
+def test_gradual_never_warms_extraction_targets_or_masks():
+    x = np.zeros((2, 36, 8))
+    x[:, :, 0] = 0.7
+    m = np.ones((2, 36, 8), dtype=bool)
+    m[:, 5, :] = False
+    results = mpert.inject_index_drop_dataset(
+        x, m, level_id="S4", family=GRADUAL_FAMILY, index="ndvi", round_idx=2,
+    )
+    for r in results:
+        np.testing.assert_array_equal(r.m, m[r.source_row])

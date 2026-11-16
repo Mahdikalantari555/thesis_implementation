@@ -195,6 +195,27 @@ two experiments.
   "no parallel architecture trials" prohibition for THIS program only. Architecture source:
   `research/Architecture_Selection_for_Self_Supervised_Spatiotemporal_Anomaly.md` (2D CNN stem →
   per-location GRU, prediction primary + masked-recon aux, ~90k params, no pooled latent).
+  Progress 2026-11-16: **R0.5 zonal distribution arm IMPLEMENTED**
+  (`monitor/zonal_dist.py` + `scripts/run_zonal_dist_study.py`): the three-way
+  prompt structure Zonal Mean / Zonal Distribution Statistics / Patch now has
+  its middle rung, built from the statistics already in `stats.zarr` with no
+  training and no extraction (presets level=8ch ≡ b1 / lower=8ch p10-only /
+  spread=14ch / dist=45ch; the `level` arm is proven to reproduce `b1`
+  exactly). 27 tests. NEXT for this arm: the severity/MDM80 sweep on the locked
+  evaluation panel (user data), the `b0_calendar` DOY variant and the
+  `p10`-only path-max scorer.
+  `patch-data-pipeline` PARTIALLY implemented — geometry
+  (`FieldWindow`, bbox crop/pad without resampling, neighbour-excluding
+  `in_field` mask), per-pixel per-bin aggregation (`aggregate_bin`), the zarr
+  store schema/writer/validator (`io/patches.py`), the leakage-free
+  normalization artifact and the provenance record are done and tested
+  (40 unit tests); the `scripts/extract_patches.py` scene loop still needs the
+  Landsat archive and is the next code task.
+  `training-holdout-invariant` IMPLEMENTED in code
+  (`monitor/holdout.py`, `scripts/build_holdout_manifest.py`, wired into
+  `train_main.py`, 37 unit tests green with synthetic manifests) — the frozen
+  manifest still needs ONE user run on the data machine
+  (`python scripts/build_holdout_manifest.py --archive-end 2026-09-10`).
   Execution order: 0 `training-holdout-invariant` (STANDING invariant, owner
   2026-11-15: holdout farms/dates frozen BEFORE implementation, fail-closed in
   every training path, pixel-level included) → 1 `patch-data-pipeline` (patches.zarr) → 2 `patch-level-controlled-trial`

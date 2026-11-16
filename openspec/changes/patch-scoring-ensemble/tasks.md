@@ -9,9 +9,13 @@
 - [ ] 1.2 `src/ssl_anomaly/monitor/patch_scores.py`: component implementations
       reading the PoC scorer outputs + frozen σ tables; per-pixel maps AND
       (N, 36, C) field tensors per component.
-- [ ] 1.3 Persistence: CUSUM + EWMA in `monitor/scoring.py` (or sibling),
+- [x] 1.3 Persistence: CUSUM + EWMA in `monitor/scoring.py` (or sibling),
       κ/h calibration at 1%/5% field-cycle FAR on validation only; unit
       test: zero alarms on clean dev at the calibrated budget.
+      DONE in `monitor/patch_scores.py`: `cusum_path` (state carries through
+      unobserved bins — no evidence is not evidence of normality), `ewma_path`,
+      `calibrate_cusum_h` (same contract as `calibrate_threshold`, so the two
+      rules are comparable at equal FAR). 21 tests in `test_patch_scores.py`.
 
 ## 2. Decisions C1 / C2 / M3
 
@@ -27,11 +31,15 @@
 
 ## 2b. Scoring basis (delegated from farm-local-anomaly-scoring)
 
-- [ ] 2.4 Declare the basis tier of every component (`s_pred`, `s_rec`,
+- [x] 2.4 Declare the basis tier of every component (`s_pred`, `s_rec`,
       `s_lat` = locally anchored; `s_hyb`, `z_f(t)`, common-mode subtraction
       = population-ranked) and add `basis` as an axis of the 3.1 selection
       matrix; unit test that a component without a declared basis fails the
       report build.
+      DONE: `patch_scores.component_basis()` + `require_basis()`. The declared
+      default set is locally anchored only; `s_hyb`, `z_f(t)`, common-mode
+      subtraction and indicator z are population-ranked and must be named
+      explicitly.
 - [ ] 2.5 Enumeration guard: `s_hyb` / `z_f(t)` may only enter the default
       score if the farm-local alternatives lose under the pre-registered
       rule — the comparison is recorded, never implicit.

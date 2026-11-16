@@ -26,6 +26,8 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from ssl_anomaly.monitor.severity_table import (
+    GRADUAL_FAMILY,
+    GRADUAL_RAMP_BINS,
     PERSISTENT_DURATION_BINS,
     PERSISTENT_FAMILY,
     SEVERITY_TABLE,
@@ -293,6 +295,14 @@ def inject_index_drop(
     family/index/delta target, per-bin realized deltas (after flooring),
     skipped-bin count (SAVI bins missing red or nir), floored-bin count, and
     the % of the field's OWN grand-growth median.
+
+    For ``family="gradual"`` the applied magnitude at bin b is
+    ``delta · min(1, (b − onset + 1)/duration)`` — the ramp then held to cycle
+    end (change ``gradual-severity-shape``). ``meta["n_bins_window"]`` stays the
+    count of bins the ramp FITS in (``duration``), so onset+window remains a
+    valid "the anomaly must be visible by here" window for the event-FAR
+    accounting, and ``meta["n_bins_active"]`` records the longer span the
+    signal is actually present in.
     """
     if index not in ("ndvi", "savi"):
         raise ValueError(f"Unknown index {index!r} (expected 'ndvi' or 'savi')")
@@ -304,12 +314,21 @@ def inject_index_drop(
     n_floored = 0
     n_skipped = 0
 
+    gradual = family == GRADUAL_FAMILY
+    duration = max(1, int(duration))
+
+    def _mult(b: int) -> float:
+        """δ multiplier at bin b: 1.0 for the step families, ramp for gradual."""
+        return min(1.0, (b - onset + 1) / duration) if gradual else 1.0
+
+    n_active = (T - onset) if gradual else max(0, end - onset)
     if index == "ndvi":
-        for b in range(onset, end):
+        for b in range(onset, T if gradual else end):
+            mag = delta * _mult(b)
             if not m[b, CH_NDVI] or not np.isfinite(out[b, CH_NDVI]):
                 n_skipped += 1
                 continue
-            target = out[b, CH_NDVI] - delta
+            target = out[b, CH_NDVI] - mag
             floored = min(max(target, NDVI_PHYSICAL_RANGE[0]), NDVI_PHYSICAL_RANGE[1])
             if floored != target:
                 n_floored += 1
@@ -317,13 +336,14 @@ def inject_index_drop(
             realized.append(float(x[b, CH_NDVI] - floored))
     else:  # savi via red/nir solver
         lo_r, hi_r = REFLECTANCE_PHYSICAL_RANGE
-        for b in range(onset, end):
+        for b in range(onset, T if gradual else end):
+            mag = delta * _mult(b)
             if not (m[b, CH_RED] and m[b, CH_NIR]) or not (
                 np.isfinite(out[b, CH_RED]) and np.isfinite(out[b, CH_NIR])
             ):
                 n_skipped += 1
                 continue
-            solved = _solve_savi_drop(float(out[b, CH_RED]), float(out[b, CH_NIR]), delta)
+            solved = _solve_savi_drop(float(out[b, CH_RED]), float(out[b, CH_NIR]), mag)
             if solved is None:
                 n_skipped += 1
                 continue
@@ -347,6 +367,10 @@ def inject_index_drop(
             "pct_of_field_median": pct, "field_median_source": median_source,
             "field_grand_growth_median": field_median,
             "savi_solver": "sum-preserving red/nir solve" if index == "savi" else None,
+            "ramp_bins": (duration if gradual else None),
+            "ramp_profile": ([round(_mult(b), 6) for b in range(onset, min(T, onset + duration))]
+                             if gradual else None),
+            "n_bins_active": int(n_active),
         },
     )
 
@@ -369,12 +393,23 @@ def inject_index_drop_dataset(
     ``(i + r) % 3``), giving the per-phase breakdown without random resampling.
     """
     delta = {lv.level_id: lv.delta_ndvi for lv in SEVERITY_TABLE}[level_id]
-    duration = (PERSISTENT_DURATION_BINS if family == PERSISTENT_FAMILY
-                else {lv.level_id: lv.duration_bins for lv in SEVERITY_TABLE}[level_id])
+    if family == GRADUAL_FAMILY:
+        # The gradual ramp length cycles through the spec's D in {3, 4, 6} by
+        # round so one sweep covers all three ramps; the onset is pulled
+        # earlier when needed so the FULL ramp fits inside the cycle, and both
+        # are recorded per injection (spec scenario "Ramp physically
+        # consistent per bin").
+        duration = int(GRADUAL_RAMP_BINS[round_idx % len(GRADUAL_RAMP_BINS)])
+    elif family == PERSISTENT_FAMILY:
+        duration = PERSISTENT_DURATION_BINS
+    else:
+        duration = {lv.level_id: lv.duration_bins for lv in SEVERITY_TABLE}[level_id]
     results: list[InjectionResult] = []
     for i in range(X.shape[0]):
         phase = PHASES[(i + round_idx) % len(PHASES)]
         onset = phase_start_bin(phase, X.shape[1])
+        if family == GRADUAL_FAMILY:
+            onset = min(onset, max(1, X.shape[1] - duration))
         res = inject_index_drop(
             X[i], M[i], index=index, onset_bin=onset, duration=duration,
             delta=delta, family=family,

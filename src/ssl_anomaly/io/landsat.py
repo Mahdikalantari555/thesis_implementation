@@ -66,10 +66,16 @@ def quality_mask(qa_pixel: np.ndarray, cfg: QualityCfg) -> np.ndarray:
 
 def apply_scale_sr(arr: np.ndarray, scale: float, offset: float) -> np.ndarray:
     """Apply scale/offset to surface reflectance; set nodata (0) and saturated
-    values (>1) to NaN."""
-    out = arr.astype(np.float32) * scale + offset
-    out[(arr == 0) | (arr > 1.6)] = np.nan
-    out[(out < -0.1) | (out > 1.2)] = np.nan
+    values (>1) to NaN.
+
+    The saturation test is applied AFTER scaling. Testing the raw DN against
+    1.6 (as this function used to) marks every DN as saturated — DN values are
+    in the thousands — and turns every raw scene into all-NaN.
+    """
+    src = arr.astype(np.float32)
+    out = src * scale + offset
+    out[(arr == 0) | ~np.isfinite(src)] = np.nan          # nodata stays NaN
+    out[(out < -0.1) | (out > 1.2)] = np.nan              # saturated / invalid
     return out
 
 
