@@ -23,7 +23,7 @@
 
 ## 2. Exporter
 
-- [ ] 2.1 `scripts/extract_patches.py`: scene loop reusing the
+- [x] 2.1 `scripts/extract_patches.py`: scene loop reusing the
       extract_pixels.py source resolution + io/landsat.py QA/scale handling
       verbatim; writes patches.zarr + `.manifest.jsonl`; flags
       --fields/--dates/--smoke/--estimate-runtime/--resume/--patch-size
@@ -66,3 +66,35 @@
 - [ ] 3.2 After the user-run extraction: verify store schema, counts and
       hashes; record estimated vs actual wall time; confirm the existing
       suite (contract + bilingual 50) stays green and untouched.
+
+### 2.1 notes
+
+`scripts/extract_patches.py` + `tests/unit/test_extract_patches.py` (34 tests,
+including an end-to-end run on synthetic GeoTIFFs). Field-major windowed reads,
+resume through `.manifest.jsonl`, `--estimate-runtime` (no raster is opened),
+`--smoke`, `--fields`, `--dates`, `--resume`, `--patch-size`.
+
+Four defects were found while testing it, three of them in code this change
+touches:
+
+1. **Scene dates vs cycle offsets.** `cycles.parquet` stores `t_start` as a day
+   OFFSET from the archive epoch; scene dates are absolute. Comparing them
+   directly shifts every cycle by decades, so every bin comes out empty
+   instead of failing. Added `day_index()` and an explicit `--epoch` (default:
+   the earliest scene), and the epoch is recorded in provenance.
+2. **Double-scaling.** The shipped `*.tif` scenes are already reflectance/K
+   (`extract_stats.py` reads them as-is), so applying the C2 L2 factors turns
+   everything into NaN. `--band-scale {auto,native,landsat}` with per-scene
+   inference (reflectance stays `native`), recorded in provenance.
+3. **`io.landsat.apply_scale_sr` tested the saturation limit against raw DN**
+   (`arr > 1.6` where `arr` is DN in the thousands), so every DN-valued scene
+   became all-NaN. Fixed to test the SCALED value; this affects
+   `io/landsat.load_scene` and `io/zonal` too, which is the point.
+4. **The "no QA" fallback resurrected fully cloudy scenes.** `valid` was
+   replaced by "any finite band" whenever it came back empty — including when
+   QA existed and said *cloud*. Now the fallback applies only when the QA
+   raster is missing.
+
+Also: `create_store` allocates `field_ids` but cannot fill it, so the driver
+writes it and a later run refuses (`exit 3`) to mix a different field
+selection into an existing store.

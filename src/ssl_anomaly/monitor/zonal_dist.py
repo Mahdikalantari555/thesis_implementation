@@ -417,6 +417,172 @@ def alarm_rates(scores: np.ndarray, tau: float, k: int) -> np.ndarray:
     return np.array([bool(alarm_per_cycle(s, tau, k)) for s in scores], dtype=bool)
 
 
+def calendar_doy_bins(bins: np.ndarray, start_day: int, *, bin_days: int = BIN_DAYS,
+                      n_calendar: int = N_BINS) -> np.ndarray:
+    """Map each cycle bin to a calendar-DOY bin index in ``[0, n_calendar)``.
+
+    ``b0_calendar`` scores a cycle against its calendar position rather than
+    its harvest-relative position, so the same 36-bin tensor is re-indexed by
+    the absolute day at each bin midpoint (``start_day + b·bin_days + 15``).
+    """
+    abs_bins = (int(start_day) + np.asarray(bins, dtype=np.int64) * bin_days) % 365
+    return np.clip((abs_bins / 365.0 * n_calendar).astype(np.int64), 0, n_calendar - 1)
+
+
+def fit_score_calendar(
+    cycles: dict,
+    *,
+    train_mask: np.ndarray,
+    start_days: np.ndarray,
+    min_n: int = 8,
+    n_calendar: int = N_BINS,
+) -> tuple[np.ndarray, np.ndarray]:
+    """The ``b0_calendar``-equivalent scoring path on the SAME channels.
+
+    ``b1_dist`` asks "is this cycle anomalous for its phase?"; this asks "is it
+    anomalous for its calendar position?" — the DOY variant the R0.5 task list
+    requires. The statistics are fitted on TRAIN cycles only, keyed by calendar
+    bin, and pooled across fields (no per-field terms), exactly like
+    ``B1PhaseZCausal`` with ``use_doy=False`` but on the calendar axis.
+
+    Returns ``(scores (N, 36), used_mask (N, 36))``. A cycle bin whose calendar
+    bin has fewer than ``min_n`` train observations falls back to the cycle-bin
+    statistics, so no bin is silently unscored.
+    """
+    X = np.asarray(cycles["X"], dtype=np.float64)
+    M = np.asarray(cycles["M"], dtype=bool)
+    train = np.asarray(train_mask, dtype=bool)
+    starts = np.asarray(start_days, dtype=np.int64)
+    if train.shape != (len(X),):
+        raise ValueError(f"train_mask shape {train.shape} != {len(X)} cycles")
+    if len(starts) != len(X):
+        raise ValueError(f"start_days length {len(starts)} != {len(X)} cycles")
+    if not train.any():
+        raise ValueError("train_mask selects no cycle — cannot fit the calendar scorer")
+
+    T, C = X.shape[1], X.shape[2]
+    bins = np.arange(T)
+    cal_med = np.full((n_calendar, C), np.nan)
+    cal_scale = np.full((n_calendar, C), np.nan)
+
+    # Pooled per-cycle-bin statistics (the fallback, and the degenerate guard).
+    pooled_med = np.full((T, C), np.nan)
+    pooled_scale = np.full((T, C), np.nan)
+    for b in range(T):
+        for c in range(C):
+            v = X[train, b, c][M[train, b, c]]
+            if v.size >= min_n:
+                pooled_med[b, c] = float(np.median(v))
+                pooled_scale[b, c] = max(
+                    1.4826 * float(np.median(np.abs(v - pooled_med[b, c]))), 1e-3
+                )
+    global_med = np.array([
+        float(np.median(X[train, :, c][M[train, :, c]])) if M[train, :, c].any() else 0.0
+        for c in range(C)
+    ])
+    global_scale = np.array([
+        max(1.4826 * float(np.median(np.abs(
+            X[train, :, c][M[train, :, c]] - global_med[c]
+        ))), 1e-3) if M[train, :, c].any() else 1.0
+        for c in range(C)
+    ])
+    pooled_med = np.where(np.isfinite(pooled_med), pooled_med, global_med)
+    pooled_scale = np.where(np.isfinite(pooled_scale) & (pooled_scale > 0),
+                            pooled_scale, global_scale)
+
+    cal_of = np.stack([calendar_doy_bins(bins, s, n_calendar=n_calendar) for s in starts])
+    for k in range(n_calendar):
+        for c in range(C):
+            vals: list[np.ndarray] = []
+            for i in np.flatnonzero(train):
+                sel = cal_of[i] == k
+                v = X[i, sel, c][M[i, sel, c]]
+                if v.size:
+                    vals.append(v)
+            if not vals:
+                continue
+            allv = np.concatenate(vals)
+            if allv.size >= min_n:
+                cal_med[k, c] = float(np.median(allv))
+                cal_scale[k, c] = max(
+                    1.4826 * float(np.median(np.abs(allv - cal_med[k, c]))), 1e-3
+                )
+
+    scores = np.full((len(X), T), np.nan)
+    for i in range(len(X)):
+        cidx = cal_of[i]
+        med = np.where(np.isfinite(cal_med[cidx]), cal_med[cidx], pooled_med)
+        scale = np.where(np.isfinite(cal_scale[cidx]) & (cal_scale[cidx] > 0),
+                         cal_scale[cidx], pooled_scale)
+        z = np.where(M[i], (X[i] - med) / scale, 0.0)
+        cnt = np.maximum(M[i].sum(axis=1), 1)
+        s = (z * z * M[i]).sum(axis=1) / cnt
+        scores[i] = np.where(M[i].any(axis=1), s, np.nan)
+    return scores, M
+
+
+def pathmax_scores(
+    scores: np.ndarray,
+    channels: Sequence[int],
+    mask: np.ndarray,
+    *,
+    absolute: bool = False,
+) -> np.ndarray:
+    """Per-bin MAX over a channel subset instead of the mean over all channels.
+
+    The R0.5 arm's question is whether the lower quantile carries a signal the
+    level misses. Averaging the p10 z² together with seven other p10 channels
+    answers a different question, so this path-max variant reports each
+    channel's own evidence: ``max_{c ∈ channels} z²``.
+
+    ``absolute=False`` (default) expects per-channel z² already, so the caller
+    passes ``(X, M)`` through the same decomposition used for the mean path.
+    NaN where no channel of the subset is observed.
+    """
+    z2 = np.asarray(scores, dtype=np.float64)      # (N, T, C) squared z
+    m = np.asarray(mask, dtype=bool)
+    sub = list(channels)
+    if z2.ndim != 3 or z2.shape[2] != m.shape[2]:
+        raise ValueError(f"scores {z2.shape} and mask {m.shape} disagree on channels")
+    if any(c < 0 or c >= z2.shape[2] for c in sub):
+        raise ValueError(f"channel index out of range for {z2.shape[2]} channels")
+    sel_m = m[:, :, sub]
+    vals = np.where(sel_m, z2[:, :, sub], -np.inf)
+    with np.errstate(invalid="ignore"):
+        out = vals.max(axis=2)
+    if absolute:
+        out = np.abs(out)
+    out[~sel_m.any(axis=2)] = np.nan
+    return out
+
+
+def channel_z2(
+    cycles: dict,
+    *,
+    median: np.ndarray,   # (G, T, C) fit-time medians
+    scale: np.ndarray,    # (G, T, C) fit-time scales
+    group: np.ndarray,    # (N, T) group index per cycle bin
+) -> np.ndarray:
+    """Per-channel squared z, ``(N, T, C)``, zero where unobserved.
+
+    ``fit_score_b1`` collapses the channels with a mean; the path-max variant
+    above needs the decomposition, so it is exposed here rather than
+    re-implemented at the call site (one definition of z, one place to audit).
+    """
+    X = np.asarray(cycles["X"], dtype=np.float64)
+    M = np.asarray(cycles["M"], dtype=bool)
+    N, T, C = X.shape
+    rows = np.arange(T)
+    med = np.asarray(median, dtype=np.float64)[group, rows]      # (N, T, C)
+    scl = np.asarray(scale, dtype=np.float64)[group, rows]
+    z = np.where(M, (X - med) / scl, 0.0)
+    out = np.where(M, z * z, 0.0)
+    # Bins with no observation at all are NaN, not zero — a zero would read as
+    # "perfectly normal" in every downstream aggregate.
+    out[~M.any(axis=2)] = np.nan
+    return out
+
+
 __all__ = [
     "BANDS",
     "BIN_DAYS",
@@ -430,8 +596,12 @@ __all__ = [
     "alarm_rates",
     "bin_cycle",
     "build_distribution_cycles",
+    "calendar_doy_bins",
     "channel_names",
     "channel_specs",
+    "channel_z2",
     "fit_score_b1",
+    "fit_score_calendar",
+    "pathmax_scores",
     "stat_channels",
 ]

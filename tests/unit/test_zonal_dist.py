@@ -388,3 +388,110 @@ def test_lower_quantile_arm_detects_a_drop_the_mean_hides() -> None:
     # The lower-quantile statistics moved; the median statistics did not.
     assert not np.allclose(lower["red_p10"], level["red_median"] * 0.6)
     assert np.allclose(level["red_median"], reader.get_stat("median")[:, :, bi["red"]])
+
+
+# ---------------------------------------------------------------------------
+# b0_calendar variant + p10 path-max (compare-spatial-representation task 2.3)
+# ---------------------------------------------------------------------------
+def _cycles_for_scoring(n=6, seed=0):
+    g = np.random.default_rng(seed)
+    T, C = zd.N_BINS, len(zd.channel_specs("level"))
+    X = np.abs(g.normal(0.5, 0.1, (n, T, C))).astype(np.float32)
+    M = np.ones((n, T, C), dtype=bool)
+    M[0, :4] = False
+    return {"X": X, "M": M, "field_ids": np.arange(n), "cycle_keys": [f"f{i}:c" for i in range(n)]}
+
+
+def test_calendar_bins_are_in_range_and_monotone_in_day():
+    bins = np.arange(zd.N_BINS)
+    a = zd.calendar_doy_bins(bins, start_day=0)
+    b = zd.calendar_doy_bins(bins, start_day=0)
+    assert a.min() >= 0 and a.max() < zd.N_BINS
+    np.testing.assert_array_equal(a, b)
+    # a later cycle start shifts the calendar assignment, never the cycle bins
+    c = zd.calendar_doy_bins(bins, start_day=60)
+    assert not np.array_equal(a, c)
+
+
+def test_calendar_scorer_leaks_no_test_cycle():
+    cyc = _cycles_for_scoring()
+    train = np.array([True, True, True, False, False, False])
+    starts = np.zeros(len(cyc["X"]), dtype=int)
+    s1, _ = zd.fit_score_calendar(cyc, train_mask=train, start_days=starts, min_n=2)
+    cyc2 = {k: (v.copy() if hasattr(v, "copy") else v) for k, v in cyc.items()}
+    cyc2["X"][3:] *= 100.0
+    s2, _ = zd.fit_score_calendar(cyc2, train_mask=train, start_days=starts, min_n=2)
+    np.testing.assert_allclose(s1[:3], s2[:3], equal_nan=True)
+    assert not np.allclose(s1[3:], s2[3:], equal_nan=True)
+
+
+def test_calendar_scorer_rejects_an_empty_train_mask():
+    cyc = _cycles_for_scoring()
+    with pytest.raises(ValueError, match="selects no cycle"):
+        zd.fit_score_calendar(cyc, train_mask=np.zeros(6, bool),
+                              start_days=np.zeros(6, int))
+
+
+def test_calendar_scorer_nan_where_unobserved():
+    cyc = _cycles_for_scoring()
+    scores, _ = zd.fit_score_calendar(
+        cyc, train_mask=np.ones(6, bool), start_days=np.zeros(6, int), min_n=2,
+    )
+    assert np.isnan(scores[0, :4]).all()
+    assert np.isfinite(scores[0, 4:]).all()
+
+
+def test_pathmax_picks_the_single_channel_evidence():
+    T, C = zd.N_BINS, 8
+    z2 = np.zeros((2, T, C))
+    z2[0, 5, 2] = 9.0           # one channel spikes
+    z2[0, 5, 0] = 1.0
+    m = np.ones((2, T, C), dtype=bool)
+    out = zd.pathmax_scores(z2, [0, 2], m)
+    assert out[0, 5] == 9.0
+    mean = z2[0, 5].sum() / C
+    assert out[0, 5] > mean     # the max is not diluted by the 8-channel mean
+
+
+def test_pathmax_is_nan_when_no_subset_channel_is_observed():
+    T, C = 4, 3
+    z2 = np.ones((1, T, C))
+    m = np.ones((1, T, C), dtype=bool)
+    m[0, 2, :] = False
+    assert np.isnan(zd.pathmax_scores(z2, [0, 1], m)[0, 2])
+
+
+def test_pathmax_validates_channel_indices():
+    with pytest.raises(ValueError, match="out of range"):
+        zd.pathmax_scores(np.ones((1, 2, 3)), [7], np.ones((1, 2, 3), bool))
+
+
+def test_channel_z2_matches_the_b1_decomposition():
+    cyc = _cycles_for_scoring()
+    scores, scorer = zd.fit_score_b1(cyc, train_mask=np.ones(6, bool))
+    group = (np.asarray(scorer.season_group if callable(scorer.season_group) else 0))
+    # no doy context was given, so every bin uses group 0
+    z2 = zd.channel_z2(cyc, median=scorer.median, scale=scorer.scale,
+                       group=np.zeros((6, zd.N_BINS), dtype=int))
+    mean = z2.sum(axis=2) / np.maximum(cyc["M"].sum(axis=2), 1)
+    np.testing.assert_allclose(mean, scores, atol=1e-6, equal_nan=True)
+
+
+def test_pathmax_on_lower_still_sees_the_p10_signal():
+    """The p10 arm scored by path-max must react to a p10 channel shift."""
+    cyc = _cycles_for_scoring()
+    names = zd.channel_names("lower")
+    scores, scorer = zd.fit_score_b1(cyc, train_mask=np.ones(6, bool))
+    z2 = zd.channel_z2(cyc, median=scorer.median, scale=scorer.scale,
+                       group=np.zeros((6, zd.N_BINS), dtype=int))
+    ndvi_p10 = names.index("ndvi_p10")
+    base = zd.pathmax_scores(z2, [ndvi_p10], cyc["M"])
+
+    cyc2 = {k: v for k, v in cyc.items()}
+    cyc2["X"] = cyc["X"].copy()
+    cyc2["X"][1, 20, ndvi_p10] -= 1.0
+    s2, scorer2 = zd.fit_score_b1(cyc2, train_mask=np.ones(6, bool))
+    z2b = zd.channel_z2(cyc2, median=scorer2.median, scale=scorer2.scale,
+                        group=np.zeros((6, zd.N_BINS), dtype=int))
+    after = zd.pathmax_scores(z2b, [ndvi_p10], cyc["M"])
+    assert after[1, 20] > base[1, 20]

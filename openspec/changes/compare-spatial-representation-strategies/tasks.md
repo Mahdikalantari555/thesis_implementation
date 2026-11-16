@@ -29,15 +29,17 @@
 - [ ] 2.2 `StatsZarrReader._validate_schema` accepts the extra statistics
       without relaxing the field/date/band assertions; a test proves the
       median path is byte-identical to today after the change.
-- [ ] 2.3 Scoring paths: `b1_dist` (`B1PhaseZCausal` on the extended
+- [x] 2.3 Scoring paths: `b1_dist` (`B1PhaseZCausal` on the extended
       channel set), `b0_dist` (`b0_calendar` on the same channels) and the
       `p10`-only path-max variant; each scored through the unchanged alarm
       rule; unit test that the median-only configuration reproduces the
       current `b1` numbers exactly (regression guard).
-      Partly done: `fit_score_b1` + the `level`-preset identity test
-      (`test_fit_score_b1_reproduces_the_reference_path`, plus the CLI's
-      `--self-check`) prove the b1 reproduction. **Still open:** the
-      `b0_calendar` DOY variant and the `p10`-only path-max scorer.
+      DONE: `fit_score_b1` (b1 reproduction, asserted by the `level`-preset
+      identity test and the CLI's `--self-check`), `fit_score_calendar`
+      (`b0_calendar` calendar-DOY reference on the same channels), and
+      `pathmax_scores` + `channel_z2` (the p10-only path-max, reported
+      separately so the lower-quantile answer cannot be diluted).
+      `calendar_doy_bins` maps cycle bins to calendar bins.
 - [ ] 2.4 Evaluation: R0.5 arms on the identical evaluation panel,
       injection sets and calibration budgets as the patch arms; MDM80 per
       temporal shape + event-FAR + delay reported in the comparison table.
@@ -124,3 +126,26 @@
       and coherent-vs-white results, the crossing table, honest negatives
       explicit, L-rung labelling; decision handed to
       patch-full-run-and-ablations.
+
+## Implementation notes (data-free half)
+
+- `monitor/spatial_study.py` — the pure analysis half of finding 24:
+  `spatial_support` (30 m ⇒ 1 px = 0.09 ha, 16×16 = 480 m ≈ 23 ha),
+  `geometry_memo` (32 px default; 64 px excluded, 3.83× the median field),
+  `capacity_flag` (median-referenced ±20 %), `crossing_table` +
+  `sign_test` (the PAIRED four-cell detectability table with Wilson CIs and
+  an exact binomial test — misaligned arrays are a hard error),
+  `alarm_frequency_diagnostic` (per-pixel frequency, successive-cycle top-q
+  Jaccard, alarm-count entropy), `static_pattern_normalizer` (a field's own
+  clean climatology, floored), `noise_null_gap` (hard-coded
+  `gate_eligible=False`), and `render_comparison_table` (one table across
+  the four dimensions, with the support column, the basis label and the
+  stated confound). 32 tests in `test_spatial_study.py`.
+- `scripts/bench_spatial_representations.py` — measures lazy Zarr reads vs a
+  materialized preload, records the lazy-vs-materialized decision with its
+  rule, times ONE forward+backward per representation (R1 32 px, R2 16 px,
+  R3 multi-scale, R1_pixelwise) and extrapolates per-epoch/total hours,
+  peak RAM, CPU utilization and the capacity flags into
+  `reports/bench/spatial_<stamp>.json`. 7 tests in `test_bench_spatial.py`.
+  **Owner command:** `python scripts/bench_spatial_representations.py
+  --store data/processed/patches.zarr` (on the data machine).
