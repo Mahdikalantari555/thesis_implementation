@@ -64,3 +64,20 @@ under this change.
 - **THEN** each baseline coefficient's source (sugarcane or recorded
   row-crop analogue) is in the model card, and missing terms yield
   `absent`, not a substituted default
+
+### Requirement: Indicator z-unit is labelled as population-referenced
+
+Indicator z-scores use the across-field spread at the same phenophase as
+their unit; they are therefore **population-referenced** measurements, not
+farm-local ones. Every report SHALL label them as such, SHALL additionally
+report the per-field (farm-own) indicator z where sufficient history exists,
+and SHALL NOT use a population-referenced indicator to make a claim about
+within-farm abnormality unless the farm-own variant agrees. The labelling
+follows the basis tiers of `farm-local-anomaly-scoring`.
+
+#### Scenario: Indicator basis is stated
+
+- **WHEN** indicator agreement is reported for an arm
+- **THEN** each indicator row states whether its z-unit is across-field or
+  farm-own, the farm-own variant is present where history suffices, and
+  disagreement between the two is surfaced rather than averaged away

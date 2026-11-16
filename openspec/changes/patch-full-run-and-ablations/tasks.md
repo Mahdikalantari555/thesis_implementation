@@ -19,7 +19,13 @@
 - [ ] 2.1 E2 aux-weight {0, 0.3}; decision: keep aux only if MDM improves.
 - [ ] 2.2 E6 LST-off checkpoint (feeds patch-independent-indicators).
 - [ ] 2.3 E4 covariates ladder (+weather last, conditioned AND
-      unconditioned reported).
+      unconditioned reported). The ladder gains ONE cell for the
+      between-farm differences the owner prompt names: ratoon/cycle kind and
+      variety group (already present in `cycles_490.parquet` and used by
+      `baseline/robust.py` strata, absent from every model covariate set) —
+      added to the patch covariates and compared against the no-stratum arm;
+      whether the SCALE should depend on ratoon/variety is separately owned
+      by `farm-local-anomaly-scoring`.
 - [ ] 2.4 E5 inner-buffer + burn-in variants (the scale/representation sweep
       lives in `compare-spatial-representation-strategies`).
 - [ ] 2.5 Sensor-offset estimation script (near-coincident L8/L9 pairs over

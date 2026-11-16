@@ -6,7 +6,11 @@
       scene time, coefficient registry with sources; unit tests on known
       values; `absent` propagation when a coefficient or Ta is missing.
 - [ ] 1.2 Indicator z-score pipeline: per-bin aggregation, phenophase-matched
-      robust z, exceedance threshold; unit tests on synthetic series.
+      robust z, exceedance threshold; unit tests on synthetic series. Both
+      z-units are produced and labelled: across-field (population-referenced,
+      current behaviour) AND farm-own (per-field spread, with the pooled
+      fallback and tier counts of `farm-local-anomaly-scoring`); a report row
+      without the unit label fails the build.
 - [ ] 1.3 Availability checker: CWSI_ET / TVDI / physical CWSI / ETa-ETrF
       with coverage counts; `absent` semantics test.
 - [ ] 1.4 External-consistency module: ERA5 event context (precip deficit,

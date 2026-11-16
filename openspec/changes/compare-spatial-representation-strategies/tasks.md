@@ -13,36 +13,94 @@
       PatchDeepScorer interface (top-q mean primary, majority-vote flag);
       aggregation unit tests against hand-computed values.
 
-## 2. Benchmark module (TDD-first)
+## 2. R0.5 zonal distribution statistics (rule-based, no training)
 
-- [ ] 2.1 `scripts/bench_spatial_representations.py`: Zarr random-read,
+- [ ] 2.1 Channel builder: per-(field, cycle, bin) `{median, std, p10, iqr}`
+      per band on the 36-bin grid, read from the EXISTING `stats.zarr` via
+      `StatsZarrReader.get_stat` (no extraction, no new store); unit tests
+      on a synthetic cube (bin aggregation matches `nanpercentile` on
+      hand-built input, NaN-as-absent discipline, channel order).
+- [ ] 2.2 `StatsZarrReader._validate_schema` accepts the extra statistics
+      without relaxing the field/date/band assertions; a test proves the
+      median path is byte-identical to today after the change.
+- [ ] 2.3 Scoring paths: `b1_dist` (`B1PhaseZCausal` on the extended
+      channel set), `b0_dist` (`b0_calendar` on the same channels) and the
+      `p10`-only path-max variant; each scored through the unchanged alarm
+      rule; unit test that the median-only configuration reproduces the
+      current `b1` numbers exactly (regression guard).
+- [ ] 2.4 Evaluation: R0.5 arms on the identical evaluation panel,
+      injection sets and calibration budgets as the patch arms; MDM80 per
+      temporal shape + event-FAR + delay reported in the comparison table.
+- [ ] 2.5 R0-subset re-score: existing R0 arms scored on exactly the PoC
+      evaluation panel with the identical injections, so the representation
+      effect is not confounded with training-set size; confound stated next
+      to any row that still reuses an all-train-field result.
+
+## 3. Heterogeneity + noise battery (analysis only, no retraining)
+
+- [ ] 3.1 Static-pattern control: per-field per-pixel clean climatology over
+      that field's own clean cycles → chronic-offset normalizer; scored
+      alongside population σ for every representation; fallback to
+      population σ for fields with too few clean cycles (listed in the
+      report); unit test that the offset is leave-one-cycle-out safe.
+- [ ] 3.2 White-noise null: `spatial="white"` mode in the patch applier
+      (matched mean footprint, random in-field pixel subset, seed-fixed),
+      applied to the same δ ladder; MDM80 reported as a diagnostic column
+      and excluded from every severity gate (asserted by a test).
+- [ ] 3.3 Per-pixel alarm-frequency diagnostic on clean dev cycles:
+      share of pixels alarming in >50% of bins, successive-cycle top-q pixel
+      set Jaccard overlap, per-pixel alarm entropy; reported per
+      representation.
+- [ ] 3.4 Summary: a single "chronic vs event vs noise" table per
+      representation, with the coherent-minus-white MDM gap and the
+      MDM-under-chronic-offset drop stated as numbers.
+
+## 4. Extent axis + detectability crossing
+
+- [ ] 4.1 Footprint sweep {0.1, 0.3, 0.6, 1.0} on frozen checkpoints (no
+      retraining, no recalibration): MDM80 and localization AUPRC per
+      extent per representation; unit test that footprint 1.0 reproduces
+      the existing protocol numbers exactly.
+- [ ] 4.2 Crossing table per severity: {patch-only, zonal-only, both,
+      neither} counts with Wilson CIs and a paired test over fields;
+      committed under reports/ with the paired field list.
+
+## 5. Benchmark module (TDD-first)
+
+- [ ] 5.1 `scripts/bench_spatial_representations.py`: Zarr random-read,
       preload time/RAM, per-representation epoch throughput, CPU util,
       peak RAM, disk I/O → one JSON artifact; runs on CPU.
-- [ ] 2.2 Run the benchmark ONCE; record the lazy-vs-materialized decision
+- [ ] 5.2 Run the benchmark ONCE; record the lazy-vs-materialized decision
       + per-epoch estimates (gates the user-run commands).
 
-## 3. Representations
+## 6. Representations
 
-- [ ] 3.1 R2 config end-to-end (smoke on CPU: shapes, NaN discipline,
+- [ ] 6.1 R2 config end-to-end (smoke on CPU: shapes, NaN discipline,
       aggregation, estimates).
-- [ ] 3.2 R3a multi-dilation stem (flag) + param count check (≈+11k);
+- [ ] 6.2 R3a multi-dilation stem (flag) + param count check (≈+11k);
       smoke.
-- [ ] 3.3 R3b two-scale fusion — built ONLY if the pre-registered trigger
+- [ ] 6.3 R3b two-scale fusion — built ONLY if the pre-registered trigger
       fires (R2 or R3a context benefit with CI excluding zero).
 
-## 4. Runs (user-executed, estimates first)
+## 7. Runs (user-executed, estimates first)
 
-- [ ] 4.1 Single-seed screening: R2 K ∈ {4, 6, 8} + R3a; review produced
+- [ ] 7.1 Single-seed screening: R2 K ∈ {4, 6, 8} + R3a; review produced
       reports; pick finalists.
-- [ ] 4.2 Finalists × seeds {13, 42, 2026}: full severity sweep (3 shapes +
-      secondary) + localization probe + benchmark fields per run.
+- [ ] 7.2 Finalists × seeds {13, 42, 2026}: full severity sweep (3 shapes +
+      secondary) + localization probe + extent sweep + benchmark fields per
+      run.
 
-## 5. Verdict
+## 8. Verdict
 
-- [ ] 5.1 The ONE transparent table + figure (four dimensions) committed
+- [ ] 8.1 The ONE transparent table + figure (four dimensions, R0 / R0.5 /
+      R1 / R2 / R3 rows, farm-local vs population-ranked labels) committed
       under reports/; pre-registered adoption rule applied verbatim.
-- [ ] 5.2 Finding 24 (Persian, persian-writing skill): scale-accuracy
+- [ ] 8.2 Resolution arithmetic stamped into the table and the finding
+      (1 px = 30 m = 0.09 ha; R2 crop = 480 m ≈ 23 ha; LST from ~100 m) —
+      a missing support column is a defect.
+- [ ] 8.3 Finding 24 (Persian, persian-writing skill): scale-accuracy
       differences stated plainly (the owner's core ask), capacity and
-      compute columns beside every accuracy column, honest negatives
+      compute columns beside every accuracy column, the chronic-vs-event
+      and coherent-vs-white results, the crossing table, honest negatives
       explicit, L-rung labelling; decision handed to
       patch-full-run-and-ablations.
