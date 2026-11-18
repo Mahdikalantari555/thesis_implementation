@@ -284,3 +284,12 @@ observation's channels in registry order (e.g. L08-13):
    `reports/literature_models_benchmark.json` exists but no view surfaces it.
 8. **Neighbour definition** — kNN by centroid distance (1.8 km, ≤4), ignoring
    the registry's block/office structure which is now available in the payload.
+9. **Patch-level pixel arms (trial stage, NOT wired to the platform)** —
+   `patch_cnn_gru` / `patch_pixelwise` (48×48 field-aligned windows, per-pixel
+   z² against a frozen σ table, top-20 % in-field aggregation, empirical-p
+   alarms) exist only in the controlled-trial artifacts
+   (`docs/findings/23_patch_level_poc.md`; MDM80 = S1 vs >S6 for every
+   field-level arm on the identical protocol). Wiring one of them into the
+   exporter/platform as a new contract slot is a separate openspec change;
+   until then this document describes the platform as deployed (field-level
+   arms only).
