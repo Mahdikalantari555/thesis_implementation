@@ -83,6 +83,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--protocol", choices=["severity", "legacy"], default="severity",
                    help="final-test protocol (severity = literature-grounded sweep)")
     p.add_argument("--scorer", default="recon_only", help="scoring arm for the severity final test")
+    p.add_argument("--b1-run-id", default=None,
+                   help="reference B1 run id (default: b1_<date suffix of --run-id>)")
     p.add_argument("--attach-severity", action="store_true",
                    help="add severity_table_sha256 + mdm80 to the existing frozen sidecar (task 3.1)")
     p.add_argument("--seeds", default="13,42,2026")
@@ -363,7 +365,7 @@ def final_test(args) -> int:
     # B1 lives in its own run dir (b1_<same date suffix as the main run>).
     # run_id pattern "<model>_<date>" where model itself contains underscores.
     suffix = args.run_id.rsplit("_", 1)[1] if "_" in args.run_id else time.strftime("%Y%m%d")
-    b1_run_id = f"b1_{suffix}"
+    b1_run_id = args.b1_run_id or f"b1_{suffix}"
     b1 = load_b1(b1_run_id, seed)
     # B1's τ, k, normalizer from the same dev calibration (metrics of the b1 run).
     b1_metrics_path = mproto.DEV_DIR / b1_run_id / "metrics_b1.json"
@@ -693,7 +695,7 @@ def final_test_severity(args) -> int:
 
     # B1: dev-calibrated severity metrics of the b1 run (same date suffix).
     suffix = args.run_id.rsplit("_", 1)[1] if "_" in args.run_id else time.strftime("%Y%m%d")
-    b1_run_id = f"b1_{suffix}"
+    b1_run_id = args.b1_run_id or f"b1_{suffix}"
     b1_metrics_path = mproto.DEV_DIR / b1_run_id / f"metrics_b1_sev_{args.scorer}.json"
     b1_metrics = json.loads(b1_metrics_path.read_text(encoding="utf-8"))
     b1_entry = ([r for r in b1_metrics["per_seed"] if r["seed"] == seed] or b1_metrics["per_seed"])[0]
