@@ -42,6 +42,7 @@ import numpy as np
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
+from ssl_anomaly.monitor import holdout as mholdout  # noqa: E402
 from ssl_anomaly.monitor import inputs as minputs  # noqa: E402
 from ssl_anomaly.monitor import models as mmodels  # noqa: E402
 from ssl_anomaly.monitor import normal_bank as nbank  # noqa: E402
@@ -73,7 +74,7 @@ MDM80_CENSORED = 7  # numeric sentinel for ">S6" (ordering only; reported as ">S
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--run-id", required=True, help="training run id (checkpoints/dev/<run_id>/)")
-    p.add_argument("--model", required=True, choices=["masked_transformer", "gru_ae", "gru_pred", "b1"])
+    p.add_argument("--model", required=True, choices=["masked_transformer", "gru_ae", "gru_pred", "b1", *PATCH_SCORERS])
     p.add_argument("--protocol", choices=["severity", "legacy"], default="severity",
                    help="severity = literature-grounded sweep (headline); legacy = finding-16 MAD-scaled continuity")
     p.add_argument("--scorer", choices=SCORER_CHOICES, default="recon_only",
@@ -83,6 +84,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--patch-run", default=None,
                    help="run id holding patch_model.pt / patch_sigma.npz / patch_norm.json "
                         "(default: --run-id)")
+    p.add_argument("--patch-checkpoint", type=Path,
+                   help="explicit patch trainer checkpoint (e.g. <out>/<arch>_seed<seed>/last.pt)")
+    p.add_argument("--patch-norm", type=Path, help="same-run frozen patch normalization")
+    p.add_argument("--patch-sigma", type=Path, help="same-run frozen sigma from clean dev calibration")
+    p.add_argument("--holdout-manifest", type=Path, default=mholdout.HOLDOUT_MANIFEST_PATH,
+                   help="frozen holdout for patch scoring provenance")
     p.add_argument("--bank-k", type=int, choices=[1, 5], default=5)
     p.add_argument("--bank-distance", choices=["knn", "mahalanobis"], default="knn")
     p.add_argument("--seeds", default="13,42,2026", help="seeds to evaluate (default: 13,42,2026)")
@@ -106,77 +113,75 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-def load_patch_artifacts(run_id: str, *, norm_path: str | None = None,
-                         sigma_path: str | None = None) -> tuple:
-    """Load the patch checkpoint + frozen sigma + norm sidecar.
+def load_patch_artifacts(run_id: str, *, checkpoint_path: Path | None = None,
+                         norm_path: Path | None = None, sigma_path: Path | None = None) -> tuple:
+    """Load the same-run checkpoint, normalization and frozen σ. Never refit."""
+    import torch
 
-    All three are REQUIRED and are read from the run's own directory: a patch
-    arm scored with another run's sigma table, or with statistics fitted after
-    the fact, would not be the arm that was trained. ``--patch-norm`` /
-    ``--patch-sigma`` exist only to point at a run whose artifacts live
-    elsewhere (e.g. a resumed run); they never make the files optional.
-    """
     from ssl_anomaly.io import patches as P
+    from ssl_anomaly.models.patch_cnn_gru import build_patch_model
+    from ssl_anomaly.train.patch_data import COVARIATES, N_COVARIATES, PATCH_INPUT_PROTOCOL
 
-    root = mproto.CHECKPOINTS_DEV_DIR / run_id
-    model_path = root / PATCH_ARTIFACTS["model"]
-    sigma_file = Path(sigma_path) if sigma_path else root / PATCH_ARTIFACTS["sigma"]
-    norm_file = Path(norm_path) if norm_path else root / PATCH_ARTIFACTS["norm"]
+    root = checkpoint_path.parent if checkpoint_path else mproto.CHECKPOINTS_DEV_DIR / run_id
+    model_path = checkpoint_path or root / PATCH_ARTIFACTS["model"]
+    sigma_file = sigma_path or root / PATCH_ARTIFACTS["sigma"]
+    norm_file = norm_path or root / (P.NORM_STATS_NAME if checkpoint_path else PATCH_ARTIFACTS["norm"])
     for label, path in (("model", model_path), ("sigma", sigma_file), ("norm", norm_file)):
-        if not path.exists():
+        if not path.is_file():
             raise FileNotFoundError(
                 f"patch {label} artifact not found: {path} — the patch arm needs the "
                 "checkpoint, the frozen sigma table and the norm sidecar from the SAME "
                 "run; nothing is inferred or refitted here."
             )
 
-    payload = __import__("torch").load(model_path, map_location="cpu", weights_only=False)
+    payload = torch.load(model_path, map_location="cpu", weights_only=False)
     cfg = payload["config"]
-    from ssl_anomaly.models.patch_cnn_gru import build_patch_model
-
+    if cfg.get("input_protocol") != PATCH_INPUT_PROTOCOL:
+        raise ValueError("patch checkpoint predates the corrected input protocol; do not rescore legacy weights")
+    if (cfg.get("n_channels") != P.N_CHANNELS or cfg.get("n_covariates") != N_COVARIATES
+            or cfg.get("covariates") != list(COVARIATES)):
+        raise ValueError("patch checkpoint channels/covariates do not match the input protocol")
+    norm = P.load_patch_norm(norm_file)
+    if norm["sha256"] != cfg.get("norm_sha256"):
+        raise ValueError("patch checkpoint and frozen normalization hashes differ")
+    for key in ("splits_sha256", "holdout_sha256"):
+        if not norm.get(key) or norm[key] != cfg.get(key):
+            raise ValueError(f"patch checkpoint and normalization disagree on {key}")
     model = build_patch_model(
-        use_cnn=bool(cfg.get("use_cnn", True)),
-        n_channels=int(cfg["n_channels"]),
-        d_model=int(cfg.get("d_model", 64)),
-        n_covariates=int(cfg.get("n_covariates", 0)),
-        n_horizons=int(cfg.get("n_horizons", 3)),
+        use_cnn=bool(cfg["use_cnn"]),
+        n_channels=P.N_CHANNELS,
+        d_model=int(cfg["d_model"]),
+        n_covariates=N_COVARIATES,
+        n_horizons=int(cfg["n_horizons"]),
         stem_widths=tuple(cfg.get("stem_widths", (44, 60))),
     )
-    model.load_state_dict(payload["state_dict"])
+    model.load_state_dict(payload["state_dict"] if "state_dict" in payload else payload["model"])
 
-    sd = np.load(sigma_file, allow_pickle=False)
-    sigma = mpscores.PatchSigmaTable(
-        sigma=sd["sigma"], fallback=sd["fallback"], n=sd["n"],
-        min_n=int(sd["min_n"]) if "min_n" in sd.files else 20,
-        sha256=str(sd["sha256"]) if "sha256" in sd.files else "",
-    )
-    norm = P.load_patch_norm(norm_file)
+    with np.load(sigma_file, allow_pickle=False) as sd:
+        sigma = mpscores.PatchSigmaTable(
+            sigma=sd["sigma"], fallback=sd["fallback"], n=sd["n"],
+            min_n=int(sd["min_n"]), sha256=str(sd["sha256"]),
+        )
+        expected = {"model_sha256": hashlib.sha256(model_path.read_bytes()).hexdigest(),
+                    "norm_sha256": norm["sha256"], "input_protocol": PATCH_INPUT_PROTOCOL}
+        if any(k not in sd.files or str(sd[k]) != v for k, v in expected.items()):
+            raise ValueError("patch sigma is not bound to this checkpoint and input protocol")
+    if sigma.sha256 != mpscores.sigma_table_sha256(sigma.sigma, sigma.fallback, sigma.n):
+        raise ValueError("patch sigma table failed its sha256 check")
     return model, sigma, norm, cfg
 
 
-def build_patch_arm(model: str, run_id: str, device: str, *, sigma, in_field: np.ndarray,
-                    n_channels: int) -> mpscores.PatchDeepScorer:
-    """Construct the patch scorer for one arm (``patch_cnn_gru`` or the control).
-
-    The control is the SAME network with the CNN stem collapsed to a 1x1 conv
-    (``patch_cnn_gru.scorer_id``), so the comparison isolates spatial context.
-    A checkpoint whose ``use_cnn`` disagrees with the requested arm is refused:
-    evaluating the CNN-off weights under the CNN arm's name would be a silent
-    relabelling of the result.
-    """
+def build_patch_arm(arm: str, model, cfg: dict, device: str, *, sigma,
+                    in_field: np.ndarray) -> mpscores.PatchDeepScorer:
+    """Keep the scorer label tied to the checkpoint's architecture."""
     from ssl_anomaly.models.patch_cnn_gru import scorer_id
 
-    ckpt, sigma_tbl, _norm, cfg = load_patch_artifacts(run_id)
-    want_cnn = model == "patch_cnn_gru"
-    if bool(cfg.get("use_cnn", True)) is not want_cnn:
-        raise ValueError(
-            f"checkpoint was trained with use_cnn={cfg.get('use_cnn')} but "
-            f"--scorer {model} asks for use_cnn={want_cnn}; re-run with the arm "
-            "the checkpoint was trained as."
-        )
+    want_cnn = arm == "patch_cnn_gru"
+    if bool(cfg["use_cnn"]) is not want_cnn:
+        raise ValueError(f"checkpoint use_cnn={cfg['use_cnn']} does not match scorer {arm}")
     return mpscores.PatchDeepScorer(
-        scorer_id(want_cnn), ckpt, sigma,
-        in_field=in_field, n_channels=n_channels, device=device,
+        scorer_id(want_cnn), model, sigma,
+        in_field=in_field, n_channels=int(cfg["n_channels"]), device=device,
     )
 
 
@@ -686,35 +691,43 @@ def run_patch_severity_protocol(args: argparse.Namespace, manifest: dict, sel: d
     from ssl_anomaly.io import patches as P
 
     root = P.open_store(store_path)
+    epoch = np.datetime64(P.validate_locked_patch_store(root, manifest), "D")
     patch_run = args.patch_run or args.run_id
+    holdout = mholdout.load_holdout_manifest(path=args.holdout_manifest)
+    mholdout.assert_frozen_holdout_matches_splits(holdout, manifest)
 
-    # --- join the field-level cycle list to the store --------------------
     cycle_keys = list(sel["cycle_keys"])
-    fids, cids = [], []
-    for key in cycle_keys:
-        # monitor.inputs builds keys as "<field>:<cycle_id>" (inputs.py:207)
-        parts = str(key).split(":")
-        if len(parts) != 2:
-            raise SystemExit(f"unexpected cycle key {key!r}; expected '<field>:<cycle_id>'")
-        fids.append(int(parts[0]))
-        cids.append(int(parts[1]))
-    fids_a, cids_a = np.asarray(fids, dtype=np.int64), np.asarray(cids, dtype=np.int64)
+    msplits.assert_no_test_cycles(cycle_keys, manifest, context="patch dev evaluation")
+    if not set(cycle_keys) <= set(manifest["cycles"]["dev"]):
+        raise ValueError("patch dev evaluation only accepts locked dev cycle keys")
+    index = P.patch_cycle_index(root)
+    for key, start, end in zip(cycle_keys, sel["start_dates"], sel["end_dates"], strict=True):
+        cycle = index.get(key)
+        if cycle is None:
+            raise ValueError(f"requested dev patch cycle {key} is not in the store")
+        if (epoch + np.timedelta64(cycle.start_day, "D") != np.datetime64(start, "D")
+                or epoch + np.timedelta64(cycle.end_day + 1, "D") != np.datetime64(end, "D")):
+            raise ValueError(f"patch bounds for {key} disagree with the locked dev cycle")
+    fids = [index[key].field_id for key in cycle_keys]
+    cids = [index[key].cycle_id for key in cycle_keys]
 
-    model, sigma, norm, cfg = load_patch_artifacts(patch_run)
-    batch = pE.patch_batch_for_cycles(root, fids_a, cids_a, norm=norm)
-    if batch["cycles_found"] != len(cycle_keys):
-        raise SystemExit(
-            f"{batch['cycles_found']} patch cycles for {len(cycle_keys)} dev cycles — "
-            "every dev cycle must exist in the store; dropping them would change the "
-            "evaluation population between arms"
-        )
+    model, sigma, norm, cfg = load_patch_artifacts(
+        patch_run, checkpoint_path=args.patch_checkpoint, norm_path=args.patch_norm,
+        sigma_path=args.patch_sigma,
+    )
+    if seeds != [cfg.get("seed")]:
+        raise ValueError("patch evaluation requires exactly the seed in the checkpoint")
+    if cfg.get("smoke") and not args.smoke:
+        raise ValueError("smoke-trained patch weights can only be scored with --smoke")
+    P.validate_patch_norm_binding(root, norm, manifest, holdout)
+    batch = pE.patch_batch_for_cycles(root, fids, cids, norm=norm)
 
     calib_idx, eval_idx, eval_hash = partition_calib_eval(cycle_keys)
     print(f"[patch-severity] {len(cycle_keys)} dev cycles joined to the store; "
           f"calibration n={len(calib_idx)}, evaluation n={len(eval_idx)} (hash {eval_hash})")
 
-    scorer = build_patch_arm(args.scorer, patch_run, device, sigma=sigma,
-                             in_field=batch["in_field"], n_channels=int(cfg["n_channels"]))
+    scorer = build_patch_arm(args.scorer, model, cfg, device, sigma=sigma,
+                             in_field=batch["in_field"])
     # evaluate_subset slices -> each sample's in-field mask row must be named
     row_of_sample = np.arange(len(cycle_keys))
     ref_paths = pE.patch_reference_paths(
@@ -728,6 +741,8 @@ def run_patch_severity_protocol(args: argparse.Namespace, manifest: dict, sel: d
 
     levels = sev.load_table()
     families = [f.strip() for f in str(args.shapes).split(",") if f.strip()]
+    eval_batch = {key: value[eval_idx] if isinstance(value, np.ndarray) else value
+                  for key, value in batch.items()}
     cells: dict[str, dict] = {}
     for lv in levels:
         for fam in families:
@@ -737,8 +752,7 @@ def run_patch_severity_protocol(args: argparse.Namespace, manifest: dict, sel: d
                 delays: list[float] = []
                 for rnd in range(max(1, args.rounds)):
                     cell = pE.patch_arm_scores(
-                        arm, {kk: vv[eval_idx] for kk, vv in batch.items()
-                              if kk in ("X", "pixel_valid", "in_field")},
+                        arm, eval_batch,
                         level_id=lv.level_id, family=fam, index=index, round_idx=rnd,
                         field_row=row_of_sample[eval_idx],
                     )
@@ -764,7 +778,7 @@ def run_patch_severity_protocol(args: argparse.Namespace, manifest: dict, sel: d
                 cells[key] = {
                     "n": n, "n_detected": n_det, "detection_rate": n_det / max(1, n),
                     "wilson_ci95": [round(lo, 4), round(hi, 4)],
-                    "median_delay_days": float(np.median(delays)) if delays else float("nan"),
+                    "median_delay_days": float(np.median(delays)) if delays else None,
                     "level_id": lv.level_id, "family": fam, "index": index,
                     "delta_ndvi": lv.delta_ndvi,
                 }
@@ -777,7 +791,7 @@ def run_patch_severity_protocol(args: argparse.Namespace, manifest: dict, sel: d
                             >= MDM80_TARGET), None)
             mdm80[f"{fam}/{index}"] = (
                 {"value": ">S6", "sentinel": MDM80_CENSORED, "censored": True,
-                 "level_cell": None, "median_delay_days": float("nan")}
+                 "level_cell": None, "median_delay_days": None}
                 if reached is None else
                 {"value": reached, "sentinel": int(reached[1:]), "censored": False,
                  "level_cell": f"{reached}/{fam}/{index}",
@@ -791,13 +805,19 @@ def run_patch_severity_protocol(args: argparse.Namespace, manifest: dict, sel: d
         "alarm_statistic": "neg_log_empirical_p_vs_calibration_subset",
         "mdm80": mdm80, "cells": cells,
         "patch_sigma_sha256": sigma.sha256,
-        "patch_run": patch_run,
+        "patch_norm_sha256": norm["sha256"],
+        "unnormalized_channels": batch["unnormalized_channels"],
+        "holdout_sha256": holdout["manifest_sha256"],
+        "params": sum(p.numel() for p in model.parameters()),
+        "patch_run": str(args.patch_checkpoint or patch_run),
         "axis": "patch-level representation (per-pixel, in-field aggregation)",
         "n_calib_cycles": len(calib_idx), "n_eval_cycles": len(eval_idx),
         "n_injected_total": int(sum(c["n"] for c in cells.values())),
     }]
     return {
         "protocol": "severity_sweep_patch_v1",
+        "input_protocol": cfg["input_protocol"],
+        "n_channels": cfg["n_channels"],
         "shapes": families, "scorer": args.scorer,
         "eval_subset_sha256": eval_hash,
         "n_calib_cycles": len(calib_idx), "n_eval_cycles": len(eval_idx),
@@ -838,6 +858,11 @@ def aggregate_severity(per_seed: list[dict]) -> dict:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     t0 = time.time()
+    patch = args.scorer in PATCH_SCORERS
+    if patch and (args.model != args.scorer or args.protocol != "severity"):
+        raise SystemExit("patch scoring needs matching --model/--scorer and --protocol severity")
+    if args.model in PATCH_SCORERS and not patch:
+        raise SystemExit("patch models require a patch --scorer")
     seeds = [int(s) for s in args.seeds.split(",")]
     device = args.device or ("cuda" if _cuda() else "cpu")
 
@@ -852,7 +877,7 @@ def main(argv: list[str] | None = None) -> int:
         wall = time.time() - t0
         agg = aggregate_severity(per_seed)
         N = int(sev_metrics["n_calib_cycles"] + sev_metrics["n_eval_cycles"])
-        channel_count = len(per_seed[0]["nrmse_per_band"]) if per_seed else 8
+        channel_count = sev_metrics["n_channels"] if patch else len(per_seed[0]["nrmse_per_band"])
         metrics = {
             "run_id": args.run_id,
             "model_id": args.model,
@@ -861,7 +886,8 @@ def main(argv: list[str] | None = None) -> int:
             "bank_variant": (f"{args.bank_distance}{args.bank_k}" if args.scorer == "bank" else None),
             "severity_table_sha256": sev_metrics["severity_table_sha256"],
             "eval_subset_sha256": sev_metrics["eval_subset_sha256"],
-            "ladder_rung": "L2",
+            "ladder_rung": "engineering_smoke_only" if patch and args.smoke else "L2",
+            **({"input_protocol": sev_metrics["input_protocol"]} if patch else {}),
             "patch_run": (per_seed[0].get("patch_run") if per_seed else None),
             "patch_sigma_sha256": (per_seed[0].get("patch_sigma_sha256")
                                    if per_seed else None),
@@ -895,9 +921,18 @@ def main(argv: list[str] | None = None) -> int:
         if args.smoke:
             suffix += "_smoke"
         out_path = out_dir / f"metrics_{args.model}{suffix}.json"
-        out_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+        if patch:
+            # A repeated patch run gets an explicit new id, never a replaced report.
+            with out_path.open("x", encoding="utf-8") as output:
+                json.dump(metrics, output, indent=2, allow_nan=False)
+        else:
+            out_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
 
-        if not args.smoke:
+        if patch and not args.smoke:
+            # The patch score has a different calibration/report contract. Do not
+            # append invented field-level FAR, AUPRC, or NRMSE to the dev log.
+            print("[dev_log] patch report only; full patch PoC metrics and review are pending")
+        if not args.smoke and not patch:
             primary_key = f"{sev.ACUTE_FAMILY}/ndvi"
             mdm_vals = [r["mdm80"][primary_key]["sentinel"] for r in per_seed]
             mdm_mean, mdm_std = mproto.mean_std([float(v) for v in mdm_vals])

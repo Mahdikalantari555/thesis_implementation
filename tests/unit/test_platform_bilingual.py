@@ -201,6 +201,7 @@ def test_selected_field_default_is_guarded():
     assert "FIELDS[9]" not in code and "FIELDS[10]" not in code and "FIELDS[18]" not in code
 
 
+@pytest.mark.real_data
 def test_exported_series_matches_platform_expectations():
     """The exporter and the platform must agree on the payload shape (contract v5)."""
     series = json.loads((SRC / "data" / "series_khuzestan.json").read_text(encoding="utf-8"))

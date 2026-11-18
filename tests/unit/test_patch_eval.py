@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from tests.patch_fixtures import bind_patch_store
 
 from ssl_anomaly.io import patches as P
 from ssl_anomaly.monitor import patch_eval as PE
 from ssl_anomaly.monitor import patch_scores as PS
 from ssl_anomaly.monitor import severity_table as sev
+from ssl_anomaly.train import patch_data as PD
 
 T, C, S = P.N_BINS, P.N_CHANNELS, 8
 
@@ -30,25 +32,29 @@ def _store(tmp_path, field_ids=(11, 22), n_cycles=3, seed=0):
             root["cycle_valid"][fi, ci] = 1
             root["cycle_ids"][fi, ci] = ci
             root["cycle_start_day"][fi, ci] = 10 + ci
+            root["cycle_end_day"][fi, ci] = 10 + ci + P.MAX_CYCLE_DAYS - 1
             root["sensor_id"][fi, ci] = 1
             root["n_obs"][fi, ci] = 2
             vals = g.normal(0.4, 0.05, size=(T, C, S, S)).astype(np.float32)
             # out-of-field pixels carry garbage on purpose: they must never be read
             vals[:, :, S // 2 :, :] = 99.0
             root["values"][fi, ci] = vals
-            root["pixel_valid"][fi, ci, 0] = 1
+            root["pixel_valid"][fi, ci, :, 0] = 1
+    bind_patch_store(root, known=field_ids)
     return root
 
 
 def _norm(median=0.4, iqr=0.05):
     per_ch = {name: {"median": median, "iqr": iqr, "n": 100} for name in P.CHANNELS}
-    return {"L8": per_ch, "L9": per_ch, "unknown": per_ch}
+    return {"stats": {"L8": per_ch, "L9": per_ch, "unknown": per_ch},
+            "channel_order": list(P.CHANNELS)}
 
 
 # --- the join ------------------------------------------------------------
 def test_join_uses_field_and_cycle_ids_not_row_position(tmp_path):
     root = _store(tmp_path)
-    out = PE.patch_batch_for_cycles(root, [22, 11], [1, 2], norm=_norm())
+    root["cycle_ids"][1, 1] = 81  # the ID need not equal the slot
+    out = PE.patch_batch_for_cycles(root, [22, 11], [81, 2], norm=_norm())
     assert out["X"].shape == (2, T, C, S, S)
     # row 0 must be field 22 / cycle 1, i.e. the SECOND store row
     direct = np.asarray(root["values"][1, 1], dtype=np.float32)
@@ -86,9 +92,8 @@ def test_join_keeps_unobserved_values_at_zero_after_normalization(tmp_path):
 
 def test_join_flags_a_missing_channel_sidecar(tmp_path):
     root = _store(tmp_path)
-    out = PE.patch_batch_for_cycles(root, [11], [0], norm={})     # no stats at all
-    # raw units pass through unchanged rather than being silently standardized
-    assert np.isfinite(out["X"]).all()
+    with pytest.raises(ValueError, match="expected stats"):
+        PE.patch_batch_for_cycles(root, [11], [0], norm={})
 
 
 # --- reference paths -----------------------------------------------------
@@ -135,7 +140,9 @@ def _scorer(n=4, seed=0, in_field_shape=None):
 
 def _batch(n=4, seed=0):
     g = np.random.default_rng(seed)
-    return {"X": g.normal(0, 1, size=(n, T, C, S, S)).astype(np.float32),
+    raw = g.uniform(0.1, 0.7, size=(n, T, C, S, S)).astype(np.float32)
+    return {"X": raw.copy(), "raw": raw, "obs": np.ones(raw.shape, bool),
+            "sensor_id": np.ones((n, T), int), "norm_stats": _norm(0.0, 1.0)["stats"],
             "pixel_valid": np.ones((n, T, S, S), bool),
             "in_field": np.ones((n, S, S), bool)}
 
@@ -174,71 +181,108 @@ def test_persistent_cell_uses_the_frozen_duration():
 
 
 # --- the eval_dev patch path, end to end ---------------------------------
-def test_patch_severity_path_runs_on_a_synthetic_store(tmp_path, monkeypatch):
-    """Drive the real ``run_patch_severity_protocol`` against a tiny store.
-
-    This test would catch a cycle-key format mistake (``a|b`` vs ``a:b``), a
-    wrong artifact filename, or a scale mismatch between the p-value path and
-    ``cumulative_channel_max`` — all of which are silent in the aggregate
-    metrics.
-    """
+def test_patch_severity_cli_consumes_the_new_trainer_checkpoint(tmp_path, monkeypatch):
+    """Build the real norm, train the fixture and exercise the dev report path."""
+    import hashlib
     import importlib.util
-    from pathlib import Path as _Path
+    import json
+    from pathlib import Path
 
     import torch
 
-    repo = _Path(__file__).resolve().parents[2]
-    spec = importlib.util.spec_from_file_location("eval_dev", repo / "scripts" / "eval_dev.py")
+    from ssl_anomaly.monitor import holdout as H
+
+    repo = Path(__file__).resolve().parents[2]
+    spec = importlib.util.spec_from_file_location("eval_dev", repo / "scripts/eval_dev.py")
     E = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(E)
+    spec = importlib.util.spec_from_file_location("train_patch", repo / "scripts/train_patch.py")
+    trainer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(trainer)
 
-    _store(tmp_path, field_ids=(11, 22), n_cycles=10)         # writes patches.zarr
-    from ssl_anomaly.io import patches as PP
-    from ssl_anomaly.models.patch_cnn_gru import build_patch_model
-
-    dev = tmp_path / "dev"
-    run_dir = dev / "r1"
-    run_dir.mkdir(parents=True)
-    torch.manual_seed(0)
-    model = build_patch_model(use_cnn=True, n_channels=C, d_model=8, n_horizons=2,
-                              stem_widths=(8, 8))
-    torch.save({
-        "config": {"n_channels": C, "d_model": 8, "n_horizons": 2, "use_cnn": True,
-                   "n_covariates": 0, "stem_widths": (8, 8)},
-        "state_dict": model.state_dict(),
-    }, run_dir / "patch_model.pt")
+    root = _store(tmp_path, field_ids=(33, 11, 22), n_cycles=10)
+    cycle_keys = [f"{fid}:{ci}" for fid in (11, 22) for ci in range(10)]
+    splits, holdout = bind_patch_store(root, known=(11, 22, 33), dev_keys=cycle_keys)
+    lock = tmp_path / "splits.json"
+    lock.write_text(json.dumps(splits))
+    holdout_path = H.save_holdout_manifest(holdout, path=tmp_path / "holdout.json")
+    norm = P.build_patch_norm(root=root, splits_manifest=splits, holdout_manifest=holdout)
+    norm_path = P.save_patch_norm(norm, tmp_path / P.NORM_STATS_NAME)
+    store = tmp_path / "patches.zarr"
+    assert trainer.main([
+        "--splits", str(lock), "--holdout-manifest", str(holdout_path), "--store", str(store),
+        "--norm", str(norm_path), "--out", str(tmp_path), "--seed", "13", "--smoke",
+        "--epochs", "1", "--d-model", "8", "--n-horizons", "1", "--batch-size", "1",
+        "--max-fields", "1", "--max-cycles", "1", "--device", "cpu", "--no-benchmark",
+    ]) == 0
+    ckpt = tmp_path / "patch_cnn_gru_seed13" / "_smoke" / "last.pt"
+    norm_hash = P.norm_stats_sha256(norm)
+    assert P.load_patch_norm(ckpt.with_name(P.NORM_STATS_NAME))["sha256"] == norm_hash
+    # This table is only a synthetic fixture for the frozen artifact contract,
+    # not an estimate of any real dev residual scale.
     sigma = PS.fit_patch_sigma(
         np.random.default_rng(0).normal(0, 1, (20, T, C, S, S)),
         np.ones((20, T, C, S, S), bool), np.ones((20, T), dtype=int),
     )
-    np.savez(run_dir / "patch_sigma.npz", sigma=sigma.sigma, fallback=sigma.fallback,
-             n=sigma.n, min_n=sigma.min_n, sha256=sigma.sha256)
-    PP.save_patch_norm(_norm(), run_dir / "patch_norm.json")
+    sigma_path = tmp_path / "patch_sigma.npz"
+    sigma_args = {
+        "sigma": sigma.sigma, "fallback": sigma.fallback, "n": sigma.n,
+        "min_n": sigma.min_n, "sha256": sigma.sha256,
+        "model_sha256": hashlib.sha256(ckpt.read_bytes()).hexdigest(),
+        "norm_sha256": norm_hash, "input_protocol": PD.PATCH_INPUT_PROTOCOL,
+    }
+    np.savez(sigma_path, **sigma_args)
 
-    monkeypatch.setattr(E.mproto, "CHECKPOINTS_DEV_DIR", dev)
-
-    cycle_keys = [f"{fid}:{ci}" for fid in (11, 22) for ci in range(10)]
-    sel = {"cycle_keys": cycle_keys}
-    args = E.parse_args([
-        "--run-id", "r1", "--model", "gru_ae", "--scorer", "patch_cnn_gru",
-        "--patch-store", str(tmp_path / "patches.zarr"), "--rounds", "1",
-    ])
-    metrics, per_seed = E.run_patch_severity_protocol(args, {}, sel, [13], "cpu")
-
+    epoch = np.datetime64(splits["base_date"], "D")
+    index = P.patch_cycle_index(root)
+    dev = {"cycle_keys": cycle_keys,
+           "start_dates": np.array([epoch + index[k].start_day for k in cycle_keys]),
+           "end_dates": np.array([epoch + index[k].end_day + 1 for k in cycle_keys])}
+    monkeypatch.setattr(E.msplits, "load_splits_locked", lambda: splits)
+    monkeypatch.setattr(E.minputs, "load_masked_cycles", lambda: None)
+    monkeypatch.setattr(E.mproto, "select_splits", lambda *_a, **_kw: dev)
+    monkeypatch.setattr(E.mproto, "DEV_DIR", tmp_path / "reports")
+    argv = [
+        "--run-id", "r1", "--model", "patch_cnn_gru", "--scorer", "patch_cnn_gru",
+        "--patch-store", str(store), "--patch-checkpoint", str(ckpt), "--patch-sigma", str(sigma_path),
+        "--holdout-manifest", str(holdout_path), "--rounds", "1", "--seeds", "13", "--device", "cpu",
+        "--smoke",
+    ]
+    assert E.main(argv) == 0
+    path = tmp_path / "reports/r1/metrics_patch_cnn_gru_sev_patch_cnn_gru_smoke.json"
+    assert "NaN" not in path.read_text()
+    metrics = json.loads(path.read_text())
+    assert metrics["ladder_rung"] == "engineering_smoke_only"
+    assert metrics["input_protocol"] == PD.PATCH_INPUT_PROTOCOL
     assert metrics["protocol"] == "severity_sweep_patch_v1"
     assert metrics["n_calib_cycles"] + metrics["n_eval_cycles"] == 20
-    assert metrics["n_calib_cycles"] >= 8      # the p-value needs enough reference
-    # the default --shapes is the frozen primary pair (acute + persistent);
-    # gradual is opt-in and never a silent default
-    assert set(per_seed[0]["mdm80"]) == {
+    assert metrics["n_calib_cycles"] >= 8
+    result = metrics["per_seed"][0]
+    assert set(result["mdm80"]) == {
         f"{fam}/{idx}" for fam in (sev.ACUTE_FAMILY, sev.PERSISTENT_FAMILY)
         for idx in ("ndvi", "savi")
     }
-    assert per_seed[0]["patch_sigma_sha256"] == sigma.sha256
-    # every cell was evaluated with the full evaluation subset
-    for cell in per_seed[0]["cells"].values():
+    assert result["patch_sigma_sha256"] == sigma.sha256
+    assert result["patch_norm_sha256"] == norm_hash
+    for cell in result["cells"].values():
         assert cell["n"] == metrics["n_eval_cycles"]
         assert 0.0 <= cell["detection_rate"] <= 1.0
+
+    with pytest.raises(ValueError, match="requires exactly the seed"):
+        E.main([*argv, "--seeds", "13,42"])
+    dev["end_dates"][0] += np.timedelta64(1, "D")
+    with pytest.raises(ValueError, match="patch bounds for 11:0"):
+        E.main(argv)
+
+    np.savez(sigma_path, **(sigma_args | {"model_sha256": "other model"}))
+    with pytest.raises(ValueError, match="sigma is not bound"):
+        E.load_patch_artifacts("r1", checkpoint_path=ckpt, sigma_path=sigma_path)
+    payload = torch.load(ckpt, map_location="cpu", weights_only=False)
+    payload["config"].pop("input_protocol")
+    legacy = ckpt.with_name("legacy.pt")
+    torch.save(payload, legacy)
+    with pytest.raises(ValueError, match="do not rescore legacy weights"):
+        E.load_patch_artifacts("r1", checkpoint_path=legacy, sigma_path=sigma_path)
 
 
 def test_patch_path_refuses_an_absent_store(tmp_path):
@@ -257,7 +301,7 @@ def test_patch_path_refuses_an_absent_store(tmp_path):
         E.run_patch_severity_protocol(args, {}, {"cycle_keys": []}, [13], "cpu")
 
 
-def test_patch_path_refuses_a_cycle_missing_from_the_store(tmp_path, monkeypatch):
+def test_patch_path_refuses_a_cycle_missing_from_the_store(tmp_path):
     import importlib.util
     from pathlib import Path as _Path
 
@@ -266,12 +310,19 @@ def test_patch_path_refuses_a_cycle_missing_from_the_store(tmp_path, monkeypatch
                                                   repo / "scripts" / "eval_dev.py")
     E = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(E)
-    _store(tmp_path, field_ids=(11,), n_cycles=1)
-    dev = tmp_path / "dev"
-    dev.mkdir()
-    monkeypatch.setattr(E.mproto, "CHECKPOINTS_DEV_DIR", dev)
-    args = E.parse_args(["--run-id", "r1", "--model", "gru_ae",
-                         "--scorer", "patch_cnn_gru",
+    from ssl_anomaly.monitor import holdout as H
+
+    root = _store(tmp_path, field_ids=(11,), n_cycles=1)
+    keys = ["11:0", "11:5"]
+    splits, holdout = bind_patch_store(root, known=(11,), dev_keys=keys)
+    path = H.save_holdout_manifest(holdout, path=tmp_path / "holdout.json")
+    args = E.parse_args(["--run-id", "r1", "--model", "patch_cnn_gru", "--scorer", "patch_cnn_gru",
+                         "--holdout-manifest", str(path),
                          "--patch-store", str(tmp_path / "patches.zarr")])
-    with pytest.raises((SystemExit, ValueError, FileNotFoundError)):
-        E.run_patch_severity_protocol(args, {}, {"cycle_keys": ["11:0", "11:5"]}, [13], "cpu")
+    cycle = P.patch_cycle_index(root)["11:0"]
+    epoch = np.datetime64(splits["base_date"], "D")
+    with pytest.raises(ValueError, match="dev patch cycle 11:5 is not in the store"):
+        E.run_patch_severity_protocol(args, splits, {
+            "cycle_keys": keys, "start_dates": [epoch + cycle.start_day, epoch],
+            "end_dates": [epoch + cycle.end_day + 1, epoch],
+        }, [13], "cpu")

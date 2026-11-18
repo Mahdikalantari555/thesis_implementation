@@ -36,6 +36,7 @@ import time
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
@@ -106,14 +107,19 @@ def main(argv: list[str] | None = None) -> int:
     # batch. A violation aborts training with the offending (field, cycle)
     # pairs named; it is never a warning.
     holdout_manifest = mholdout.load_holdout_manifest()
+    mholdout.assert_frozen_holdout_matches_splits(holdout_manifest, manifest)
+    # Masked-cycle metadata stores the exclusive parquet t_end.
+    end_days = pd.to_datetime(list(sel["end_dates"]), format="mixed", errors="coerce")
+    last_data_days = end_days - pd.Timedelta(days=1)
     mholdout.assert_train_only(
         [int(f) for f in sel["field_ids"]],
         list(sel["cycle_keys"]),
         [str(d) for d in sel["start_dates"]],
+        cycle_end_dates=last_data_days,
         manifest=holdout_manifest,
         context=f"train_main.py(model={args.model}, seed={args.seed})",
     )
-    n_holdout_farms = len(set(int(f) for f in sel["field_ids"])
+    n_holdout_farms = len({int(f) for f in sel["field_ids"]}
                          & set(holdout_manifest["holdout_farms"]))
     print(f"[holdout] manifest {holdout_manifest['manifest_sha256'][:12]}… verified; "
           f"0 holdout farms / cycles in the training inputs")

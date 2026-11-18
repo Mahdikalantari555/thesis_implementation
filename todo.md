@@ -24,7 +24,7 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
 
 ## In progress
 
-- ▶ **`decomposition-aware-ssl-study`** — isolated runner and [runbook](docs/decomposition_aware_ssl_study.md). Real benchmark/ablation and the architecture-gate decision require the canonical polygon zonal store and the existing frozen holdout manifest. Smoke is not empirical evidence.
+- ▶ **`decomposition-aware-ssl-study`** — isolated runner and [runbook](docs/decomposition_aware_ssl_study.md). Real benchmark/ablation and the architecture-gate decision require the canonical polygon zonal store, locked splits and existing frozen holdout manifest. Smoke is not empirical evidence.
 - ▶ **`rerun-rq-suite-on-real-490`** (proposed 2026-11-10) — RQ1–RQ8 + data-scarcity results in findings 11–12 came from `simulate_490_field_archive`, not the real 490-field archive; re-run on real data, fail closed, provenance in every report.
   - ✅ Task 1: real_archive.py loader + hash check + provenance + --source arg (tests/unit/test_real_archive.py 4/6 pass)
   - ✅ Task 2: all 8 run_rq*.py + run_data_scarcity.py refactored with --source {real490,real32,simulated}; simulated → reports/simulated/
@@ -205,18 +205,13 @@ two experiments.
   exactly). 27 tests. NEXT for this arm: the severity/MDM80 sweep on the locked
   evaluation panel (user data), the `b0_calendar` DOY variant and the
   `p10`-only path-max scorer.
-  `patch-data-pipeline` PARTIALLY implemented — geometry
-  (`FieldWindow`, bbox crop/pad without resampling, neighbour-excluding
-  `in_field` mask), per-pixel per-bin aggregation (`aggregate_bin`), the zarr
-  store schema/writer/validator (`io/patches.py`), the leakage-free
-  normalization artifact and the provenance record are done and tested
-  (40 unit tests); the `scripts/extract_patches.py` scene loop still needs the
-  Landsat archive and is the next code task.
-  `training-holdout-invariant` IMPLEMENTED in code
-  (`monitor/holdout.py`, `scripts/build_holdout_manifest.py`, wired into
-  `train_main.py`, 37 unit tests green with synthetic manifests) — the frozen
-  manifest still needs ONE user run on the data machine
-  (`python scripts/build_holdout_manifest.py --archive-end 2026-09-10`).
+  The audit follow-up verifies locked patch extraction, the train-only norm
+  sidecar and causal train/scoring inputs on fixtures. See the
+  [patch input runbook](docs/patch_inputs.md). Next: audit the **existing**
+  freeze on the archive machine, then verify a fresh bound export and review
+  the preregistered patch PoC; do not refreeze or recompute frozen checkpoints.
+  Fold-matrix execution stays blocked until fold-aware calibration and scoring
+  are wired. The checkout suite does not certify the strict real-data gate.
   Execution order: 0 `training-holdout-invariant` (STANDING invariant, owner
   2026-11-15: holdout farms/dates frozen BEFORE implementation, fail-closed in
   every training path, pixel-level included) → 1 `patch-data-pipeline` (patches.zarr) → 2 `patch-level-controlled-trial`

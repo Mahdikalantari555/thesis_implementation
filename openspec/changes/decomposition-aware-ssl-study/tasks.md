@@ -14,8 +14,14 @@
 - [x] 3.1 Wire a staged, resumable CLI with isolated outputs, checkpoints, progress, runbook and provenance; run the explicit end-to-end smoke and verify output and resume.
 - [ ] 3.2 Run and review the benchmark and ablation on the authorized canonical Landsat development archive; record source coverage, real paired results and architecture-gate outcome (requires external Zarr and frozen manifest; never satisfied by smoke).
 
-Task 3.2 is blocked in this checkout: `../Data/Processed/satellite/stats.zarr` and `data/processed/holdout_manifest.json` are absent. Use the [runbook](../../../docs/decomposition_aware_ssl_study.md) against the authorized local archive.
+Task 3.2 is blocked in this checkout: `../Data/Processed/satellite/stats.zarr`, the locked splits and the frozen
+holdout files under `data/processed/` are absent. Use the [runbook](../../../docs/decomposition_aware_ssl_study.md) against the authorized local archive.
 
 ## Workflow follow-up
 
 - Keep the change active until real runs are available for review. Keep any multi-branch, auxiliary loss, SSA or wavelet study in a separately reviewed follow-up. Review indicator availability and shared-input limitations before increasing the validation claim.
+
+## Audit follow-up
+
+- [x] A.1 Use the common changed and scored rows for dose-response summaries,
+      report support loss, and verify challenged-score resume and empty support.

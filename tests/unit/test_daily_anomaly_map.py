@@ -11,15 +11,18 @@ if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
 
-def test_daily_anomaly_and_map_color_changes(tmp_path: Path):
+def test_daily_anomaly_and_map_color_changes(tmp_path: Path, tmp_data_dir, monkeypatch):
     """Verify compute_daily_anomaly produces per-bin z-scores and map colors change per date."""
+    from build_baseline import main as build_baseline
     from compute_daily_anomaly import compute_daily_anomaly_df
     from make_map_custom import anomaly_color, build_custom_map
 
+    monkeypatch.chdir(tmp_path)
+    assert build_baseline() == 0
     df = compute_daily_anomaly_df(
-        zarr_path="data/processed/fields.zarr",
-        cycles_path="data/processed/cycles.parquet",
-        baseline_path="data/processed/baseline.npz",
+        zarr_path=tmp_data_dir / "fields.zarr",
+        cycles_path=tmp_data_dir / "cycles.parquet",
+        baseline_path=tmp_data_dir / "baseline.npz",
     )
     assert not df.empty
     assert {"field", "date", "bin_idx", "anomaly"}.issubset(df.columns)
@@ -39,7 +42,7 @@ def test_daily_anomaly_and_map_color_changes(tmp_path: Path):
     df.to_parquet(daily_out, index=False)
 
     out_path, diag = build_custom_map(
-        zarr_path="data/processed/fields.zarr",
+        zarr_path=tmp_data_dir / "fields.zarr",
         daily_path=daily_out,
         out_path=html_out,
     )

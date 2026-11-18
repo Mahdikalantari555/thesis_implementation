@@ -144,6 +144,43 @@ def synthetic_metrics(
     return out
 
 
+def changed_uplift(clean: np.ndarray, injected: np.ndarray, changed: np.ndarray) -> np.ndarray:
+    """Uplift on field-dates actually changed and scored in both views."""
+    paired = changed & np.isfinite(clean) & np.isfinite(injected)
+    out = np.full(clean.shape, np.nan, dtype=np.float64)
+    np.subtract(injected, clean, out=out, where=paired, dtype=np.float64)
+    return out
+
+
+def matched_dose_response(doses: np.ndarray, uplifts: list[np.ndarray]) -> dict:
+    """Compare all doses on one observed/scored positive cohort, not just equal counts."""
+    if (
+        len(doses) != len(uplifts)
+        or not uplifts
+        or any(x.shape != uplifts[0].shape or x.ndim != 2 for x in uplifts)
+    ):
+        raise ValueError("dose uplift arrays must share the same (field, date) axes")
+    finite = [np.isfinite(x) for x in uplifts]
+    shared = np.logical_and.reduce(finite)
+    n = int(shared.sum())
+    medians = [float(np.median(x[shared])) if n else None for x in uplifts]
+    return {
+        **correlation(doses, np.array(medians, dtype=float)),
+        "n_matched_field_dates": n,
+        "n_matched_fields": int(shared.any(axis=1).sum()),
+        "n_matched_dates": int(shared.any(axis=0).sum()),
+        "doses": [
+            {
+                "dose_train_scale": float(dose),
+                "n_positive": int(seen.sum()),
+                "n_excluded_by_matching": int(seen.sum()) - n,
+                "median_matched_uplift": median,
+            }
+            for dose, seen, median in zip(doses, finite, medians)
+        ],
+    }
+
+
 def read_evidence(path: Path | None, *, adjacency: bool = False) -> pd.DataFrame | None:
     if path is None:
         return None

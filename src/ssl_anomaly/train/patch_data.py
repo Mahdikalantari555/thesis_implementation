@@ -8,8 +8,8 @@ of that field-cycle. Three invariants are structural, not conventions:
    global and one-shot. The Dataset therefore filters with the shared
    ``monitor/holdout.py`` helper and *fails closed* — a missing or unreadable
    manifest is an error, never "train on everything". The holdout filter is
-   applied to the field list at construction time and asserted again per
-   sample, so a store edited after construction cannot leak.
+   applied to the locked train cycle keys and inclusive calendar bounds
+   before any observation is read.
 2. **Normalization is frozen** (``patch-data-pipeline`` task 2.2): the
    per-channel × per-sensor median/IQR artifact is loaded read-only and its
    hash is checked; nothing is fitted here. ``build_patch_norm`` does the
@@ -22,13 +22,14 @@ of that field-cycle. Three invariants are structural, not conventions:
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 
 from ssl_anomaly.io import patches as P
-from ssl_anomaly.monitor import holdout as H
+from ssl_anomaly.monitor.holdout import HoldoutViolationError
 
 # 8 covariates, fixed order (task 1.3): sin/cos DOY, cycle age, days since last
 # valid, log1p n_obs, sensor one-hot L8/L9, field-level in-field fraction.
@@ -37,6 +38,8 @@ COVARIATES: tuple[str, ...] = (
     "log1p_n_obs", "sensor_l8", "sensor_l9", "infield_frac",
 )
 N_COVARIATES = len(COVARIATES)
+PATCH_INPUT_PROTOCOL = "patch_inputs_v2"
+MAX_OBSERVATION_COUNT = np.iinfo(np.uint8).max
 
 
 @dataclass(frozen=True)
@@ -60,6 +63,7 @@ def build_covariates(
     *,
     bin_days: int = P.BIN_DAYS,
     n_bins: int = P.N_BINS,
+    epoch: str = "2013-03-30",
 ) -> np.ndarray:
     """The 8-covariate matrix, ``(T, N_COVARIATES)`` float32.
 
@@ -85,9 +89,9 @@ def build_covariates(
     mid = start + np.arange(n_bins) * bin_days + bin_days / 2.0
     # Same convention as monitor.inputs.doy_channels: the absolute calendar
     # day from the shared epoch, so both arms agree on where the season is.
-    epoch = pd.Timestamp("2013-03-30")
+    origin = pd.Timestamp(epoch)
     doy = np.array(
-        [(epoch + pd.Timedelta(days=int(d))).day_of_year for d in mid],
+        [(origin + pd.Timedelta(days=int(d))).day_of_year for d in mid],
         dtype=np.float64,
     )
     ang = 2.0 * np.pi * doy / 365.25
@@ -105,149 +109,81 @@ def build_covariates(
     out[:, 1] = np.cos(ang)
     out[:, 2] = age / max(1, n_bins - 1)
     out[:, 3] = since / max(1, n_bins)
-    out[:, 4] = np.log1p(np.maximum(no, 0.0)) / np.log1p(max(1.0, float(no.max(initial=0.0))))
+    if not np.isfinite(no).all() or np.any((no < 0) | (no > MAX_OBSERVATION_COUNT)):
+        raise ValueError("n_obs must contain valid uint8 acquisition counts")
+    out[:, 4] = np.log1p(no) / np.log1p(MAX_OBSERVATION_COUNT)
     out[:, 5] = (sid == P.SENSOR_IDS["L8"]).astype(np.float32)
     out[:, 6] = (sid == P.SENSOR_IDS["L9"]).astype(np.float32)
     out[:, 7] = float(in_field_frac)
     return out
 
 
-class PatchCycleDataset:
-    """Iterable/lazy view over the store's (field, cycle) pairs.
+def read_cycle_inputs(root, cycle: P.PatchCycle, *, epoch: str) -> dict:
+    """Read one cycle with a polygon mask and the shared causal covariates."""
+    values, obs, sensors, in_field = P.read_patch_observations(root, cycle)
+    n_obs = np.asarray(root["n_obs"][cycle.row, cycle.column])
+    cov = build_covariates(np.array([cycle.start_day]), n_obs, sensors,
+                           float(in_field.mean()), epoch=epoch)
+    return {"raw": values, "obs": obs, "sensor_id": sensors, "in_field": in_field,
+            "covariates": cov}
 
-    Parameters
-    ----------
-    root
-        An open ``patches.zarr`` group (``patches.open_store``).
-    field_ids
-        Field ids to consider, in store order or any order (intersected with
-        the store's own index).
-    holdout_manifest
-        The frozen manifest (dict). Required: ``None`` raises, because
-        "train on everything" must never be reachable by omission.
-    norm
-        The frozen normalization dict (``patches.load_patch_norm``).
-    max_cycles
-        Optional cap for smoke runs (earliest cycles per field).
-    """
+
+class PatchCycleDataset:
+    """Lazy training view restricted to admissible locked train cycles."""
 
     def __init__(
         self,
         root,
         field_ids: np.ndarray | list[int],
         *,
+        splits_manifest: dict,
         holdout_manifest: dict,
         norm: dict,
         max_cycles: int | None = None,
-        require_holdout_clear: bool = True,
     ) -> None:
         if holdout_manifest is None:
-            raise ValueError(
-                "holdout_manifest is required (training-holdout-invariant): pass the "
-                "frozen manifest; training without it is not a supported path."
-            )
-        self.root = root
+            raise ValueError("holdout_manifest is required (training-holdout-invariant)")
+        self.cycles, self.excluded_by_holdout = P.select_patch_train_cycles(
+            root, field_ids=field_ids, max_cycles=max_cycles,
+            splits_manifest=splits_manifest, holdout_manifest=holdout_manifest,
+        )
         self.norm = norm
-
-        store_fields = np.asarray(root["field_ids"][:], dtype=np.int64)
-        index = {int(f): i for i, f in enumerate(store_fields)}
-        wanted = [int(f) for f in np.asarray(field_ids).ravel()]
-        missing = [f for f in wanted if f not in index]
-        if missing:
-            raise ValueError(f"{len(missing)} requested fields are not in the store: {missing[:5]}")
-
-        # --- fail-closed holdout filter -----------------------------------
-        keep_rows = H.train_only_mask(wanted, manifest=holdout_manifest)
-        self.excluded_by_holdout = [f for f, k in zip(wanted, keep_rows) if not k]
-        self.fields = [f for f, k in zip(wanted, keep_rows) if k]
-        if not self.fields:
-            raise ValueError(
-                "every requested field is a holdout field or holdout-only farm "
-                f"({len(self.excluded_by_holdout)} excluded) — nothing to train on"
-            )
-        self._row_of = {f: index[f] for f in self.fields}
-        self._holdout = holdout_manifest
-
-        # --- cycle index ---------------------------------------------------
-        self._pairs: list[tuple[int, int]] = []
-        cycle_valid = root["cycle_valid"]
-        for fid in self.fields:
-            row = self._row_of[fid]
-            valid = np.asarray(cycle_valid[row, :], dtype=bool)
-            cols = np.flatnonzero(valid)
-            if max_cycles is not None:
-                cols = cols[: int(max_cycles)]
-            self._pairs.extend((fid, int(c)) for c in cols)
-
-        self.in_field = root["in_field"]
-        self.channel_names = tuple(root.attrs.get("channel_order", P.CHANNELS))
-        self.patch_size = int(root.attrs.get("patch_size", P.DEFAULT_PATCH_SIZE))
+        self._stats = P.patch_norm_stats(norm)
+        P.validate_patch_norm_binding(root, norm, splits_manifest, holdout_manifest)
+        self.epoch = P.patch_epoch(root)
+        self.root = root
+        self.fields = sorted({c.field_id for c in self.cycles})
+        self.unnormalized_channels: set[str] = set()
 
     def __len__(self) -> int:
-        return len(self._pairs)
+        return len(self.cycles)
 
-    def sample(self, i: int) -> PatchSample:
-        fid, cidx = self._pairs[i]
-        row = self._row_of[fid]
-
-        # Re-assert per sample: a store mutated after construction (field id
-        # rewritten) still cannot reach training.
-        if not bool(H.train_only_mask([fid], manifest=self._holdout)[0]):
-            raise H.HoldoutViolationError(f"field {fid} is a holdout field")
-
-        vals = np.asarray(self.root["values"][row, cidx], dtype=np.float32)  # (T,C,S,S)
-        sids = np.asarray(self.root["sensor_id"][row, cidx], dtype=np.int64)  # (T,)
-        nobs = np.asarray(self.root["n_obs"][row, cidx], dtype=np.uint8)      # (T,)
-        in_field = np.asarray(self.in_field[row, 0], dtype=bool)              # (S,S)
-        start = int(np.asarray(self.root["cycle_start_day"][row, cidx]))
-        cid = int(np.asarray(self.root["cycle_ids"][row, cidx]))
-
-        finite = np.isfinite(vals)
-        obs = finite & in_field[None, None, :, :]
-        x = np.where(obs, vals, 0.0).astype(np.float32)
-        pixel_valid = obs.any(axis=1)                                          # (T,S,S)
-
-        x = self._normalize(x, sids, obs)
-        cov = build_covariates(
-            np.full(P.N_BINS, start), nobs, sids,
-            in_field_frac=float(in_field.mean()),
-        )
+    def sample(
+        self, i: int, *, transform: Callable[[np.ndarray, np.ndarray, np.ndarray], np.ndarray] | None = None,
+    ) -> PatchSample:
+        cycle = self.cycles[i]
+        row, col = cycle.row, cycle.column
+        # Only a read-only store is supported. Still fail fast if its identity
+        # or dates were replaced between admission and this value read.
+        if (
+            not self.root["cycle_valid"][row, col]
+            or int(self.root["field_ids"][row]) != cycle.field_id
+            or int(self.root["cycle_ids"][row, col]) != cycle.cycle_id
+            or int(self.root["cycle_start_day"][row, col]) != cycle.start_day
+            or int(self.root["cycle_end_day"][row, col]) != cycle.end_day
+            or P.patch_epoch(self.root) != self.epoch
+        ):
+            raise HoldoutViolationError(f"patch cycle metadata changed after admission: {cycle.key}")
+        data = read_cycle_inputs(self.root, cycle, epoch=self.epoch)
+        raw, obs = data["raw"].astype(np.float32), data["obs"]
+        if transform is not None:
+            raw = transform(raw, obs, data["in_field"])
+        x, missing = P.normalize_patch(raw, obs, data["sensor_id"], self._stats)
+        self.unnormalized_channels.update(missing)
         return PatchSample(
-            field_id=fid, cycle_id=cid, x=x, obs=obs, pixel_valid=pixel_valid,
-            covariates=cov, start_day=start,
+            field_id=cycle.field_id, cycle_id=cycle.cycle_id, x=x, obs=obs,
+            pixel_valid=obs.any(axis=1), covariates=data["covariates"], start_day=cycle.start_day,
         )
-
-    def _normalize(self, x: np.ndarray, sids: np.ndarray, obs: np.ndarray) -> np.ndarray:
-        """Frozen per-channel × per-sensor robust standardization.
-
-        Values that are unobserved stay exactly 0 (they carry no information
-        and must not become a non-zero constant after centring). Channels with
-        no frozen statistics for a sensor keep raw units and are flagged.
-        """
-        out = x.copy()
-        T, C = x.shape[0], x.shape[1]
-        for sid in np.unique(sids):
-            name = P.SENSOR_NAMES.get(int(sid), str(sid))
-            per_ch = self.norm.get(name, {})
-            bins = np.flatnonzero(sids == sid)
-            if bins.size == 0:
-                continue
-            for ci, ch in enumerate(self.channel_names):
-                stats = per_ch.get(ch, {})
-                med, iqr = stats.get("median"), stats.get("iqr")
-                if med is None or iqr is None or iqr <= 0:
-                    self.unnormalized_channels = getattr(self, "unnormalized_channels", set())
-                    self.unnormalized_channels.add(ch)
-                    continue
-                sel = obs[bins, ci]
-                out[np.ix_(bins, [ci])] = np.where(
-                    sel[:, None, :, :],
-                    (x[bins, ci][:, None, :, :] - med) / iqr,
-                    0.0,
-                )
-        if out.shape[:2] != (T, C):  # pragma: no cover - shape guard
-            raise RuntimeError("normalization changed the tensor shape")
-        return out.astype(np.float32)
 
 
 def collate(samples: list[PatchSample]) -> dict[str, np.ndarray]:
@@ -280,9 +216,11 @@ def estimate_epoch_seconds(
 __all__ = [
     "COVARIATES",
     "N_COVARIATES",
+    "PATCH_INPUT_PROTOCOL",
     "PatchCycleDataset",
     "PatchSample",
     "build_covariates",
     "collate",
     "estimate_epoch_seconds",
+    "read_cycle_inputs",
 ]

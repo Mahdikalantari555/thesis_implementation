@@ -26,6 +26,7 @@ import logging
 import warnings
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -340,6 +341,7 @@ def store_schema(
         "field_ids": ((n_fields,), "<i8"),
         "cycle_ids": ((n_fields, max_cycles), "<i8"),
         "cycle_start_day": ((n_fields, max_cycles), "<i8"),
+        "cycle_end_day": ((n_fields, max_cycles), "<i8"),
         "cycle_valid": ((n_fields, max_cycles), "|u1"),
     }
 
@@ -351,7 +353,7 @@ def estimate_store_bytes(n_fields: int, n_cycles: int, size: int = DEFAULT_PATCH
         + n_cycles * N_BINS * size * size                      # uint8 validity
         + n_fields * size * size                               # in_field
         + n_cycles * N_BINS * 2                                # n_obs + sensor
-        + n_fields * 2 + n_cycles * 8 * 2                      # origins + cycle arrays
+        + n_fields * 2 + n_cycles * 8 * 3                      # origins + cycle arrays
     )
 
 
@@ -421,14 +423,9 @@ def validate_store(root, *, expected_fields: int | None = None) -> dict:
     dtype, a wrong channel axis, or a field count that disagrees with the
     registry. Returns a summary dict for the provenance record.
     """
-    required = set(store_schema(1, 1)) - {"values", "pixel_valid", "in_field",
-                                          "bbox_origin", "n_obs", "sensor_id",
-                                          "field_ids", "cycle_ids",
-                                          "cycle_start_day", "cycle_valid"}
     missing = [k for k in store_schema(1, 1) if k not in root]
     if missing:
         raise ValueError(f"patch store is missing arrays: {missing}")
-    del required
 
     values = root["values"]
     if len(values.shape) != 6:
@@ -443,15 +440,11 @@ def validate_store(root, *, expected_fields: int | None = None) -> dict:
     if expected_fields is not None and n_fields != expected_fields:
         raise ValueError(f"store holds {n_fields} fields, registry says {expected_fields}")
 
-    if root.attrs.get("channel_order") and tuple(root.attrs["channel_order"]) != CHANNELS:
-        raise ValueError(
-            f"channel_order {root.attrs['channel_order']} != frozen {list(CHANNELS)}"
-        )
-    for name, expect_prefix in (("pixel_valid", "u1"), ("in_field", "u1"),
-                                ("bbox_origin", "u2")):
-        dt = root[name].dtype
-        if dt.kind != expect_prefix[0]:
-            raise ValueError(f"{name} dtype {dt} does not match schema")
+    if root.attrs.get("channel_order") != list(CHANNELS):
+        raise ValueError(f"patch store channel_order must be {list(CHANNELS)}")
+    for name, (shape, dtype) in store_schema(n_fields, max_cycles, size).items():
+        if root[name].shape != shape or root[name].dtype != np.dtype(dtype):
+            raise ValueError(f"{name} shape/dtype does not match the patch schema")
 
     return {
         "n_fields": int(n_fields),
@@ -462,6 +455,144 @@ def validate_store(root, *, expected_fields: int | None = None) -> dict:
         "n_cycles_recorded": int(np.asarray(root["cycle_valid"][:]).sum()),
         "bytes_estimate": estimate_store_bytes(int(n_fields), int(max_cycles), int(size)),
     }
+
+
+@dataclass(frozen=True)
+class PatchCycle:
+    field_id: int
+    cycle_id: int
+    row: int
+    column: int
+    start_day: int
+    end_day: int
+
+    @property
+    def key(self) -> str:
+        return f"{self.field_id}:{self.cycle_id}"
+
+
+def patch_epoch(root) -> str:
+    try:
+        return date.fromisoformat(root.attrs["cycle_epoch"]).isoformat()
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("patch store lacks a valid cycle_epoch; re-extract to a new store") from exc
+
+
+def patch_cycle_index(root) -> dict[str, PatchCycle]:
+    """Index valid store slots by stable field/cycle identity, not column number."""
+    fields = np.asarray(root["field_ids"][:], dtype=int)
+    if np.any(fields <= 0) or len(set(fields)) != fields.size:
+        raise ValueError("patch store field_ids must be positive and unique")
+    ids, starts, ends = (
+        np.asarray(root[name][:]) for name in ("cycle_ids", "cycle_start_day", "cycle_end_day")
+    )
+    index = {}
+    for row, col in np.argwhere(root["cycle_valid"][:]):
+        cycle = PatchCycle(int(fields[row]), int(ids[row, col]), int(row), int(col),
+                           int(starts[row, col]), int(ends[row, col]))
+        if cycle.key in index:
+            raise ValueError(f"duplicate patch cycle: {cycle.key}")
+        index[cycle.key] = cycle
+    return index
+
+
+def validate_locked_patch_store(root, splits_manifest: dict) -> str:
+    """Check the schema and locked cycle provenance without opening value chunks."""
+    validate_store(root)
+    epoch = patch_epoch(root)
+    expected_hash = splits_manifest.get("cycle_file_hashes", {}).get("cycles_parquet_sha256")
+    if (
+        not expected_hash
+        or root.attrs.get("cycle_source_sha256") != expected_hash
+        or root.attrs.get("splits_manifest_sha256") != splits_manifest["manifest_sha256"]
+        or epoch != splits_manifest.get("base_date")
+    ):
+        raise ValueError("patch store cycle provenance disagrees with locked splits; re-extract to a new store")
+    return epoch
+
+
+def select_patch_train_cycles(
+    root, *, splits_manifest: dict, holdout_manifest: dict,
+    field_ids: Sequence[int] | None = None, max_cycles: int | None = None,
+) -> tuple[list[PatchCycle], list[int]]:
+    """Admit locked train cycles before loading any arrays of observed values."""
+    from ssl_anomaly.monitor import holdout as H
+
+    H.assert_frozen_holdout_matches_splits(holdout_manifest, splits_manifest)
+    epoch = validate_locked_patch_store(root, splits_manifest)
+    store_fields = [int(f) for f in root["field_ids"][:]]
+    wanted = store_fields if field_ids is None else list(dict.fromkeys(int(f) for f in field_ids))
+    missing = sorted(set(wanted) - set(store_fields))
+    if missing:
+        raise ValueError(f"requested fields are not in the store: {missing[:5]}")
+    keep = H.train_only_mask(wanted, manifest=holdout_manifest)
+    excluded = [f for f, admitted in zip(wanted, keep) if not admitted]
+    eligible = {f for f, admitted in zip(wanted, keep) if admitted}
+    if not eligible:
+        raise ValueError("every requested field is a holdout field or unknown at the freeze")
+    train_keys = set(splits_manifest["cycles"]["train"])
+    admitted = [cycle for key, cycle in patch_cycle_index(root).items()
+                if key in train_keys and cycle.field_id in eligible]
+    if not admitted:
+        raise ValueError("no admissible locked train cycles are present in the patch store")
+    assert_patch_train_cycles(admitted, epoch=epoch, holdout_manifest=holdout_manifest)
+    if max_cycles is not None:
+        if max_cycles < 1:
+            raise ValueError("max_cycles must be positive")
+        per_field: dict[int, int] = {}
+        selected = []
+        for cycle in sorted(admitted, key=lambda c: (c.row, c.start_day, c.column)):
+            count = per_field.get(cycle.field_id, 0)
+            if count < max_cycles:
+                selected.append(cycle)
+                per_field[cycle.field_id] = count + 1
+        admitted = selected
+    assert_patch_count_bounds(root, admitted)
+    return admitted, excluded
+
+
+def assert_patch_train_cycles(cycles, *, epoch: str, holdout_manifest: dict) -> None:
+    from ssl_anomaly.monitor import holdout as H
+
+    origin = np.datetime64(epoch, "D")
+    H.assert_train_only(
+        [c.field_id for c in cycles], [c.key for c in cycles],
+        [origin + np.timedelta64(c.start_day, "D") for c in cycles],
+        cycle_end_dates=[origin + np.timedelta64(c.end_day, "D") for c in cycles],
+        manifest=holdout_manifest, context="patch cycle admission",
+    )
+
+
+def _outside_cycle(cycle: PatchCycle) -> np.ndarray:
+    return np.arange(N_BINS) * BIN_DAYS > cycle.end_day - cycle.start_day
+
+
+def assert_patch_count_bounds(root, cycles: Sequence[PatchCycle]) -> None:
+    """Preflight metadata for every admitted cycle before fitting or training."""
+    from ssl_anomaly.monitor.holdout import HoldoutViolationError
+
+    counts = root["n_obs"]
+    for cycle in cycles:
+        outside = _outside_cycle(cycle)
+        if outside.any() and np.any(counts[cycle.row, cycle.column][outside]):
+            raise HoldoutViolationError(f"patch cycle {cycle.key} has acquisition counts after its end")
+
+
+def read_patch_observations(root, cycle: PatchCycle) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Load one admitted cycle; enforce QA/polygon masks in every consumer."""
+    from ssl_anomaly.monitor.holdout import HoldoutViolationError
+
+    row, col = cycle.row, cycle.column
+    values = np.asarray(root["values"][row, col])
+    in_field = np.asarray(root["in_field"][row, 0], dtype=bool)
+    finite = np.isfinite(values) & in_field[None, None]
+    if finite[_outside_cycle(cycle)].any():
+        raise HoldoutViolationError(f"patch cycle {cycle.key} has observations after its end")
+    pixels = np.asarray(root["pixel_valid"][row, col], dtype=bool)
+    sensors = np.asarray(root["sensor_id"][row, col], dtype=np.int64)
+    if not np.isin(sensors, tuple(SENSOR_NAMES)).all():
+        raise ValueError(f"patch cycle {cycle.key} has an invalid sensor id")
+    return values, finite & pixels, sensors, in_field
 
 
 # ---------------------------------------------------------------------------
@@ -513,70 +644,98 @@ def fit_patch_norm(
     return out
 
 
-def build_patch_norm(
-    *,
-    root,
-    train_field_ids: Iterable[int],
-    train_cycle_mask: np.ndarray | None = None,
-    splits_sha256: str | None = None,
-    channel_order: Sequence[str] = CHANNELS,
-) -> dict:
-    """Build the frozen normalization artifact from TRAIN fields/cycles only.
-
-    ``train_cycle_mask`` is a boolean ``(F, C)`` mask aligned to the store;
-    when omitted, every recorded cycle of a train field is used. Dev/test
-    fields are excluded by construction: their field ids are simply not in
-    ``train_field_ids``.
-    """
-    import numpy as np
-
-    field_ids = np.asarray(root["field_ids"][:], dtype=np.int64)
-    want = {int(f) for f in train_field_ids}
-    rows = [i for i, f in enumerate(field_ids) if int(f) in want]
-    if not rows:
-        raise ValueError("no train fields present in the store — refusing to fit norm stats")
-
-    values = np.asarray(root["values"][:], dtype=np.float32)
-    sensor_ids = np.asarray(root["sensor_id"][:], dtype=np.int64)
-    in_field = np.asarray(root["in_field"][:], dtype=bool)
-    cycle_valid = np.asarray(root["cycle_valid"][:], dtype=bool)
-    if train_cycle_mask is not None:
-        m = np.asarray(train_cycle_mask, dtype=bool)
-        if m.shape != cycle_valid.shape:
-            raise ValueError(f"train_cycle_mask shape {m.shape} != store {cycle_valid.shape}")
-        cycle_valid = cycle_valid & m
-
-    flat_vals: list[np.ndarray] = []
-    flat_sensors: list[np.ndarray] = []
-    for fi in rows:
-        for ci in np.flatnonzero(cycle_valid[fi]):
-            v = values[fi, ci]                       # (36, 8, S, S)
-            s = sensor_ids[fi, ci]                   # (36,)
-            mask = in_field[fi, 0].astype(bool)      # (S, S)
-            for b in range(v.shape[0]):
-                if not mask.any():
-                    continue
-                sel = v[b][:, mask]                  # (8, n_px)
-                if not np.isfinite(sel).any():
-                    continue
-                flat_vals.append(sel.T)              # (n_px, 8)
-                flat_sensors.append(np.full(sel.shape[1], int(s[b]), dtype=np.int64))
+def build_patch_norm(*, root, splits_manifest: dict, holdout_manifest: dict,
+                     progress=None) -> dict:
+    """Fit only after verifying the selected locked train cycles and date bounds."""
+    cycles, _ = select_patch_train_cycles(
+        root, splits_manifest=splits_manifest, holdout_manifest=holdout_manifest,
+    )
+    flat_vals, flat_sensors = [], []
+    for cycle in progress(cycles) if progress is not None else cycles:
+        values, obs, sensors, _ = read_patch_observations(root, cycle)
+        for b, sensor in enumerate(sensors):
+            pixels = obs[b].any(axis=0)
+            if pixels.any():
+                flat_vals.append(np.where(obs[b][:, pixels], values[b][:, pixels], np.nan).T)
+                flat_sensors.append(np.full(pixels.sum(), sensor, dtype=np.uint8))
     if not flat_vals:
         raise ValueError("no finite in-field train pixel observations — refusing to fit norm stats")
 
-    stats = fit_patch_norm(
-        np.concatenate(flat_vals), np.concatenate(flat_sensors), channel_order=channel_order,
-    )
+    stats = fit_patch_norm(np.concatenate(flat_vals), np.concatenate(flat_sensors))
+    fields = sorted({cycle.field_id for cycle in cycles})
     return {
         "stats": stats,
-        "computed_from": "train-split fields x train periods only",
-        "field_ids_used": sorted(int(field_ids[i]) for i in rows),
-        "splits_sha256": splits_sha256,
-        "channel_order": list(channel_order),
-        "n_train_fields": len(rows),
-        "n_train_cycles": int(sum(len(np.flatnonzero(cycle_valid[fi])) for fi in rows)),
+        "computed_from": "admissible locked train cycles only",
+        "train_cycle_keys": sorted(cycle.key for cycle in cycles),
+        "field_ids_used": fields,
+        "splits_sha256": splits_manifest["manifest_sha256"],
+        "holdout_sha256": holdout_manifest["manifest_sha256"],
+        "channel_order": list(CHANNELS),
+        "n_train_fields": len(fields),
+        "n_train_cycles": len(cycles),
         "stat": "median/iqr (per channel, per sensor)",
     }
+
+
+def validate_patch_norm_binding(root, norm: dict, splits_manifest: dict, holdout_manifest: dict) -> None:
+    """Require a norm fitted on admissible locked cycles in the bound store."""
+    if (norm.get("splits_sha256") != splits_manifest["manifest_sha256"]
+            or norm.get("holdout_sha256") != holdout_manifest["manifest_sha256"]):
+        raise ValueError("patch normalization artifact is not bound to these locked splits and holdout")
+    norm_keys = norm.get("train_cycle_keys")
+    store_keys = patch_cycle_index(root)
+    if (not isinstance(norm_keys, list) or not norm_keys
+            or not all(isinstance(k, str) for k in norm_keys)
+            or len(set(norm_keys)) != len(norm_keys)
+            or not set(norm_keys) <= (set(store_keys) & set(splits_manifest["cycles"]["train"]))):
+        raise ValueError("patch normalization artifact includes cycles outside this store's locked train set")
+    cycles = [store_keys[k] for k in norm_keys]
+    assert_patch_train_cycles(cycles, epoch=patch_epoch(root), holdout_manifest=holdout_manifest)
+
+
+def patch_norm_stats(norm: dict) -> dict:
+    """Validate the envelope, allowing an unavailable individual channel scale."""
+    if not isinstance(norm, dict):
+        raise ValueError("invalid patch normalization artifact: expected a JSON object")
+    stats, order = norm.get("stats"), norm.get("channel_order")
+    if not isinstance(stats, dict) or not stats or not isinstance(order, (list, tuple)) or tuple(order) != CHANNELS:
+        raise ValueError("invalid patch normalization artifact: expected stats and frozen channel_order")
+    if not any(stats.values()):
+        raise ValueError("invalid patch normalization artifact: no channel records")
+    for sensor, channels in stats.items():
+        if not isinstance(channels, dict) or sensor not in SENSOR_IDS:
+            raise ValueError(f"invalid patch normalization sensor {sensor!r}")
+        for channel, record in channels.items():
+            if (channel not in CHANNELS or not isinstance(record, dict)
+                    or not {"median", "iqr"} <= record.keys()):
+                raise ValueError(f"invalid patch normalization channel {sensor}/{channel}")
+            for key in ("median", "iqr"):
+                x = record.get(key)
+                if x is not None and (
+                    type(x) not in (int, float) or not np.isfinite(x) or (key == "iqr" and x < 0)
+                ):
+                    raise ValueError(f"invalid patch normalization {sensor}/{channel}/{key}")
+    return stats
+
+
+def normalize_patch(values, obs, sensors, stats) -> tuple[np.ndarray, set[str]]:
+    """Normalize observed model inputs consistently; never center missing values."""
+    out = np.where(obs, values, 0.0).astype(np.float32)
+    absent = set()
+    for sid in np.unique(sensors):
+        bins = np.flatnonzero(sensors == sid)
+        channels = stats.get(SENSOR_NAMES.get(int(sid), "unknown"), {})
+        for ci, ch in enumerate(CHANNELS):
+            seen = obs[bins, ci]
+            if not seen.any():
+                continue
+            record = channels.get(ch, {})
+            median, iqr = record.get("median"), record.get("iqr")
+            if median is None or iqr is None or iqr <= 0:
+                absent.add(ch)
+                continue
+            out[bins, ci] = np.where(seen, (out[bins, ci] - median) / iqr, 0.0)
+    return out, absent
 
 
 def norm_stats_sha256(norm: dict) -> str:
@@ -589,9 +748,12 @@ def save_patch_norm(norm: dict, path: str | Path) -> Path:
     """Freeze the norm artifact with its own sha256 inside the JSON."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    patch_norm_stats(norm)
     frozen = dict(norm)
     frozen["sha256"] = norm_stats_sha256(norm)
-    path.write_text(json.dumps(frozen, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    with path.open("x", encoding="utf-8") as f:
+        json.dump(frozen, f, indent=2, sort_keys=True, allow_nan=False)
+        f.write("\n")
     return path
 
 
@@ -601,10 +763,12 @@ def load_patch_norm(path: str | Path, *, verify: bool = True) -> dict:
     if not path.exists():
         raise RuntimeError(
             f"patch normalization artifact missing at {path}. Build it once with "
-            "`python scripts/extract_patches.py --build-norm` (train fields only); "
+            "`python scripts/build_patch_norm.py --store <patches.zarr>` (locked train cycles only); "
             "training consumers refuse to start without it."
         )
     norm = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(norm, dict):
+        raise ValueError(f"invalid patch normalization artifact at {path}: expected a JSON object")
     if verify:
         recorded = norm.get("sha256")
         if not recorded or norm_stats_sha256(norm) != recorded:
@@ -613,6 +777,7 @@ def load_patch_norm(path: str | Path, *, verify: bool = True) -> dict:
                 "statistics were modified. Refusing to continue (leakage-free "
                 "normalization requirement)."
             )
+    patch_norm_stats(norm)
     return norm
 
 
@@ -711,6 +876,8 @@ __all__ = [
     "FieldWindow",
     "Provenance",
     "aggregate_bin",
+    "assert_patch_count_bounds",
+    "assert_patch_train_cycles",
     "build_patch_norm",
     "create_store",
     "crop_and_pad",
@@ -720,10 +887,18 @@ __all__ = [
     "load_patch_norm",
     "majority_sensor",
     "norm_stats_sha256",
+    "normalize_patch",
     "open_store",
     "output_sha256",
+    "patch_cycle_index",
+    "patch_epoch",
     "patch_in_field_mask",
+    "patch_norm_stats",
+    "read_patch_observations",
     "save_patch_norm",
+    "select_patch_train_cycles",
     "store_schema",
+    "validate_locked_patch_store",
+    "validate_patch_norm_binding",
     "validate_store",
 ]

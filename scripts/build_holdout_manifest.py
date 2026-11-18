@@ -3,10 +3,10 @@
 
 The manifest is a PURE DERIVATION of the locked splits
 (``data/processed/splits_locked.json``): holdout farms = the locked test-block
-fields (whole-field, all periods), holdout dates = every cycle starting on/after
+fields (whole-field, all periods), holdout dates = every acquisition on/after
 the locked ``test_period_start``. No new split semantics are introduced.
 
-Frozen with SHA-256; rebuilding requires ``--force <reason>`` (the locked-splits
+Frozen with SHA-256; rebuilding requires ``--force --reason <reason>`` (the locked-splits
 discipline). The trainer never re-derives it.
 
 Examples
@@ -21,7 +21,7 @@ Inspect without writing::
 
 Rebuild after an authorised split change::
 
-    python scripts/build_holdout_manifest.py --force "split manifest re-frozen after data refresh"
+    python scripts/build_holdout_manifest.py --force --reason "split manifest re-frozen after data refresh"
 """
 
 from __future__ import annotations
@@ -53,10 +53,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="overwrite an existing frozen manifest (requires --reason)")
     p.add_argument("--reason", default=None,
                    help="why the frozen manifest is being replaced (recorded inside it)")
-    p.add_argument("--dry-run", action="store_true",
-                   help="print the derived manifest and write nothing")
+    inspection = p.add_mutually_exclusive_group()
+    inspection.add_argument("--dry-run", action="store_true",
+                            help="print the derived manifest and write nothing")
+    inspection.add_argument("--audit-existing", action="store_true",
+                            help="compare the frozen manifest at --out with the locked splits, read-only")
     p.add_argument("--skip-cycle-file-check", action="store_true",
-                   help="do not hash-verify the cycle files (inspection/dry-run on a "
+                   help="do not hash-verify the cycle files (inspection on a "
                         "machine without the data archive; NEVER for a real freeze)")
     return p.parse_args(argv)
 
@@ -64,9 +67,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
 
-    if args.skip_cycle_file_check and not args.dry_run:
-        print("ERROR: --skip-cycle-file-check is only allowed with --dry-run",
+    if args.skip_cycle_file_check and not (args.dry_run or args.audit_existing):
+        print("ERROR: --skip-cycle-file-check is only allowed for read-only inspection",
               file=sys.stderr)
+        return 2
+    if args.audit_existing and (args.force or args.archive_end):
+        print("ERROR: --audit-existing is read-only and accepts no freeze options", file=sys.stderr)
         return 2
 
     kwargs = {"verify_cycle_files": not args.skip_cycle_file_check}
@@ -78,9 +84,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: cannot load the locked splits: {exc}", file=sys.stderr)
         return 2
 
-    manifest = mholdout.build_holdout_manifest(
-        splits_manifest, archive_end_date=args.archive_end,
-    )
+    try:
+        if args.audit_existing:
+            frozen = mholdout.load_holdout_manifest(path=args.out)
+            print(json.dumps(mholdout.audit_frozen_holdout(frozen, splits_manifest), indent=2))
+            mholdout.assert_frozen_holdout_matches_splits(frozen, splits_manifest)
+            return 0
+        manifest = mholdout.build_holdout_manifest(
+            splits_manifest, archive_end_date=args.archive_end,
+        )
+    except (RuntimeError, KeyError, ValueError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
 
     print(f"derived from splits manifest sha256: "
           f"{str(splits_manifest.get('manifest_sha256'))[:16]}…")

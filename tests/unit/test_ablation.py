@@ -8,7 +8,7 @@ if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
 
-def test_parse_drop_spec_and_mini_ablation():
+def test_parse_drop_spec_and_mini_ablation(tmp_data_dir):
     from run_ablation import parse_drop_spec, run_ablation_suite
 
     assert parse_drop_spec("none") == (set(), True)
@@ -17,7 +17,10 @@ def test_parse_drop_spec_and_mini_ablation():
     assert parse_drop_spec("lst+weather") == ({"ST_B10"}, False)
     assert parse_drop_spec("SR_B5") == ({"SR_B5"}, True)
 
-    rep = run_ablation_suite(drops=["none", "lst", "weather"], seeds=[42, 43], epochs=3)
+    rep = run_ablation_suite(
+        zarr_path=tmp_data_dir / "fields.zarr", cycles_path=tmp_data_dir / "cycles.parquet",
+        drops=["none", "lst", "weather"], seeds=[42, 43], epochs=3,
+    )
     assert set(rep["configs"].keys()) == {"none", "lst", "weather"}
     for k in ("none", "lst", "weather"):
         metrics = rep["configs"][k]["metrics"]

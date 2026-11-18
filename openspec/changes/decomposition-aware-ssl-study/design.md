@@ -26,3 +26,12 @@ Compare feature and independent-score hypotheses in the same field/date cohort. 
 ## Migration Plan
 
 There is no migration. Invoke the research script explicitly. Rollback removes the new study files and/or its output directory, with no change to the production pipeline.
+
+### Audit follow-up: matched dose response
+
+Store atomic per-challenge uplift arrays alongside their metric JSON so resume
+can recover the exact field-date intersection without running finished fits
+again. Derive across-dose medians and trend only on that intersection; keep
+native per-scenario AP and report support loss separately. Real input admission
+also checks the existing freeze against locked split membership without changing
+its exclusions.

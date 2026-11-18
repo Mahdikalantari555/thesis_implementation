@@ -38,24 +38,14 @@
       cycles sha, splits sha, output sha256) + schema validation test.
       `Provenance.validate()` refuses an incomplete record (AGENTS.md §2.4);
       `output_sha256` is deterministic and value-sensitive.
-      Also recorded: `holdout_manifest_sha256`, so the store's provenance
-      names the holdout freeze it was extracted under.
+      The store binds to the locked split/cycle source; its held-out data is
+      for evaluation. The norm and training runs, not the all-split exporter,
+      also bind the frozen holdout hash.
 - [ ] 2.4 Agent executes `--smoke` and `--estimate-runtime`, reviews the
       output (shapes, NaN discipline, plausible QA fractions), then hands
       the FULL run to the user as an exact command (conda env geo, cwd,
       expected wall time from the estimate, output paths) — the agent
       never launches it.
-
-## Remaining (needs the data archive / geo env)
-
-- [ ] 2.1 `scripts/extract_patches.py` — the scene loop. It reuses
-      `extract_pixels.py`'s source resolution and `io/landsat.py` QA/scale
-      handling; every geometry/aggregation decision it needs is already in
-      `io/patches.py` and tested. Deferred deliberately: it cannot be smoke
-      tested without the Landsat archive, and an untested exporter is worse
-      than none.
-- [ ] 2.4 `--smoke` / `--estimate-runtime` review, then the full run handed to
-      the user (never launched by the agent).
 
 ## 3. Verification gates
 
@@ -81,7 +71,8 @@ touches:
    OFFSET from the archive epoch; scene dates are absolute. Comparing them
    directly shifts every cycle by decades, so every bin comes out empty
    instead of failing. Added `day_index()` and an explicit `--epoch` (default:
-   the earliest scene), and the epoch is recorded in provenance.
+   the locked `base_date` for training-compatible exports), and the epoch is
+   recorded in provenance.
 2. **Double-scaling.** The shipped `*.tif` scenes are already reflectance/K
    (`extract_stats.py` reads them as-is), so applying the C2 L2 factors turns
    everything into NaN. `--band-scale {auto,native,landsat}` with per-scene
@@ -98,3 +89,12 @@ touches:
 Also: `create_store` allocates `field_ids` but cannot fill it, so the driver
 writes it and a later run refuses (`exit 3`) to mix a different field
 selection into an existing store.
+
+## Audit follow-up
+
+- [x] A.1 Preserve locked cycle IDs and bind the cycle-window bounds, epoch and
+      source hashes at extraction; test that scenes after cycle end stay absent.
+- [x] A.2 Build and load the verified `stats` sidecar on locked train cycles;
+      test a producer-to-training/scoring round trip and bad provenance refusal.
+- [ ] A.3 Re-extract and review production-sized artifacts on the authorized
+      archive before relying on new patch results.

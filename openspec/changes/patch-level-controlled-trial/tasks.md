@@ -35,8 +35,9 @@
 ## 2. Scoring + eval integration
 
 - [x] 2.1 Patch σ tables: 1.4826 × MAD of dev residuals per (channel,
-      2-bin phenophase group, sensor), frozen + sha; unit test proving no
-      test/dev leakage into scoring-time statistics.
+      2-bin phenophase group, sensor); fit helper and frozen table hash tested
+      in isolation. The real table must use calibration, not evaluation or test
+      residuals, and must be produced for the corrected checkpoint under 3.x.
 - [x] 2.2 `PatchDeepScorer` adapter: per-pixel z² → top-20% aggregation →
       (N, 36, C) interface-compatible with `DeepCausalScorer.loo_batch`;
       alarm machinery (τ/k/q95, 5% FAR) untouched; per-pixel score maps
@@ -51,11 +52,13 @@
       null and excluded from every severity gate; the existing
       sum-preserving red/nir SAVI solver per pixel; injection-hash equality
       test against the field-level protocol sets.
-- [x] 2.4 eval_dev.py: scorer choices patch_cnn_gru / patch_pixelwise;
-      protocol `severity` unchanged; MDM80 censoring + AUPRC + detection
-      delay + pixel-localization AUPRC (footprint-0.3 probe) in the report.
+- [ ] 2.4 eval_dev.py: scorer choices patch_cnn_gru / patch_pixelwise;
+      stable cycle join, artifact handoff and MDM80 report exercised with a
+      fixture. Full severity/FAR parity, AUPRC, onset-relative delay and
+      pixel-localization AUPRC (footprint-0.3 probe) still require completion
+      and verification; do not use the plumbing smoke as a PoC verdict.
 
-All data-free items (1.1–2.4 fully) are implemented and tested:
+The input, training and scoring components have fixture coverage:
 `tests/unit/test_patch_model.py` (20), `test_patch_data.py` (18),
 `test_patch_scores.py` (21), `test_patch_perturbations.py` (34),
 `test_train_patch_cli.py` (9, including a real synthetic-store smoke run).
@@ -127,9 +130,19 @@ All data-free items (1.1–2.4 fully) are implemented and tested:
 - Injections happen in the PATCH tensor via `patch_perturbations` with the
   severity table's δ and the frozen persistent duration; the injection hash
   records are carried into the cell result.
-- `--patch-store` / `--patch-run`; artifacts are `patch_model.pt`,
-  `patch_sigma.npz`, `patch_norm.json` from the same run, and a checkpoint
-  whose `use_cnn` disagrees with `--scorer` is refused (no silent relabelling).
+- Artifacts may be in the named `--patch-run` directory, or supplied as the
+  trainer's `--patch-checkpoint` with its saved `norm_stats.json` and explicit
+  `--patch-sigma`. The seed, architecture and input hashes must agree.
+  This verifies the handoff; it does not replace the real calibration,
+  matched severity/FAR comparison or review for 3.4/4.x.
 
 Still data-blocked: 3.x (the subset PoC run), 4.1/4.2 (gate evaluation and the
 Persian finding).
+
+## Audit follow-up
+
+- [x] A.1 Use and record the causal patch input protocol in training and scoring;
+      test prefix invariance through the model and reject incompatible resumes.
+- [x] A.2 Verify on a synthetic fixture the same-run checkpoint/norm/scoring artifact handoff. Keep
+      the real residual-scale calibration, controlled comparison and report
+      review in the owner-run PoC; do not reuse σ from legacy inputs.

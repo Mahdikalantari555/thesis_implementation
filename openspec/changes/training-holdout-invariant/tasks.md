@@ -46,19 +46,22 @@
 
 ## User action still needed (agent never runs long jobs / touches data)
 
-- [ ] U.1 On the machine holding the data archive, build the frozen manifest
-      ONCE and commit it:
+- [ ] U.1 On the machine holding the data archive, audit the existing freeze
+      read-only. Only if no freeze has ever been created, inspect and freeze
+      once from the verified locked assets:
 
       ```bash
-      python scripts/build_holdout_manifest.py --dry-run   # inspect first
+      python scripts/build_holdout_manifest.py --audit-existing  # existing freeze
+      # First freeze only:
+      python scripts/build_holdout_manifest.py --dry-run
       python scripts/build_holdout_manifest.py \
           --archive-end 2026-09-10
       ```
 
       `--archive-end` is the last acquisition date (538-date archive); it
-      makes trailing future dates holdout-by-default. Omit it only if you
-      prefer not to check dates at all — it is recorded as `null`, never
-      guessed.
+      makes trailing future dates holdout-by-default. The locked test-period
+      cutoff always applies; an unspecified archive end is recorded as `null`.
+      Do not replace a freeze to resolve a failed audit or to gain coverage.
 
 - [ ] U.2 Then re-run the training smoke to confirm the wiring in situ:
 
@@ -74,7 +77,7 @@
 ## Notes recorded during implementation
 
 - The derivation deliberately does NOT reuse `split_of_cycle` for enforcement:
-  holdout is decided by farm membership + cycle start date, so a farm that is
+  holdout is decided by farm membership and the cycle date bounds, so a farm that is
   unknown at freeze time (future registration) is caught even though it is
   absent from every split list.
 - `filter_train_only` is provided for constructing subsets, but the
@@ -82,7 +85,16 @@
   how leaks hide, so the spec's fail-closed proof is the assertion, not the
   filter.
 - `assert_train_only` accepts `cycle_keys` alone (field ids parsed from the
-  key) so a patch Dataset that carries only keys is still enforceable.
-- `--skip-cycle-file-check` exists solely so `--dry-run` inspection works on a
-  machine without the cycle files; it is refused without `--dry-run` and must
-  never be used for a real freeze.
+  key) for farm-only checks. Cycle consumers must also supply date bounds.
+- `--skip-cycle-file-check` is only for read-only `--dry-run` or
+  `--audit-existing` without cycle files. It is not an archive gate and is
+  refused for a real freeze.
+
+## Audit follow-up
+
+- [x] A.1 Use spatial block membership in new freezes and add a read-only audit
+      plus runtime comparison to the locked splits; test missing and extra farms.
+- [x] A.2 Enforce inclusive cycle-end bounds in the zonal and patch training
+      paths, including checks before fitting patch normalization.
+- [ ] A.3 Review the actual frozen manifests and cycle coverage on the archive
+      machine without modifying either freeze.

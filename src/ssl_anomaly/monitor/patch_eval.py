@@ -30,6 +30,9 @@ from __future__ import annotations
 
 import numpy as np
 
+from ssl_anomaly.io import patches as P
+from ssl_anomaly.train.patch_data import read_cycle_inputs
+
 SENTINEL_ABSENT = "absent"
 
 
@@ -40,71 +43,37 @@ def patch_batch_for_cycles(
     *,
     norm: dict,
 ) -> dict:
-    """Gather the patch tensors for ``(field_id, cycle_id)`` pairs.
-
-    Returns ``{"X": (N,T,C,S,S) float32 normalized, "pixel_valid": (N,T,S,S),
-    "in_field": (N,S,S), "sensor_id": (N,T), "cycles_found": int}``.
-
-    Values are normalized with the run's OWN frozen sidecar, per channel ×
-    sensor, exactly as training did — a patch arm scored in raw units against a
-    σ table fitted in normalized units would look calibrated and be wrong.
-    """
-    store_fields = np.asarray(root["field_ids"][:], dtype=np.int64)
-    row_of = {int(f): i for i, f in enumerate(store_fields)}
-    channel_names = tuple(root.attrs.get("channel_order", ()))
-    if not channel_names:
-        raise ValueError("the patch store has no channel_order attribute")
-
+    """Join by stable keys and keep raw inputs for physical-unit challenges."""
+    epoch = P.patch_epoch(root)
+    index = P.patch_cycle_index(root)
+    stats = P.patch_norm_stats(norm)
     field_ids = np.asarray(field_ids, dtype=np.int64).ravel()
     cycle_ids = np.asarray(cycle_ids, dtype=np.int64).ravel()
-    if field_ids.shape != cycle_ids.shape:
-        raise ValueError(
-            f"field_ids {field_ids.shape} and cycle_ids {cycle_ids.shape} must align"
-        )
-    missing_fields = sorted({int(f) for f in field_ids if int(f) not in row_of})
-    if missing_fields:
-        raise ValueError(f"{len(missing_fields)} cycles' fields are not in the store: "
-                         f"{missing_fields[:5]}")
-
-    first = np.asarray(root["values"][row_of[int(field_ids[0])], int(cycle_ids[0])],
-                       dtype=np.float32)
-    T, C, S, _ = first.shape
-    N = field_ids.size
-    X = np.empty((N, T, C, S, S), dtype=np.float32)
-    pixel_valid = np.empty((N, T, S, S), dtype=bool)
-    in_field = np.empty((N, S, S), dtype=bool)
-    sensor_ids = np.empty((N, T), dtype=np.int64)
-
-    for n, (fid, cid) in enumerate(zip(field_ids, cycle_ids)):
-        row = row_of[int(fid)]
-        vals = np.asarray(root["values"][row, int(cid)], dtype=np.float32)
-        if vals.shape != (T, C, S, S):
-            raise ValueError(f"cycle {cid} of field {fid} is {vals.shape}, expected {(T, C, S, S)}")
-        mask_field = np.asarray(root["in_field"][row, 0], dtype=bool)
-        finite = np.isfinite(vals)
-        obs = finite & mask_field[None, None]
-        x = np.where(obs, vals, 0.0).astype(np.float32)
-        for sid in np.unique(np.asarray(root["sensor_id"][row, int(cid)], dtype=np.int64)):
-            name = {1: "L8", 2: "L9"}.get(int(sid), "unknown")
-            per_ch = norm.get(name, {})
-            bins = np.flatnonzero(np.asarray(root["sensor_id"][row, int(cid)], dtype=np.int64) == sid)
-            for ci, ch in enumerate(channel_names):
-                stats = per_ch.get(ch, {})
-                med, iqr = stats.get("median"), stats.get("iqr")
-                if med is None or iqr is None or iqr <= 0:
-                    continue
-                sel = obs[bins, ci]
-                x[np.ix_(bins, [ci])] = np.where(
-                    sel[:, None, :, :], (vals[bins, ci][:, None, :, :] - med) / iqr, 0.0,
-                )
-        X[n] = x
-        pixel_valid[n] = obs.any(axis=1)
-        in_field[n] = mask_field
-        sensor_ids[n] = np.asarray(root["sensor_id"][row, int(cid)], dtype=np.int64)
+    if field_ids.shape != cycle_ids.shape or not field_ids.size:
+        raise ValueError("field_ids and cycle_ids must align and be non-empty")
+    keys = [f"{f}:{c}" for f, c in zip(field_ids, cycle_ids)]
+    missing = [key for key in keys if key not in index]
+    if missing:
+        raise ValueError(f"{len(missing)} requested patch cycles are not in the store: {missing[:5]}")
+    cycles = [index[key] for key in keys]
+    P.assert_patch_count_bounds(root, cycles)
+    rows = [read_cycle_inputs(root, cycle, epoch=epoch) for cycle in cycles]
+    raw, obs, sensors, in_field, covariates = (
+        np.stack([data[key] for data in rows])
+        for key in ("raw", "obs", "sensor_id", "in_field", "covariates")
+    )
+    normalized = [P.normalize_patch(v, m, s, stats) for v, m, s in zip(raw, obs, sensors)]
+    x, missing_scales = zip(*normalized)
     return {
-        "X": X, "pixel_valid": pixel_valid, "in_field": in_field,
-        "sensor_id": sensor_ids, "cycles_found": int(N),
+        "X": np.stack(x), "unnormalized_channels": sorted(set().union(*missing_scales)), "raw": raw, "obs": obs, "pixel_valid": obs.any(axis=2),
+        "in_field": in_field, "sensor_id": sensors, "covariates": covariates,
+        "cycles_found": len(keys), "norm_stats": stats,
     }
+
+
+def _scoring_inputs(batch: dict, rows=slice(None)) -> dict:
+    names = {"sensor_ids": "sensor_id", "covariates": "covariates", "obs": "obs"}
+    return {kw: batch[key][rows] for kw, key in names.items() if key in batch}
 
 
 def patch_reference_paths(
@@ -134,7 +103,8 @@ def patch_reference_paths(
         extra = ({} if field_row is None
                  else {"idx": np.asarray(field_row)[sl]})
         scores, _pred = arm_scorer.loo_batch(
-            batch["X"][sl], batch.get("pixel_valid", batch.get("M"))[sl], **extra,
+            batch["X"][sl], batch.get("pixel_valid", batch.get("M"))[sl],
+            **extra, **_scoring_inputs(batch, sl),
         )
         paths[n0 : n0 + sl.size] = scores
     return paths
@@ -167,26 +137,24 @@ def patch_arm_scores(
     duration = (sev.PERSISTENT_DURATION_BINS if family == sev.PERSISTENT_FAMILY
                 else levels[level_id].duration_bins)
 
-    rng = rng if rng is not None else np.random.default_rng(abs(hash(level_id)) % 2**32)
+    rng = rng if rng is not None else np.random.default_rng(round_idx)
     injections = []
     Xinj = np.empty_like(batch["X"])
-    Minj = np.empty_like(batch["pixel_valid"])
+    Minj = batch["pixel_valid"]
     for n in range(batch["X"].shape[0]):
         onset = ppert.onset_for_shape(family, batch["X"].shape[1], 3, int(duration))
         inj = ppert.inject_patch_drop(
-            batch["X"][n], np.ones_like(batch["X"][n], dtype=bool),
+            batch["raw"][n].astype(np.float32), batch["obs"][n],
             index=index, delta=delta, onset_bin=onset, shape=family,
             duration=int(duration), in_field=batch["in_field"][n],
             level_id=level_id, rng=rng,
         )
-        Xinj[n] = inj.x
-        # The mask is never changed by an injection (same contract as the
-        # field-level applier), so the batch mask carries over verbatim.
-        Minj[n] = batch["pixel_valid"][n]
+        Xinj[n], _ = P.normalize_patch(
+            inj.x, batch["obs"][n], batch["sensor_id"][n], batch["norm_stats"]
+        )
         injections.append(inj.to_hash_record())
     extra = {} if field_row is None else {"idx": np.asarray(field_row)}
-    out = arm.score_cycles(Xinj, Minj, None, None, **extra)
-    scores, _pred = arm.scorer.loo_batch(Xinj, Minj, **extra)
-    return {"z2": out["z2"], "paths": scores, "p_value": out["p_value"],
+    out = arm.score_cycles(Xinj, Minj, None, None, **extra, **_scoring_inputs(batch))
+    return {"z2": out["z2"], "paths": out["score"], "p_value": out["p_value"],
             "observed": Minj.any(axis=(2, 3)),   # (N, T): any in-field pixel seen
             "injections": injections}

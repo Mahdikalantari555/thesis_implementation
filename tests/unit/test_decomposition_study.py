@@ -9,7 +9,8 @@ import zarr
 
 from ssl_anomaly.decomposition_study.data import BANDS, read_zonal, smoke_panel, split_panel
 from ssl_anomaly.decomposition_study.decompose import METHODS, decompose, regular_grid
-from ssl_anomaly.monitor.holdout import holdout_manifest_hash
+from ssl_anomaly.monitor.holdout import build_holdout_manifest, holdout_manifest_hash
+from ssl_anomaly.monitor.splits import manifest_hash
 
 
 def test_zonal_selection_quality_and_manifest(tmp_path):
@@ -26,13 +27,19 @@ def test_zonal_selection_quality_and_manifest(tmp_path):
     for k, v in entries.items():
         arr = np.asarray(v)
         g.create_dataset(k, shape=arr.shape, dtype=arr.dtype)[:] = arr
-    manifest_path = tmp_path / "holdout.json"
+    manifest_path, splits_path = tmp_path / "holdout.json", tmp_path / "splits.json"
     with pytest.raises(RuntimeError, match="holdout manifest missing"):
-        read_zonal(path, manifest_path, 0.5)
-    manifest = {"known_farm_ids": [1, 2], "holdout_farms": [2], "holdout_date_start": "2013-05-01"}
-    manifest["manifest_sha256"] = holdout_manifest_hash(manifest)
+        read_zonal(path, manifest_path, 0.5, splits_path=splits_path)
+    splits = {
+        "kmeans": {"test_block_fields": [2]},
+        "train_fields": [1],
+        "test_period_start": "2013-05-01",
+    }
+    splits["manifest_sha256"] = manifest_hash(splits)
+    splits_path.write_text(json.dumps(splits))
+    manifest = build_holdout_manifest(splits)
     manifest_path.write_text(json.dumps(manifest))
-    panel = read_zonal(path, manifest_path, 0.5)
+    panel = read_zonal(path, manifest_path, 0.5, splits_path=splits_path)
     assert panel.fields.tolist() == [1]
     assert panel.days.tolist() == [0, 15]
     assert panel.optical[0, 0].tolist() == pytest.approx([0.1, 0.14, 0.16, 0.4, 0.18, 0.12])
@@ -44,7 +51,11 @@ def test_zonal_selection_quality_and_manifest(tmp_path):
     manifest["holdout_farms"] = [1]
     manifest_path.write_text(json.dumps(manifest))
     with pytest.raises(RuntimeError, match="self-hash"):
-        read_zonal(path, manifest_path, 0.5)
+        read_zonal(path, manifest_path, 0.5, splits_path=splits_path)
+    manifest["manifest_sha256"] = holdout_manifest_hash(manifest)
+    manifest_path.write_text(json.dumps(manifest))
+    with pytest.raises(RuntimeError, match="missing_spatial_fields"):
+        read_zonal(path, manifest_path, 0.5, splits_path=splits_path)
 
 
 def test_stl_gap_mask():
@@ -338,3 +349,33 @@ def test_synthetic_ap_respects_observed_changes_and_pairs():
     assert result["ap_date"] == pytest.approx(1.0)
     assert result["ap_field"] == pytest.approx(1.0)
     assert result["changed_alarm_fraction"] == 1.0
+
+
+def test_dose_response_uses_same_changed_rows_despite_varying_score_support():
+    from ssl_anomaly.decomposition_study.validation import changed_uplift, matched_dose_response
+
+    clean = np.zeros((2, 2))
+    # Date (1, 1) is scored in all doses but was unchanged at the mild dose.
+    changed = np.ones_like(clean, dtype=bool)
+    mild_changed = changed.copy()
+    mild_changed[1, 1] = False
+    inputs = [
+        np.array(x)
+        for x in ([[1, 9], [10, 99]], [[2, 10], [np.nan, 99]], [[3, np.nan], [np.nan, 99]])
+    ]
+    uplift = [changed_uplift(clean, x, m) for x, m in zip(inputs, (mild_changed, changed, changed))]
+    report = matched_dose_response(np.array([0.5, 1, 2]), uplift)
+    assert (
+        report["n_matched_field_dates"]
+        == report["n_matched_fields"]
+        == report["n_matched_dates"]
+        == 1
+    )
+    assert [d["median_matched_uplift"] for d in report["doses"]] == [1, 2, 3]
+    assert [d["n_excluded_by_matching"] for d in report["doses"]] == [2, 2, 1]
+    assert report["spearman"] == pytest.approx(1)
+    uplift[-1][0, 0] = np.nan
+    empty = matched_dose_response(np.array([0.5, 1, 2]), uplift)
+    assert empty["n_matched_field_dates"] == 0
+    assert empty["spearman"] is None
+    assert all(d["median_matched_uplift"] is None for d in empty["doses"])

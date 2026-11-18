@@ -99,12 +99,16 @@ def test_report_without_artifacts_is_a_clean_error(tmp_path, capsys):
     assert "no cell artifacts" in capsys.readouterr().err
 
 
-def test_execute_refuses_without_a_fold_store(tmp_path, capsys):
+@pytest.mark.parametrize("store_exists", [False, True])
+def test_execute_refuses_without_fold_aware_evaluation(tmp_path, capsys, store_exists):
     """The critical guard: never train on the held-out blocks by omission."""
     p, folds = _folds_file(tmp_path)
+    if store_exists:
+        (tmp_path / "folds" / "fold_0.zarr").mkdir(parents=True)
     code = R.main(["--execute", "--folds", str(p), "--dir", str(tmp_path / "d"),
-                   "--fold-store-dir", str(tmp_path / "nonexistent")])
-    assert code == 0                     # the command reports and continues
+                   "--fold-store-dir", str(tmp_path / "folds")])
+    assert code == 2
+    assert not (tmp_path / "d").exists()
     err = capsys.readouterr().err
     assert "[blocked]" in err
     assert "leak" in err

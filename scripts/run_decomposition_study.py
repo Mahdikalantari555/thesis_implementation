@@ -25,6 +25,7 @@ from ssl_anomaly.decomposition_study.experiment import (  # noqa: E402
     study_case,
 )
 from ssl_anomaly.monitor.holdout import HOLDOUT_MANIFEST_PATH  # noqa: E402
+from ssl_anomaly.monitor.splits import SPLITS_LOCKED_PATH  # noqa: E402
 
 DEFAULT_STATS = REPO.parent / "Data/Processed/satellite/stats.zarr"
 
@@ -42,6 +43,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--holdout-manifest", type=Path, help="existing hash-verified frozen holdout"
     )
+    parser.add_argument("--splits-path", type=Path, help="locked splits referenced by the freeze")
     parser.add_argument("--train-before", help="exclusive training end (default: 2021-01-01)")
     parser.add_argument("--evaluate-from", help="inclusive evaluation start (default: 2022-01-01)")
     parser.add_argument("--min-valid-frac", type=float, default=0.50)
@@ -71,7 +73,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     args = parser.parse_args(argv)
     if args.smoke and any(
-        (args.stats_zarr, args.holdout_manifest, args.indicators, args.adjacency)
+        (args.stats_zarr, args.holdout_manifest, args.splits_path, args.indicators, args.adjacency)
     ):
         parser.error("--smoke does not accept real archive, manifest or evidence arguments")
     if not 1 <= args.threads <= 8 or (args.epochs is not None and not 1 <= args.epochs <= 50):
@@ -90,6 +92,7 @@ def run(args: argparse.Namespace) -> Run:
             args.stats_zarr or DEFAULT_STATS,
             args.holdout_manifest or HOLDOUT_MANIFEST_PATH,
             args.min_valid_frac,
+            splits_path=args.splits_path or SPLITS_LOCKED_PATH,
         )
         train, evaluate = "2021-01-01", "2022-01-01"
     split = split_panel(panel, args.train_before or train, args.evaluate_from or evaluate)

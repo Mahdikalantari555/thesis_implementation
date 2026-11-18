@@ -14,11 +14,9 @@ deliberately able to do all four WITHOUT a store —
 so the plan and the acceptance verdict can be inspected, and re-derived
 identically, before a single GPU-hour is spent.
 
-``--execute`` is the only mode that trains; it shells out to ``train_patch.py``
-and ``eval_dev.py`` per cell so the checkpoints, config hashes and dev_log rows
-are produced by the SAME entry points every other result came from (a bespoke
-training loop here would make the matrix incomparable with the rest of the
-thesis).
+``--execute --dry-run`` prints the proposed training runs. Actual execution
+is blocked until fold-specific locked calibration/evaluation and artifact
+wiring exist. Ordinary held-out dev scoring is not a fold evaluation.
 
 Design constraints encoded below, all from the change's design.md:
 
@@ -36,9 +34,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
-import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -215,83 +211,27 @@ def cmd_report(args) -> int:
 
 
 def cmd_execute(args) -> int:
-    """Run the missing cells by shelling out to the canonical entry points."""
-    d = Path(args.dir)
-    done = GM.completed_cells(d)
-    folds = folds_from_file(args.folds) if args.folds else None
-    if folds is None:
+    """Show the fold plan, but do not start a retrain without fold-aware scoring."""
+    if not args.folds:
         print("--execute needs --folds", file=sys.stderr)
         return 2
+    folds = folds_from_file(args.folds)
     cells = GM.plan_matrix(folds, temporal_cutoff_day=args.temporal_cutoff_day)
-    rows = []
-    for arm in (args.arms.split(",") if args.arms else DEFAULT_ARMS):
-        for cell in cells:
-            if not cell.needs_retrain:
-                continue
-            for seed in [int(s) for s in str(args.seeds).split(",")]:
-                if (arm, cell.cell_id, seed) in done:
-                    print(f"[skip] {arm} {cell.cell_id} seed {seed} (artifact present)")
-                    continue
-                if args.dry_run:
-                    print(f"[dry-run] would train {arm} {cell.cell_id} seed {seed}")
-                    continue
-                t0 = time.time()
-                out = _run_cell(args, arm=arm, cell=cell, seed=seed)
-                rows.append({"arm": arm, "cell": cell.cell_id, "seed": seed,
-                             "seconds": round(time.time() - t0, 1), "ok": out})
-                print(json.dumps(rows[-1]))
-    return 0
-
-
-def _run_cell(args, *, arm: str, cell: GM.MatrixCell, seed: int) -> bool:
-    """Train then evaluate one cell, through the canonical scripts.
-
-    ``train_patch.py`` takes its field selection from the STORE (minus the
-    holdout manifest) and names its own output directory from
-    ``<out>/<arch>_seed<seed>/``; it has no ``--exclude-fields`` flag. The fold's
-    held-out fields are therefore excluded by BUILDING A FOLD-SPECIFIC STORE
-    VIEW: ``--out`` is a per-cell directory AND the fold's field ids are passed
-    through ``--holdout-manifest``-independent filtering by writing a partial
-    store. Since that is a data operation, ``--execute`` requires the fold
-    store to exist and says exactly how to make it, rather than silently
-    training on the held-out blocks.
-
-    This is the honest half-implementation: the plan/estimate/report modes are
-    complete, and ``--execute`` refuses until the per-fold stores exist.
-    """
-    fold_store = Path(args.fold_store_dir) / f"fold_{cell.fold_id}.zarr"
-    if not fold_store.exists():
+    if not args.dry_run:
         print(
-            f"[blocked] {arm} {cell.cell_id}: needs a fold-specific store at "
-            f"{fold_store} (train on blocks {cell.train_blocks}, exclude "
-            f"{cell.held_out_blocks}). Build it with a filter over patches.zarr; "
-            "training on the full store would leak the held-out blocks.",
+            "[blocked] Fold execution needs a verified per-fold train store and norm "
+            "bound to the frozen splits and holdout, and fold-specific calibration and "
+            "evaluation keys. Using the full store or the ordinary dev sweep would "
+            "leak held-out data or evaluate the wrong cohort. No training started.",
             file=sys.stderr,
         )
-        return False
-    run_id = f"gen_{arm}_{cell.cell_id}_s{seed}"
-    out_dir = tmp_out_dir(args, run_id)
-    train_cmd = [
-        sys.executable, str(ROOT / "scripts" / "train_patch.py"),
-        "--store", str(fold_store), "--seed", str(seed),
-        "--arch", "patch_cnn_gru" if arm == "patch_cnn_gru" else "patch_pixelwise",
-        "--out", str(out_dir),
-    ]
-    if subprocess.run(train_cmd, cwd=ROOT).returncode != 0:
-        return False
-    eval_cmd = [
-        sys.executable, str(ROOT / "scripts" / "eval_dev.py"),
-        # --run-id names the DEV checkpoint dir; the patch arm reads its own
-        # artifacts from --patch-run (defaulting to --run-id), so both are the
-        # same run id here.
-        "--run-id", run_id, "--model", "patch_cnn_gru", "--scorer", arm,
-        "--seeds", str(seed), "--patch-store", str(fold_store),
-    ]
-    return subprocess.run(eval_cmd, cwd=ROOT).returncode == 0
-
-
-def tmp_out_dir(args, run_id: str) -> Path:
-    return Path(args.dir) / "runs" / run_id
+        return 2
+    for arm in (args.arms.split(",") if args.arms else DEFAULT_ARMS):
+        for cell in cells:
+            if cell.needs_retrain:
+                for seed in [int(s) for s in str(args.seeds).split(",")]:
+                    print(f"[dry-run] would train {arm} {cell.cell_id} seed {seed}")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -312,8 +252,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="--plan writes the frozen fold file here")
     ap.add_argument("--dir", default=str(DEFAULT_ARTIFACT_DIR))
     ap.add_argument("--fold-store-dir", default=str(ROOT / "data" / "processed" / "folds"),
-                    help="per-fold filtered stores (<dir>/fold_<k>.zarr); "
-                         "--execute refuses without them")
+                    help="reserved path for per-fold filtered stores (execution blocked)")
     ap.add_argument("--temporal-cutoff-day", type=int, default=None)
     ap.add_argument("--seeds", default="13")
     ap.add_argument("--arms", default=None)

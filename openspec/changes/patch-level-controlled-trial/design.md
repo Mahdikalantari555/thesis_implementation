@@ -95,3 +95,11 @@ hashes must equal the field-level protocol's so arm comparison is exact.
   context — the aerial-MIM failure mode, document §2.3): trimmed loss +
   prediction objective are the v1 countermeasures; part C machinery is
   reused in the full run to measure α_patch.
+
+### Audit follow-up: causal inputs
+
+Use the fixed encoding bound (uint8, 255) for `log1p(n_obs)` rather than the
+full-cycle maximum. The current-bin count cannot depend on the suffix. Version
+the input protocol in patch runs/checkpoints; do not reinterpret older weights
+under corrected normalization or causality. Train, calibration and challenge
+scoring use the same preprocessing; severity deltas remain in physical units.

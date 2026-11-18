@@ -4,10 +4,10 @@
 
 `scripts/build_holdout_manifest.py` reads splits_locked `9aa5eb11…` and
 emits `data/processed/holdout_manifest.json`:
-- `holdout_farms` = splits_locked `test_fields` (51) — whole-field spatial
-  holdout (their pre-2024 cycles are ALSO holdout for training, which the
-  split assignment already guarantees by sending every uncensored cycle of
-  a test-block field to test).
+- `holdout_farms` = splits_locked `kmeans.test_block_fields`, including fields
+  with only censored/excluded rows. A row-derived `test_fields` list can also
+  include non-block fields that have some test-period cycles; those dates,
+  not their entire farm histories, are reserved in a newly derived freeze.
 - `holdout_date_start` = `test_period_start` (2024-01-01) — temporal
   holdout for non-block fields.
 - `future_fields_rule` / `future_dates_rule` = "holdout by default" (the
@@ -36,3 +36,11 @@ is data, derived once — the trainer NEVER re-derives it.
 Evaluation/locked-final-test reading rules, dev calibration, the severity
 machinery, and the existing split assignment are unchanged — the invariant
 only makes an existing structural guarantee explicit, frozen, and enforced.
+
+### Audit follow-up
+
+`build_holdout_manifest.py --audit-existing` is read-only. A legacy over-exclusion
+is retained; a missing block member or differing split hash/cutoff stops matching
+consumers until the owner reviews the freeze. Cycle checks use the inclusive end,
+not only the start. Patch export binds the epoch and cycle identity to the locked
+source so the guard is evaluated in absolute calendar dates.

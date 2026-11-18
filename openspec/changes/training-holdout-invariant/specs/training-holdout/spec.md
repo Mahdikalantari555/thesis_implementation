@@ -2,14 +2,12 @@
 
 ### Requirement: Frozen training-holdout manifest
 
-The system SHALL maintain a frozen holdout manifest derived from the locked
-splits (`9aa5eb11…`) — holdout farms = the test-block fields (whole-field
-holdout, all periods), holdout dates = every date from `test_period_start`
-(2024-01-01) onward plus all future acquisitions, holdout fields = also any
-field registered after the archive freeze — frozen with SHA-256 and
-rebuildable only with `--force <reason>`. No new split semantics SHALL be
-introduced: the manifest is a derived, frozen statement of the existing
-locked assignment.
+New frozen holdout manifests SHALL use the locked `kmeans.test_block_fields`
+as whole-field exclusions and `test_period_start` as the inclusive date cutoff.
+Fields unknown at freeze and dates after the declared archive end SHALL also
+be held out. The manifest SHALL record SHA-256 and provenance and SHALL NOT be
+replaced without `--force` and a recorded reason. The locked split assignment
+SHALL NOT be changed.
 
 #### Scenario: Manifest is a pure derivation
 
@@ -18,22 +16,27 @@ locked assignment.
   its sha and provenance are recorded, and a rebuild without `--force`
   fails
 
+#### Scenario: Existing freeze differs from its spatial block
+
+- **WHEN** a real training, patch normalization or decomposition study path
+  uses an existing freeze with the locked splits
+- **THEN** it verifies the source split hash, date cutoff and coverage of the
+  spatial block; missing block members or mismatched provenance abort; any
+  additional frozen exclusions remain in force, with no manifest rewritten
+
 ### Requirement: Fail-closed holdout enforcement in every training path
 
-Every training consumer — `train_main.py`, the patch trainer and its
-representation variants, fold retrains and contamination runs — SHALL load
-the frozen manifest (hash-verified) and SHALL assert, before training,
-that no training input touches a holdout farm or a holdout-period cycle;
-violation SHALL raise a named error listing the offending pairs and abort
-(fail-closed, never a warning). Per-pixel patch stores MAY contain holdout
-fields for evaluation purposes; the enforcement applies at the training
-consumer. Subset manifests (PoC subsets, folds, contamination fractions)
-SHALL be validated against the holdout manifest before use.
+Every training consumer (including subsets, variants, fold retrains and
+contamination runs) SHALL load the hash-verified frozen manifest and reject
+training inputs from holdout farms or periods before fitting. Cycle consumers
+SHALL check both bounds and reject missing or inverted bounds. A violation
+SHALL raise `HoldoutViolationError` naming the offending pairs. Patch stores
+MAY contain held-out observations for separate evaluation.
 
 #### Scenario: Holdout leak aborts training
 
 - **WHEN** a training Dataset would include a test-block field's cycle or a
-  post-2024 cycle
+  cycle that starts in or crosses into the held-out period
 - **THEN** construction fails with `HoldoutViolationError` naming the
   (field, cycle) pairs, and no training starts
 
