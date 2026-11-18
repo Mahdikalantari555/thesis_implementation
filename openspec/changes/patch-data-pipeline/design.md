@@ -2,12 +2,18 @@
 
 ### Decisions
 
-1. **S = 32, one patch per field, no tiling.** Measured field sides
-   (median 16.7 px, p90 17.0, max 19.6) make 32×32 sufficient for every
-   field plus margin. This deviates from the architecture document's
-   S∈{16,32} tiling proposal — justified by the measurement recorded in the
-   proposal. A `--patch-size` flag exists; the default is locked to 32 for
-   the trial.
+1. **S = 48, one patch per field, no tiling.** The proposal's measurement
+   (median 16.7 px, p90 17.0, max 19.6) was the **equivalent-square side**
+   (√area), not the bounding box. The real bbox distribution on
+   `field_mask_full.tif` (measured 2026-11-18 over all 490 fields) is
+   median 12×34 px, p95 32×35, **max 34×47** — 69.8 % of fields exceed a
+   32 px window in one dimension, because the fields are elongated
+   N–S strips. The fail-closed geometry gate caught this on the first
+   subset extraction (field 6: 12×33 bbox vs S=32). S = 48 covers every
+   field with margin; `--patch-size 48` is passed at every entry point.
+   This supersedes the architecture document's S∈{16,32} tiling proposal
+   and the earlier 32 default of this change; the 32 constant stays the
+   spec's tested minimum, 48 is the run default.
 
 2. **Cycle-bin grid, not raw dates.** The document prefers raw irregular
    dates with Δt covariates; this pipeline aggregates to the EXISTING

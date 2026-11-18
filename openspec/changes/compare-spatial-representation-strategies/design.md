@@ -74,8 +74,13 @@ in farm-level means".
 
 ### Resolution arithmetic (fixed, no measurement needed)
 
-30 m GSD ⇒ 1 px = 0.09 ha. Measured field sides (median 16.7 px, p90 17.0,
-max 19.6 px) give a median field ≈ 16.7² × 0.09 ≈ 25 ha. Consequences to
+30 m GSD ⇒ 1 px = 0.09 ha. CORRECTED MEASUREMENT 2026-11-18 (the earlier
+"median 16.7, p90 17.0, max 19.6 px" numbers were equivalent-square sides,
+√area — not bounding boxes; the fail-closed geometry gate caught the
+contradiction on the first subset extraction): field bbox distribution over
+all 490 fields = median 12×34 px, p95 32×35, max 34×47; median area 280 px
+≈ 25.2 ha. R1's patch window therefore runs at S = 48 (covers every field;
+69.8 % of fields exceed 32 px in one dimension). Consequences to
 state in finding 24, per row: (a) R1's spatial support is a whole field,
 so "patch-level" means intra-field, not sub-field-precision; (b) an R2
 16×16 crop spans 480 m ≈ 23 ha, i.e. nearly a whole median field — the
