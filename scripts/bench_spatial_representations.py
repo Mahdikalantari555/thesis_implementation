@@ -23,8 +23,12 @@ import argparse
 import json
 import os
 import platform
-import resource
 import time
+
+try:
+    import resource  # Unix only: peak-RSS probing
+except ModuleNotFoundError:  # pragma: no cover - Windows
+    resource = None
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -51,6 +55,13 @@ REPRESENTATION_SPECS: dict[str, dict] = {
 
 def peak_ram_mb() -> float:
     """Peak RSS of this process, in MB (Linux/macOS compatible)."""
+    if resource is None:  # pragma: no cover - Windows: no stdlib peak-RSS probe
+        try:
+            import psutil
+
+            return round(psutil.Process().memory_info().peak_wset / (1024 * 1024), 1)
+        except ModuleNotFoundError:
+            return float("nan")
     usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     # ru_maxrss is KB on Linux, bytes on macOS.
     return round(usage / (1024 * 1024) if platform.system() == "Darwin" else usage / 1024, 1)
