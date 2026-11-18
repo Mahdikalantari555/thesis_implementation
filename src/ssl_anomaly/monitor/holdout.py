@@ -12,7 +12,12 @@ semantics are invented here:
 - ``holdout_farms``    = the locked ``kmeans.test_block_fields`` (whole-field
   spatial holdout, including members with no eligible test rows).
 - ``holdout_date_start`` = the locked ``test_period_start`` (2024-01-01):
-  temporal holdout for every other field.
+  temporal holdout for fields **outside the k-means dev and test blocks**.
+  Dev-block cycles are calibration-only by the splits' recorded
+  ``dev_temporal_cutoff`` deviation (frozen 2026-11-14): the locked splits
+  keep every uncensored dev-block cycle in ``dev`` for all periods, and the
+  25 cycles this admits past the cutoff (2026-11-18 adjudication) share zero
+  (field, cycle) pairs with the locked test split.
 - future-by-default   = any farm id absent from ``known_farm_ids`` (fields
   registered after the archive freeze) and any observation after
   ``archive_end_date`` are holdout, per the 2026-11-14 product vision.
@@ -44,7 +49,7 @@ log = logging.getLogger("ssl_anomaly.monitor.holdout")
 REPO_ROOT = Path(__file__).resolve().parents[3]
 HOLDOUT_MANIFEST_PATH = REPO_ROOT / "data/processed/holdout_manifest.json"
 
-MANIFEST_VERSION = 1
+MANIFEST_VERSION = 2
 REBUILD_HINT = (
     "the holdout manifest is derived once from the locked splits; rebuild it "
     "only with scripts/build_holdout_manifest.py --force --reason <reason>"
@@ -108,6 +113,9 @@ def audit_frozen_holdout(manifest: dict, splits_manifest: dict) -> dict:
     """Compare a hash-verified freeze against its locked source without modifying it."""
     spatial = _test_block_fields(splits_manifest)
     frozen = {int(f) for f in manifest["holdout_farms"]}
+    kmeans = splits_manifest.get("kmeans", {}) or {}
+    source_dev = {int(f) for f in kmeans.get("dev_block_fields", ()) or ()}
+    frozen_dev = {int(f) for f in manifest.get("dev_block_fields", ()) or ()}
     source = splits_manifest.get("manifest_sha256")
     return {
         "holdout_manifest_sha256": manifest.get("manifest_sha256"),
@@ -119,6 +127,8 @@ def audit_frozen_holdout(manifest: dict, splits_manifest: dict) -> dict:
         == _frozen_day(splits_manifest["test_period_start"], "test_period_start"),
         "missing_spatial_fields": sorted(spatial - frozen),
         "extra_frozen_fields": sorted(frozen - spatial),
+        "missing_dev_fields": sorted(source_dev - frozen_dev),
+        "extra_dev_fields": sorted(frozen_dev - source_dev),
     }
 
 
@@ -128,6 +138,8 @@ def assert_frozen_holdout_matches_splits(manifest: dict, splits_manifest: dict) 
         not audit["source_matches"]
         or not audit["cutoff_matches"]
         or audit["missing_spatial_fields"]
+        or audit["missing_dev_fields"]
+        or audit["extra_dev_fields"]
         or not manifest.get("known_farm_ids")
     ):
         raise HoldoutViolationError(
@@ -153,6 +165,8 @@ def build_holdout_manifest(
         raise KeyError("locked splits manifest is missing test_period_start")
 
     test_fields = sorted(_test_block_fields(splits_manifest))
+    kmeans = splits_manifest.get("kmeans", {}) or {}
+    dev_block = sorted({int(f) for f in kmeans.get("dev_block_fields", ()) or ()})
     known = _known_farm_ids(splits_manifest)
     if not known:
         raise ValueError(
@@ -173,12 +187,16 @@ def build_holdout_manifest(
             "splits_created": splits_manifest.get("created"),
             "test_period_start": date_start,
             "n_test_fields": len(test_fields),
+            "n_dev_block_fields": len(dev_block),
             "n_known_farms": len(known),
             "rule": ("holdout_farms = locked kmeans.test_block_fields (whole-field, all periods); "
-                     "holdout_date_start = locked test_period_start (temporal holdout "
-                     "for every other field) — no new split semantics"),
+                     "holdout_date_start = locked test_period_start (temporal holdout for fields "
+                     "outside the locked dev and test blocks; dev-block cycles are "
+                     "calibration-only per the splits' recorded dev_temporal_cutoff "
+                     "deviation) — no new split semantics"),
         },
         "holdout_farms": test_fields,
+        "dev_block_fields": dev_block,
         "holdout_date_start": date_start,
         "archive_end_date": end_date,
         "known_farm_ids": known,
@@ -299,10 +317,14 @@ def train_only_mask(
 ) -> np.ndarray:
     """Boolean mask: True where a (field, cycle) pair is admissible for training.
 
-    A pair is inadmissible when its farm is a holdout farm, is unknown at
-    freeze time (future-by-default), or its observation window touches the
-    holdout period or extends after the archive end. Point checks reuse the
-    start date as the end; cycle consumers supply both bounds.
+    A pair is inadmissible when its farm is a holdout farm or is unknown at
+    freeze time (future-by-default), or — for fields outside the locked dev
+    block — its observation window touches the holdout period or extends
+    after the archive end. Dev-block fields are the calibration stratum of
+    the locked splits (recorded ``dev_temporal_cutoff`` deviation): their
+    cycles are exempt from the two date rules but never from the farm rules.
+    Point checks reuse the start date as the end; cycle consumers supply
+    both bounds.
     """
     manifest = manifest if manifest is not None else load_holdout_manifest()
     fields = np.asarray(list(field_ids), dtype=np.int64)
@@ -310,6 +332,7 @@ def train_only_mask(
 
     holdout_farms = {int(f) for f in manifest.get("holdout_farms", ())}
     known_farms = {int(f) for f in manifest.get("known_farm_ids", ())}
+    dev_block = {int(f) for f in manifest.get("dev_block_fields", ()) or ()}
     if holdout_farms:
         mask &= ~np.isin(fields, list(holdout_farms))
     if known_farms:
@@ -319,12 +342,13 @@ def train_only_mask(
     if bounds is not None:
         starts, ends = bounds
         mask &= starts.notna() & ends.notna() & (starts <= ends)
+        is_dev_block = np.isin(fields, list(dev_block)) if dev_block else np.zeros(fields.shape, dtype=bool)
         date_start = manifest.get("holdout_date_start")
         if date_start:
-            mask &= ends < _frozen_day(date_start, "holdout_date_start")
+            mask &= (ends < _frozen_day(date_start, "holdout_date_start")) | is_dev_block
         archive_end = manifest.get("archive_end_date")
         if archive_end:
-            mask &= ends <= _frozen_day(archive_end, "archive_end_date")
+            mask &= (ends <= _frozen_day(archive_end, "archive_end_date")) | is_dev_block
     return mask
 
 
@@ -378,6 +402,7 @@ def assert_train_only(
 
     holdout_farms = {int(f) for f in manifest.get("holdout_farms", ())}
     known_farms = {int(f) for f in manifest.get("known_farm_ids", ())}
+    dev_block = {int(f) for f in manifest.get("dev_block_fields", ()) or ()}
     date_start = manifest.get("holdout_date_start")
     archive_end = manifest.get("archive_end_date")
 
@@ -400,6 +425,11 @@ def assert_train_only(
             start, end = bounds[0][i], bounds[1][i]
             if pd.isna(start) or pd.isna(end) or start > end:
                 reasons.append("missing or inverted date bounds")
+            elif fid in dev_block:
+                # Dev-block fields are the locked calibration stratum: exempt
+                # from the two date rules (the splits' recorded
+                # dev_temporal_cutoff deviation), never from the farm rules.
+                pass
             elif cutoff is not None and end >= cutoff:
                 reasons.append(f"cycle touches the holdout period (>= {date_start})")
             elif last is not None and end > last:
@@ -415,8 +445,9 @@ def assert_train_only(
             f"Holdout leak{where}: {len(violations)} training input(s) touch the frozen "
             f"holdout — {'; '.join(shown)}{more}. Training aborted before the first batch "
             "(training-holdout-invariant, fail-closed). Holdout farms are the locked "
-            "test-block fields (all periods) and every cycle touching dates on/after "
-            f"{date_start}; test cycles may only be read by "
+            "test-block fields (all periods); the holdout period (>= "
+            f"{date_start}) applies to every field outside the locked dev block; "
+            "test cycles may only be read by "
             "scripts/freeze_main_model.py --final-test."
         )
 

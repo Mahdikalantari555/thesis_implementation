@@ -27,7 +27,7 @@ def manifest() -> dict:
         "created": "2026-11-14",
         "test_period_start": "2024-01-01",
         "test_fields": [101, 102],
-        "kmeans": {"test_block_fields": [101, 102]},
+        "kmeans": {"test_block_fields": [101, 102], "dev_block_fields": [201]},
         "dev_fields": [201],
         "train_fields": [301, 302],
         "monitoring_only_fields": [401],
@@ -70,6 +70,46 @@ def test_mask_accepts_cycle_starting_before_cutoff_only(manifest: dict) -> None:
         [301, 302], ["2023-12-31", "2024-01-01"], manifest=manifest,
     )
     assert list(mask) == [True, False], "the cutoff is inclusive on the holdout side"
+
+
+def test_mask_accepts_dev_block_calibration_cycle(manifest: dict) -> None:
+    """Dev-block cycles are the locked calibration stratum: exempt from the
+    two date rules (recorded dev_temporal_cutoff deviation), never from the
+    farm rules."""
+    mask = mholdout.train_only_mask(
+        [201, 301], ["2024-02-01", "2024-02-01"],
+        cycle_end_dates=["2024-06-01", "2024-06-01"], manifest=manifest,
+    )
+    assert list(mask) == [True, False], (
+        "post-cutoff dev-block cycle passes; the same window fails for a non-block field"
+    )
+
+
+def test_dev_block_exemption_never_overrides_holdout_farm(manifest: dict) -> None:
+    splits = {
+        "created": "2026-11-14",
+        "test_period_start": "2024-01-01",
+        "test_fields": [101],
+        "kmeans": {"test_block_fields": [101], "dev_block_fields": [101]},
+        "dev_fields": [101],
+        "train_fields": [301],
+        "monitoring_only_fields": [],
+        "cycles": {},
+    }
+    splits["manifest_sha256"] = "f" * 64
+    overlapping = mholdout.build_holdout_manifest(splits, created="2026-11-18")
+    with pytest.raises(mholdout.HoldoutViolationError, match="holdout farm"):
+        mholdout.assert_train_only(
+            [101], ["101:1"], ["2024-06-01"], manifest=overlapping,
+        )
+
+
+def test_assert_accepts_dev_block_calibration_cycles(manifest: dict) -> None:
+    mholdout.assert_train_only(
+        [201], ["201:3"], ["2023-03-09"],
+        cycle_end_dates=["2024-02-26"],
+        manifest=manifest, context="unit-test-dev-block",
+    )
 
 
 def test_mask_length_mismatch_raises(manifest: dict) -> None:

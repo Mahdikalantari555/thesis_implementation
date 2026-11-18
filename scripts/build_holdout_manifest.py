@@ -121,6 +121,10 @@ def main(argv: list[str] | None = None) -> int:
     except FileExistsError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
+    # The --force path records the replacement inside the manifest and
+    # re-hashes it, so the authoritative sha is the stored one.
+    stored = json.loads(Path(path).read_text(encoding="utf-8"))
+    print(f"final manifest sha256: {stored['manifest_sha256'][:16]}…")
     print(f"\nwrote {path}")
     return 0
 
