@@ -485,7 +485,7 @@ def export_field(
     *,
     mask: np.ndarray,
     cycles_of_field: list[tuple[int, int, int]],
-    scenes_by_day: dict[int, Path],
+    scenes_by_day: dict[int, list[Path]],
     size: int,
     window: P.FieldWindow,
     in_field: np.ndarray,
@@ -501,15 +501,16 @@ def export_field(
         per_bin: dict[int, list[tuple[np.ndarray, np.ndarray, str]]] = {}
         for dsh_bin in range(P.N_BINS):
             per_bin[dsh_bin] = []
-        for day_idx, scene_dir in scenes_by_day.items():
+        for day_idx, scene_dirs in scenes_by_day.items():
             b = bin_of_day(day_idx, start, n_bins=P.N_BINS)
             if b < 0 or day_idx > end:
                 continue
-            values, valid = read_scene_patch(
-                scene_dir, window, sensor=sensor_of(scene_dir), band_scale=band_scale,
-            )
-            per_bin[b].append((values, valid, sensor_of(scene_dir)))
-            n_scenes_used += 1
+            for scene_dir in scene_dirs:
+                values, valid = read_scene_patch(
+                    scene_dir, window, sensor=sensor_of(scene_dir), band_scale=band_scale,
+                )
+                per_bin[b].append((values, valid, sensor_of(scene_dir)))
+                n_scenes_used += 1
         for b in range(P.N_BINS):
             entries = per_bin[b]
             if not entries:
@@ -601,7 +602,16 @@ def main(argv: list[str] | None = None) -> int:
         scenes = [s for s in scenes if s[0] in want_dates]
     if args.smoke:
         field_ids = field_ids[: args.smoke]
-        scenes = scenes[: args.smoke]
+        # Scenes must OVERLAP the selected fields' cycle windows. Truncating
+        # the scene list (the old behaviour) paired fields with unrelated
+        # dates and produced vacuous all-NaN smokes with 0 scene-reads.
+        sel = np.isin(cycles[:, 0], field_ids)
+        if sel.any():
+            lo, hi = int(cycles[sel, 2].min()), int(cycles[sel, 3].max())
+            overlapping = [s for s in scenes if lo <= day_index(s[0], epoch) <= hi]
+        else:
+            overlapping = []
+        scenes = overlapping[: args.smoke * 10]  # runtime cap; recorded in the binding
     if not field_ids or not scenes:
         print("no fields or scenes remain after the requested selection", file=sys.stderr)
         return 2
@@ -647,7 +657,11 @@ def main(argv: list[str] | None = None) -> int:
 
     mask, _meta = load_field_mask(mask_path)
     already = done_fields(store) if args.resume else set()
-    scenes_by_day = {day_index(d, epoch): p for d, p in scenes}
+    # Group scenes by day: a future archive may carry more than one scene per
+    # date (adjacent path/rows); a dict would silently keep only the last.
+    scenes_by_day: dict[int, list[Path]] = {}
+    for d, p in scenes:
+        scenes_by_day.setdefault(day_index(d, epoch), []).append(p)
     provenance_extra = {
         "n_scenes_available": len(scenes),
         "scenes_root": str(args.scenes_root),
