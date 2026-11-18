@@ -88,6 +88,14 @@ Run the field mask + zonal pipeline via the CLI or per-scene using
 `ssl_anomaly.io.zonal.zonal_scene_from_paths` (per-scene checkpointing uses
 the SQLite `Manifest` in `data/manifests/ingest.sqlite`).
 
+## Decomposition-aware SSL research study
+
+Run `python scripts/run_decomposition_study.py --smoke` to verify the isolated
+study with an explicitly simulated fixture. For Landsat benchmarking, feature
+ablation, and independent component scores, see the
+[study runbook](docs/decomposition_aware_ssl_study.md). The study does not modify
+the main training, checkpoint, or platform pipeline.
+
 ## Design decisions
 
 - **Phenology axis**: days-since-harvest (dsh) is primary; DOY, GDD, and

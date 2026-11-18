@@ -24,6 +24,7 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
 
 ## In progress
 
+- ▶ **`decomposition-aware-ssl-study`** — isolated runner and [runbook](docs/decomposition_aware_ssl_study.md). Real benchmark/ablation and the architecture-gate decision require the canonical polygon zonal store and the existing frozen holdout manifest. Smoke is not empirical evidence.
 - ▶ **`rerun-rq-suite-on-real-490`** (proposed 2026-11-10) — RQ1–RQ8 + data-scarcity results in findings 11–12 came from `simulate_490_field_archive`, not the real 490-field archive; re-run on real data, fail closed, provenance in every report.
   - ✅ Task 1: real_archive.py loader + hash check + provenance + --source arg (tests/unit/test_real_archive.py 4/6 pass)
   - ✅ Task 2: all 8 run_rq*.py + run_data_scarcity.py refactored with --source {real490,real32,simulated}; simulated → reports/simulated/
