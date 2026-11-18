@@ -26,7 +26,8 @@ def test_zonal_selection_quality_and_manifest(tmp_path):
     }
     for k, v in entries.items():
         arr = np.asarray(v)
-        g.create_dataset(k, shape=arr.shape, dtype=arr.dtype)[:] = arr
+        # zarr 3 removed Group.create_dataset; create_array exists there (zarr 2 fallback in io/patches.py).
+        g.create_array(name=k, data=arr)
     manifest_path, splits_path = tmp_path / "holdout.json", tmp_path / "splits.json"
     with pytest.raises(RuntimeError, match="holdout manifest missing"):
         read_zonal(path, manifest_path, 0.5, splits_path=splits_path)
