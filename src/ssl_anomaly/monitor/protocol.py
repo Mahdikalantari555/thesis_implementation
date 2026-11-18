@@ -43,6 +43,9 @@ DEV_LOG_COLUMNS: tuple[str, ...] = (
     # protocol/scorer identity, the verified-table hash, the independent
     # evaluation-subset hash and the MDM80 labels (JSON per family × index).
     "protocol", "scorer", "severity_table_sha256", "eval_subset_sha256", "mdm80",
+    # Patch arms (change patch-level-controlled-trial / PR #10 eval_dev rewrite):
+    # the patch run id, the frozen patch-sigma hash, and the injected shapes list.
+    "patch_run", "patch_sigma_sha256", "shapes",
     "notes",
 )
 

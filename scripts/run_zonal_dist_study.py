@@ -198,10 +198,25 @@ def main(argv: list[str] | None = None) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # ---- reference cycle population (the arm every other arm is paired to) ----
+    # train+dev ONLY: test cycles are locked (never read), monitoring-only
+    # cycles carry no tensors. The build restricts itself to exactly this set.
     ref = minputs.load_masked_cycles()
-    reference_keys = list(ref["cycle_keys"])
+    manifest = msplits.load_splits_locked()
+    allowed = set(manifest["cycles"].get("train", ())) | set(manifest["cycles"].get("dev", ()))
+    reference_keys = [k for k in ref["cycle_keys"] if k in allowed]
+    print(f"[reference] train+dev population: {len(reference_keys)} cycles "
+          f"({len(ref['cycle_keys']) - len(reference_keys)} test/monitoring excluded)")
     if args.max_fields is not None:
-        keep_fields = sorted({int(k.split(":")[0]) for k in reference_keys})[: args.max_fields]
+        all_fields = sorted({int(k.split(":")[0]) for k in reference_keys})
+        with_dev = sorted({int(k.split(":")[0]) for k in reference_keys
+                           if k in set(manifest["cycles"].get("dev", ()))})
+        # The smoke needs BOTH sides of the machinery: dev-block fields carry
+        # only dev cycles (spatial block) and train-only fields cannot
+        # calibrate — take up to half of each.
+        n_dev = min(len(with_dev), max(1, args.max_fields // 2))
+        dev_part = with_dev[:n_dev]
+        rest = [f for f in all_fields if f not in set(dev_part)]
+        keep_fields = (dev_part + rest)[: args.max_fields]
         keep = set(keep_fields)
         reference_keys = [k for k in reference_keys if int(k.split(":")[0]) in keep]
         print(f"[smoke] restricted to {len(keep_fields)} fields / {len(reference_keys)} cycles")

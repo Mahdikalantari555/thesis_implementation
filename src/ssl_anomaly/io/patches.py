@@ -335,7 +335,7 @@ def store_schema(
         "values": ((n_fields, max_cycles, N_BINS, N_CHANNELS, size, size), "<f2"),
         "pixel_valid": ((n_fields, max_cycles, N_BINS, 1, size, size), "|u1"),
         "in_field": ((n_fields, 1, size, size), "|u1"),
-        "bbox_origin": ((n_fields, 2), "<u2"),
+        "bbox_origin": ((n_fields, 2), "<i2"),
         "n_obs": ((n_fields, max_cycles, N_BINS), "|u1"),
         "sensor_id": ((n_fields, max_cycles, N_BINS), "|u1"),
         "field_ids": ((n_fields,), "<i8"),

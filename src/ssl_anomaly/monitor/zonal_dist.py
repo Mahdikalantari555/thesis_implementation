@@ -188,13 +188,17 @@ def bin_cycle(
                 x[int(b), ci] = float(np.nanmedian(vals[finite]))
                 m[int(b), ci] = True
 
-    ndvi_idx = 0 if channel_order and channel_order[0].startswith("ndvi") else None
-    if ndvi_idx is None:
-        raise ValueError(
-            "channel_order must start with the ndvi channel — the admission rule "
-            "(>=3 bins with observed NDVI) mirrors the canonical cycle builder"
-        )
-    if int(m[:, ndvi_idx].sum()) < 3:
+    # Admission rule (>=3 bins observed) mirrors the canonical cycle builder:
+    # on the ndvi channel when the preset builds one (level/lower/dist), on
+    # the first channel otherwise (spread presets carry pure std/iqr channels
+    # by design — no index is built from them; bin coverage semantics are the
+    # same, a bin is observed iff the underlying acquisitions exist).
+    ndvi_idx = next((i for i, name in enumerate(channel_order)
+                     if name.startswith("ndvi")), None)
+    cov_idx = ndvi_idx if ndvi_idx is not None else (0 if channel_order else None)
+    if cov_idx is None:
+        raise ValueError("channel_order is empty — nothing to admit a cycle on")
+    if int(m[:, cov_idx].sum()) < 3:
         return None
     return x, m
 
@@ -302,11 +306,18 @@ def build_distribution_cycles(
     ends: list[str] = []
     harvests: list[int] = []
     keys: list[str] = []
+    ref_set = set(reference_keys) if reference_keys is not None else None
 
     for _, row in canon.iterrows():
         if bool(row["censored"]):
             continue
         fid = int(row["field"])
+        # When a reference population is given, build exactly it: rows outside
+        # the reference (test/monitoring cycles for a train+dev reference) are
+        # skipped, and the completeness check below reports any reference key
+        # the store could not serve.
+        if ref_set is not None and f"{fid}:{int(row['cycle_id'])}" not in ref_set:
+            continue
         hit = np.flatnonzero(fields == fid)
         if hit.size == 0:
             continue
