@@ -541,7 +541,51 @@ def export_field(
     }
 
 
+def _install_windows_rename_retry() -> None:
+    """Retry transient Windows AV/indexer lock failures on chunk writes.
+
+    zarr's local store writes every chunk atomically (``*.partial`` ->
+    ``os.replace``). On this machine a background scanner intermittently
+    holds the freshly-written file open, so BOTH the write itself
+    (``PermissionError`` errno 13 on open) and the rename (WinError 5) can
+    fail mid-run — the first real extraction died twice on it. The chunk
+    content is rewritten in full on retry, so a short bounded backoff is
+    safe; this is a Windows-only operational shim, not a semantic change.
+    """
+    if sys.platform != "win32":
+        return
+    import builtins
+    import os as _os
+
+    _orig_replace = _os.replace
+    _orig_open = builtins.open
+
+    def _replace(src, dst):
+        for attempt in range(10):
+            try:
+                return _orig_replace(src, dst)
+            except PermissionError:
+                time.sleep(0.5 * (attempt + 1))
+        return _orig_replace(src, dst)
+
+    def _open(file, mode="r", *args, **kwargs):
+        if not ("w" in mode or "a" in mode or "+" in mode):
+            return _orig_open(file, mode, *args, **kwargs)
+        last: Exception | None = None
+        for attempt in range(10):
+            try:
+                return _orig_open(file, mode, *args, **kwargs)
+            except PermissionError as exc:  # errno 13 / WinError 5
+                last = exc
+                time.sleep(0.5 * (attempt + 1))
+        raise last  # type: ignore[misc]
+
+    _os.replace = _replace
+    builtins.open = _open
+
+
 def main(argv: list[str] | None = None) -> int:
+    _install_windows_rename_retry()
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", default=str(ROOT / "data" / "processed" / P.PATCH_STORE_NAME))
     ap.add_argument("--mask", default=str(ROOT / "data" / "interim" / "field_mask.tif"))
