@@ -10,7 +10,13 @@ import pandas as pd
 import zarr
 
 from ssl_anomaly.io.stats_zarr import BASE_DATE
-from ssl_anomaly.monitor.holdout import assert_train_only, load_holdout_manifest, train_only_mask
+from ssl_anomaly.monitor.holdout import (
+    assert_frozen_holdout_matches_splits,
+    assert_train_only,
+    load_holdout_manifest,
+    train_only_mask,
+)
+from ssl_anomaly.monitor.splits import SPLITS_LOCKED_PATH, load_splits_locked
 
 BANDS = ("blue", "green", "red", "nir", "swir1", "swir2")
 INDICES = ("ndvi", "evi", "ndmi")
@@ -114,7 +120,13 @@ def _fields_and_dates(group) -> tuple[np.ndarray, np.ndarray]:
     return fields.astype(int), ORIGIN + times.astype("timedelta64[D]")
 
 
-def read_zonal(path: Path, manifest_path: Path, min_valid_frac: float) -> Panel:
+def read_zonal(
+    path: Path,
+    manifest_path: Path,
+    min_valid_frac: float,
+    *,
+    splits_path: Path = SPLITS_LOCKED_PATH,
+) -> Panel:
     """Read only eligible field/date slices. Do not train on a manifest inferred here."""
     if not 0 < min_valid_frac <= 1:
         raise ValueError("min_valid_frac must be in (0, 1]")
@@ -127,6 +139,9 @@ def read_zonal(path: Path, manifest_path: Path, min_valid_frac: float) -> Panel:
         or not manifest.get("holdout_date_start")
     ):
         raise ValueError("Frozen holdout manifest lacks required admission constraints")
+    # Only the split manifest is needed for zonal membership, not its cycle tensors.
+    splits = load_splits_locked(path=splits_path, verify_cycle_files=False)
+    assert_frozen_holdout_matches_splits(manifest, splits)
     cutoff = np.datetime64(manifest["holdout_date_start"], "D")
     archive_end = np.datetime64(manifest.get("archive_end_date") or "NaT", "D")
     if np.isnat(cutoff):
@@ -172,6 +187,7 @@ def read_zonal(path: Path, manifest_path: Path, min_valid_frac: float) -> Panel:
             "archive_fields": len(fields),
             "archive_dates": len(dates),
             "holdout_manifest_sha256": manifest["manifest_sha256"],
+            "splits_manifest_sha256": splits["manifest_sha256"],
             "holdout_cutoff": str(cutoff),
             "excluded_fields": len(fields) - len(fi),
             "excluded_dates": len(dates) - len(ti),

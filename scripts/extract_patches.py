@@ -56,6 +56,7 @@ from ssl_anomaly.io.landsat import (  # noqa: E402
     apply_scale_st,
     quality_mask,
 )
+from ssl_anomaly.monitor import splits as msplits  # noqa: E402
 
 # ONE_DEGREE default source-resolution (m) for the runtime estimate.
 PIXEL_SIZE_M = 30.0
@@ -74,19 +75,18 @@ ST_FILE_MAP = {"lst": "lwir11.tif"}
 # ---------------------------------------------------------------------------
 # Cycles and binning (pure)
 # ---------------------------------------------------------------------------
-def load_cycles(path: str | Path) -> np.ndarray:
-    """Read cycles parquet into ``(field, cycle_id, cycle_start_day)`` rows.
+def load_cycles(path: str | Path, *, require_cycle_ids: bool = False) -> np.ndarray:
+    """Return non-censored (field, stable cycle_id, start, last data day) rows.
 
-    Only non-censored cycles that actually reached harvest are exported: a
-    censored cycle has no harvest date, so its phase position is unknown and
-    its bins would be silently misaligned. Returns an ``(N, 3)`` int64 array
-    sorted by (field, cycle_start_day), with ``cycle_id`` a dense index per
-    field in that order.
+    The cycle table is half-open, matching the zonal/baseline builders:
+    the stored inclusive data bound is ``t_end - 1``.
     """
     import pandas as pd
 
     df = pd.read_parquet(path)
     need = {"field", "t_start", "t_end"}
+    if require_cycle_ids:
+        need.add("cycle_id")
     missing = need - set(df.columns)
     if missing:
         raise ValueError(f"{path} is missing columns {sorted(missing)}")
@@ -94,19 +94,26 @@ def load_cycles(path: str | Path) -> np.ndarray:
         df = df[~df["censored"].astype(bool)]
     if df.empty:
         raise ValueError(f"{path} has no usable (non-censored) cycles")
-    rows: list[tuple[int, int, int]] = []
-    for fid, grp in df.sort_values(["field", "t_start"]).groupby("field"):
-        for cid, (_idx, r) in enumerate(grp.iterrows()):
-            rows.append((int(fid), int(cid), int(r["t_start"])))
-    return np.asarray(rows, dtype=np.int64)
+    df = df.sort_values(["field", "t_start"])
+    if "cycle_id" not in df:
+        df = df.assign(cycle_id=df.groupby("field").cumcount())  # unbound fixture stores only
+    columns = ["field", "cycle_id", "t_start", "t_end"]
+    values = df[columns].to_numpy()
+    if not np.isfinite(values).all() or not np.equal(values, values.astype(np.int64)).all():
+        raise ValueError(f"{path} has invalid cycle identifiers or date offsets")
+    if np.any(values[:, 3] <= values[:, 2]) or df.duplicated(["field", "cycle_id"]).any():
+        raise ValueError(f"{path} has inverted bounds or duplicate (field, cycle_id) pairs")
+    values = values.astype(np.int64)
+    values[:, 3] -= 1
+    return values
 
 
 def bin_of_day(day: int, cycle_start_day: int, *, bin_days: int = P.BIN_DAYS,
                n_bins: int = P.N_BINS) -> int:
     """Bin index of an acquisition, or ``-1`` when outside the cycle window.
 
-    Half-open on the right, like every other window in this project: a scene on
-    the cycle's last day belongs to the next cycle, not to this one.
+    This grid is half-open on the right. The exporter also clips scenes to the
+    actual source-cycle interval, which can end before the grid does.
     """
     dsh = int(day) - int(cycle_start_day)
     if dsh < 0 or dsh >= bin_days * n_bins:
@@ -373,9 +380,9 @@ def estimate_runtime(
     is deliberately pessimistic: the point is to decide whether a full run fits
     in a night, not to be accurate to the minute.
     """
-    by_field: dict[int, list[int]] = {}
-    for fid, _cid, start in cycles:
-        by_field.setdefault(int(fid), []).append(int(start))
+    by_field: dict[int, list[tuple[int, int]]] = {}
+    for fid, _cid, start, end in cycles:
+        by_field.setdefault(int(fid), []).append((int(start), int(end)))
     if epoch is None:
         epoch = min((d for d, _p in scenes), default=None)
     if epoch is None:
@@ -384,9 +391,10 @@ def estimate_runtime(
                 "assumptions": {"note": "no scenes"}}
     days = np.array([day_index(d, epoch) for d, _p in scenes], dtype=np.int64)
     n_reads = 0
-    for fid in by_field:
-        for start in by_field[fid]:
-            nb = int(np.sum((days >= start) & (days < start + P.BIN_DAYS * P.N_BINS)))
+    for spans in by_field.values():
+        for start, end in spans:
+            last = min(end, start + P.BIN_DAYS * P.N_BINS - 1)
+            nb = int(np.sum((days >= start) & (days <= last)))
             n_reads += nb * (n_bands + 1)               # + QA
     sec = n_reads * SEC_PER_SCENE_READ + len(by_field) * SEC_PER_FIELD_FLUSH
     return {
@@ -476,7 +484,7 @@ def export_field(
     field_id: int,
     *,
     mask: np.ndarray,
-    cycles_of_field: list[tuple[int, int]],
+    cycles_of_field: list[tuple[int, int, int]],
     scenes_by_day: dict[int, Path],
     size: int,
     window: P.FieldWindow,
@@ -489,13 +497,13 @@ def export_field(
         (len(cycles_of_field), P.N_BINS, P.N_CHANNELS, size, size), np.nan, dtype=np.float32,
     )
     n_scenes_used = 0
-    for ci, (_cid, start) in enumerate(cycles_of_field):
+    for ci, (_cid, start, end) in enumerate(cycles_of_field):
         per_bin: dict[int, list[tuple[np.ndarray, np.ndarray, str]]] = {}
         for dsh_bin in range(P.N_BINS):
             per_bin[dsh_bin] = []
         for day_idx, scene_dir in scenes_by_day.items():
             b = bin_of_day(day_idx, start, n_bins=P.N_BINS)
-            if b < 0:
+            if b < 0 or day_idx > end:
                 continue
             values, valid = read_scene_patch(
                 scene_dir, window, sensor=sensor_of(scene_dir), band_scale=band_scale,
@@ -539,13 +547,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--scenes-root", default="D:/RS/Thesis/Data/Metric/scenes")
     ap.add_argument("--cycles", default=str(ROOT / "data" / "processed" / "cycles_490.parquet"))
     ap.add_argument("--epoch", default=None,
-                    help="archive epoch (YYYY-MM-DD) for cycle day offsets; default: "
-                         "the earliest scene date. Must match the epoch used to build "
-                         "--cycles or every cycle is shifted.")
+                    help="archive epoch of the cycle offsets (default: locked base_date "
+                         "with --splits, otherwise earliest unfiltered scene)")
     ap.add_argument("--band-scale", default="auto", choices=("auto", "native", "landsat"),
                     help="native = scenes are already reflectance/K (the shipped "
                          "archive); landsat = apply C2 L2 factors; auto = infer per scene")
-    ap.add_argument("--splits", default=None, help="splits json; its sha goes into provenance")
+    ap.add_argument("--splits", type=Path,
+                    help="locked splits JSON; required for a training-compatible store")
     ap.add_argument("--fields", default=None, help="comma-separated field ids")
     ap.add_argument("--dates", default=None, help="comma-separated YYYY-MM-DD scene dates")
     ap.add_argument("--smoke", type=int, default=None, metavar="N",
@@ -560,11 +568,29 @@ def main(argv: list[str] | None = None) -> int:
     if not mask_path.is_file():
         print(f"field mask not found: {mask_path}", file=sys.stderr)
         return 2
-    cycles = load_cycles(args.cycles)
+    cycle_source_hash = file_sha256(args.cycles)
+    splits = None
+    if args.splits is not None:
+        splits = msplits.load_splits_locked(path=args.splits, verify_cycle_files=False)
+        if cycle_source_hash != splits.get("cycle_file_hashes", {}).get("cycles_parquet_sha256"):
+            raise ValueError("--cycles does not match the verified locked splits parquet hash")
+    cycles = load_cycles(args.cycles, require_cycle_ids=splits is not None)
     scenes = discover_scenes(args.scenes_root)
     if not scenes:
         print(f"no scene directories under {args.scenes_root}", file=sys.stderr)
         return 2
+
+    epoch = _date.fromisoformat(args.epoch) if args.epoch else scenes[0][0]
+    if splits is not None:
+        locked_epoch = _date.fromisoformat(splits["base_date"])
+        if args.epoch and epoch != locked_epoch:
+            raise ValueError("--epoch disagrees with the locked splits base_date")
+        epoch = locked_epoch
+    binding = {
+        "cycle_epoch": epoch.isoformat(),
+        "cycle_source_sha256": cycle_source_hash,
+        "splits_manifest_sha256": splits["manifest_sha256"] if splits is not None else None,
+    }
 
     field_ids = sorted({int(f) for f in np.unique(cycles[:, 0])})
     if args.fields:
@@ -576,22 +602,41 @@ def main(argv: list[str] | None = None) -> int:
     if args.smoke:
         field_ids = field_ids[: args.smoke]
         scenes = scenes[: args.smoke]
+    if not field_ids or not scenes:
+        print("no fields or scenes remain after the requested selection", file=sys.stderr)
+        return 2
 
     if args.estimate_runtime:
-        est = estimate_runtime(len(field_ids), cycles, scenes, epoch=(
-            _date.fromisoformat(args.epoch) if args.epoch else None))
+        est = estimate_runtime(len(field_ids), cycles[np.isin(cycles[:, 0], field_ids)],
+                               scenes, epoch=epoch)
         print(json.dumps(est, indent=2))
         return 0
 
     from ssl_anomaly.io.field_mask import load_field_mask
 
-    mask, _meta = load_field_mask(mask_path)
+    # A resumed extraction must use the same grid, source list and geometry.
+    # The archive is treated as immutable; do not replace rasters mid-export.
+    binding["export_selection_sha256"] = hashlib.sha256(json.dumps({
+        "fields": field_ids,
+        "mask_sha256": file_sha256(mask_path),
+        "scenes": [(day.isoformat(), str(path.resolve())) for day, path in scenes],
+        "band_scale": args.band_scale,
+        "patch_size": args.patch_size,
+    }, sort_keys=True).encode()).hexdigest()
     max_cycles = int(max(np.sum(cycles[:, 0] == f) for f in field_ids))
-
-    if not store.exists():
-        P.create_store(store, field_ids=field_ids, max_cycles=max_cycles, size=args.patch_size)
-    root = P.open_store(store, mode="a")
-    if not store.exists() or not np.any(root["field_ids"][:]):
+    if store.exists():
+        if not args.resume:
+            print("store already exists; use --resume with identical inputs or a new --out", file=sys.stderr)
+            return 3
+        root = P.open_store(store, mode="r+")
+        if "cycle_end_day" not in root or any(root.attrs.get(k) != v for k, v in binding.items()):
+            print("store cycle provenance or export selection differs; use a new --out path", file=sys.stderr)
+            return 3
+        P.validate_store(root, expected_fields=len(field_ids))
+    else:
+        root = P.create_store(store, field_ids=field_ids, max_cycles=max_cycles,
+                              size=args.patch_size, attrs=binding)
+    if not np.any(root["field_ids"][:]):
         # create_store allocates the array but cannot know the ids; they are
         # written here so a later --resume can prove it is the same selection.
         root["field_ids"][:] = np.asarray(field_ids, dtype=np.int64)
@@ -600,17 +645,16 @@ def main(argv: list[str] | None = None) -> int:
               file=sys.stderr)
         return 3
 
+    mask, _meta = load_field_mask(mask_path)
     already = done_fields(store) if args.resume else set()
-    epoch = (_date.fromisoformat(args.epoch) if args.epoch
-             else min(d for d, _p in scenes))
     scenes_by_day = {day_index(d, epoch): p for d, p in scenes}
     provenance_extra = {
         "n_scenes_available": len(scenes),
         "scenes_root": str(args.scenes_root),
         "epoch": epoch.isoformat(),
         "band_scale": args.band_scale,
-        "splits_path": args.splits,
-        "splits_sha256": file_sha256(args.splits) if args.splits else None,
+        "splits_path": str(args.splits) if args.splits else None,
+        **binding,
     }
 
     n_done = 0
@@ -625,18 +669,18 @@ def main(argv: list[str] | None = None) -> int:
         root["in_field"][fi, 0] = P.patch_in_field_mask(poly, window)
         root["bbox_origin"][fi] = window.to_bbox_origin()
         rows = cycles[cycles[:, 0] == fid]
-        cycles_of_field = [(int(r[1]), int(r[2])) for r in rows]
-        for ci, (_cid, start) in enumerate(cycles_of_field):
-            if ci >= max_cycles:
-                break
+        root["cycle_valid"][fi] = 0  # mark partial work unavailable until all bins are written
+        cycles_of_field = [(int(r[1]), int(r[2]), int(r[3])) for r in rows]
+        for ci, (_cid, start, end) in enumerate(cycles_of_field):
             root["cycle_ids"][fi, ci] = _cid
             root["cycle_start_day"][fi, ci] = start
-            root["cycle_valid"][fi, ci] = 1
+            root["cycle_end_day"][fi, ci] = end
         summary = export_field(
             root, fi, fid, mask=mask, cycles_of_field=cycles_of_field,
             scenes_by_day=scenes_by_day, size=args.patch_size, window=window,
             in_field=root["in_field"][fi, 0], band_scale=args.band_scale,
         )
+        root["cycle_valid"][fi, :len(cycles_of_field)] = 1
         append_manifest(store, **summary)
         n_done += 1
         print(f"[{fi + 1}/{len(field_ids)}] field {fid}: {summary['n_scenes']} scene-reads, "
@@ -644,8 +688,8 @@ def main(argv: list[str] | None = None) -> int:
 
     prov = P.Provenance(
         git_sha=git_sha(),
-        cycles_sha256=file_sha256(args.cycles),
-        splits_sha256=provenance_extra["splits_sha256"] or "unspecified",
+        cycles_sha256=cycle_source_hash,
+        splits_sha256=binding["splits_manifest_sha256"] or "unspecified",
         source_products=[str(args.scenes_root)],
         scale_factors={
             "sr_scale": 0.0000275, "sr_offset": -0.2,

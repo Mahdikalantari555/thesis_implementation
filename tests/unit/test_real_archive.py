@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -18,17 +16,10 @@ from ssl_anomaly.eval.real_archive import (
     get_archive_provenance,
     load_real490_archive,
     require_real_archive,
-    STATS_ZARR_PATH,
-    CYCLES_PARQUET_PATH,
-    NPZ_PATH,
 )
 
 
-def _real_archive_available() -> bool:
-    return STATS_ZARR_PATH.exists() and CYCLES_PARQUET_PATH.exists() and NPZ_PATH.exists()
-
-
-@pytest.mark.skipif(not _real_archive_available(), reason="real 490-field archive files not available")
+@pytest.mark.real_data
 class TestRealArchiveLoader:
     def test_loads_expected_shape(self):
         arch = load_real490_archive()
@@ -78,6 +69,7 @@ class TestRealArchiveLoader:
         assert np.all(np.isnan(arch["eta_deficit"]))
         assert np.all(np.isnan(arch["cwsi"]))
 
+class TestMissingArchive:
     def test_missing_files_fails_closed(self, tmp_path):
         with pytest.raises(FileNotFoundError):
             load_real490_archive(

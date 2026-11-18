@@ -152,13 +152,14 @@ def test_loss_positive_with_observed() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Masked tensor archive (uses the cached rebuild; skipped if absent)
+# Masked tensor archive (strict, requires the cached rebuild)
 # ---------------------------------------------------------------------------
 MASKED_NPZ = minputs.MASKED_NPZ_PATH
 
 
-@pytest.mark.skipif(not MASKED_NPZ.exists(), reason="masked cycle cache not built yet")
+@pytest.mark.real_data
 def test_masked_archive_consistency() -> None:
+    assert MASKED_NPZ.is_file(), f"masked cycle archive cache missing: {MASKED_NPZ}"
     d = minputs.load_masked_cycles()
     X, M = d["X"], d["M"]
     assert X.shape[1:] == (36, 8)

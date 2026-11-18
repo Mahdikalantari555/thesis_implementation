@@ -398,7 +398,7 @@ class PatchArmScorer:
             )
         return out
 
-    def score_cycles(self, X, M, doy, norm, *, idx=None) -> dict:
+    def score_cycles(self, X, M, doy, norm, *, idx=None, **model_inputs) -> dict:
         """Patch-arm scores in the sweep's dict form.
 
         Returns ``z2`` = (N, T, 1) of ``-log(p)`` so the downstream
@@ -407,7 +407,7 @@ class PatchArmScorer:
         ordering. Storing the p-value itself would invert the direction of the
         alarm.
         """
-        scores, pred = self.scorer.loo_batch(X, M, idx=idx)
+        scores, pred = self.scorer.loo_batch(X, M, idx=idx, **model_inputs)
         p_val = self.p_values(scores)
         with np.errstate(divide="ignore"):
             neg_log_p = -np.log(p_val)
@@ -569,6 +569,7 @@ class PatchDeepScorer:
         idx: np.ndarray | None = None,
         sensor_ids: np.ndarray | None = None,
         covariates=None,
+        obs: np.ndarray | None = None,
     ) -> dict:
         """Full-fidelity pass: per-pixel residuals, z² maps and field paths."""
         x = np.asarray(X, dtype=np.float32)
@@ -576,14 +577,21 @@ class PatchDeepScorer:
             raise ValueError(f"X must be (N, T, C, S, S), got {x.shape}")
         N, T = x.shape[:2]
         mask = self._mask_for(idx, pixel_valid)
-        resid, pred = self._forward(x, mask, covariates)
-        obs = mask[:, :, None] & np.isfinite(x)          # (N,T,C,S,S)
+        observed = mask[:, :, None] & np.isfinite(x)
+        if obs is not None:
+            if obs.shape != x.shape:
+                raise ValueError("obs must match the per-channel model input shape")
+            observed &= obs
+        # Zero-filled channels are not observed values. Keep both the target
+        # mask and the set of input pixels aligned with the training loader.
+        mask = observed.any(axis=2)
+        resid, pred = self._forward(np.where(observed, x, 0.0), mask, covariates)
         bins = self.bins[:T]
         sid = (np.zeros((N, T), dtype=np.int64) if sensor_ids is None
                else np.asarray(sensor_ids, dtype=np.int64))
         if sid.shape != (N, T):
             raise ValueError(f"sensor_ids must be {(N, T)}, got {sid.shape}")
-        z2 = pixel_scores(resid, obs, self.sigma, bins, sid)
+        z2 = pixel_scores(resid, observed, self.sigma, bins, sid)
         # The mask varies per (sample, bin), which field_paths' in_field
         # argument cannot express — so it is applied to the VALUES first
         # (out-of-mask pixels become NaN and are filtered), and the aggregation

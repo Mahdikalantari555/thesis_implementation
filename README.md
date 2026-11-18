@@ -46,32 +46,36 @@ openspec/        # OpenSpec change specs
 
 ## Quickstart (synthetic demo)
 
-This repo can run end-to-end without real Landsat data via a synthetic
-data generator that produces phenologically plausible sugarcane NDVI curves:
+This repo can run the baseline workflow without real Landsat data. Use an
+isolated scratch directory for synthetic outputs, never your archive's
+`data/processed` or the platform's generated payload:
 
 ```bash
 # 1. Create a venv & install
-uv venv --python 3.11 && source .venv/bin/activate
-uv pip install -e ".[dev]"
+uv sync --locked --python 3.11 --extra dev
+source .venv/bin/activate
+repo="$PWD"
+cd "$(mktemp -d)"
 
-# 2. Generate a small synthetic dataset
-python scripts/generate_synthetic_data.py --n-fields 80 --n-years 10 --out data/processed --seed 42
+# 2. Generate a small synthetic dataset in the scratch directory
+python "$repo/scripts/generate_synthetic_data.py" --n-fields 80 --n-years 10 --out data/processed --seed 42
 
 # 3. Segment cycles
 python -m ssl_anomaly.cli segment --zarr data/processed/fields.zarr --out data/processed/cycles.parquet
 
 # 4. Fit robust baseline B1 and score all cycles
-python scripts/build_baseline.py
+python "$repo/scripts/build_baseline.py"
 
 # 5. Evaluate (synthetic injection benchmark)
-python scripts/evaluate.py
+python "$repo/scripts/evaluate.py"
 cat reports/metrics.json
 
 # 6. (Optional) Train SSL masked Transformer
-python scripts/train_ssl.py
+python "$repo/scripts/train_ssl.py"
 
-# 7. Run all tests
-pytest -m "not slow"
+# 7. Run checkout-only tests back in the repository
+cd "$repo"
+pytest -m "not slow and not real_data"
 ```
 
 ## Running on real Landsat data
@@ -86,7 +90,9 @@ data/raw/landsat/<scene>/     # unzipped Landsat C2 L2 scenes (one directory per
 
 Run the field mask + zonal pipeline via the CLI or per-scene using
 `ssl_anomaly.io.zonal.zonal_scene_from_paths` (per-scene checkpointing uses
-the SQLite `Manifest` in `data/manifests/ingest.sqlite`).
+the SQLite `Manifest` in `data/manifests/ingest.sqlite`). For locked patch
+exports and the train-only normalization handoff, see the
+[patch input runbook](docs/patch_inputs.md).
 
 ## Decomposition-aware SSL research study
 
@@ -126,13 +132,20 @@ the main training, checkpoint, or platform pipeline.
 ## Testing
 
 ```bash
-pytest                              # full test suite
-pytest -m "not slow"                # skip slow/golden
-pytest tests/unit                   # unit tests only
-pytest tests/regression -m golden   # golden regression
-pytest tests/parity                 # backend parity (skipped until Rust)
-pytest --cov=ssl_anomaly            # coverage report
+pytest -m "not slow and not real_data"   # clean checkout, including source-only platform checks
+pytest -m real_data                     # strict archive/export checks; missing inputs fail
+pytest                                  # both gates (also includes slow tests)
+pytest tests/regression -m golden        # golden regression
+pytest tests/parity                      # backend parity (skipped until Rust)
 ```
+
+Mark new tests that need untracked archive artifacts `@pytest.mark.real_data`;
+fixture-based and committed-artifact checks belong in the checkout gate. Do not
+skip or supply substitute data in the strict gate. It needs the authorized
+zonal/cycle files, frozen splits, masked cycle cache, farm registry, and a real
+`platform/src/data/series_khuzestan.json` export. Passing checkout tests or
+TypeScript checking does not verify the platform bundle or runtime: the original
+contract, build and screenshot gates in [AGENTS.md](AGENTS.md) still apply.
 
 ## Linting / type checking
 

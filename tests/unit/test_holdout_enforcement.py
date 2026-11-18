@@ -8,10 +8,11 @@ a warning.
 
 from __future__ import annotations
 
+import importlib.util
+import json
 import sys
 from pathlib import Path
 
-import numpy as np
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -26,6 +27,7 @@ def manifest() -> dict:
         "created": "2026-11-14",
         "test_period_start": "2024-01-01",
         "test_fields": [101, 102],
+        "kmeans": {"test_block_fields": [101, 102]},
         "dev_fields": [201],
         "train_fields": [301, 302],
         "monitoring_only_fields": [401],
@@ -178,7 +180,29 @@ def test_train_main_asserts_holdout_before_first_batch() -> None:
     assert "mholdout.assert_train_only(" in source
     # The assertion must precede the normalization fit (i.e. the first data use).
     assert source.index("assert_train_only(") < source.index("fit_robust_norm(")
+    assert "cycle_end_dates=last_data_days" in source
     assert "holdout_manifest_sha256" in source, "manifest sha must reach the run manifest"
+
+
+def test_main_rejects_cutoff_crossing_before_fitting_norm(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location("train_main", REPO_ROOT / "scripts/train_main.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    splits = {"test_period_start": "2024-01-01", "kmeans": {"test_block_fields": [101]},
+              "train_fields": [301], "manifest_sha256": "a" * 64}
+    frozen = mholdout.build_holdout_manifest(splits)
+    monkeypatch.setattr(mod.msplits, "load_splits_locked", lambda: splits)
+    monkeypatch.setattr(mholdout, "load_holdout_manifest", lambda: frozen)
+    monkeypatch.setattr(mod.minputs, "load_masked_cycles", lambda: {})
+    monkeypatch.setattr(mod.mproto, "select_splits", lambda *_a, **_kw: {
+        "field_ids": [301], "cycle_keys": ["301:7"],
+        "start_dates": ["2023-07-01"], "end_dates": ["2024-01-02"],  # exclusive
+    })
+    monkeypatch.setattr(mod.minputs, "fit_robust_norm", lambda *_a, **_kw: pytest.fail("fit before admission"))
+    monkeypatch.setattr(mod.mproto, "DEV_DIR", tmp_path / "report")
+    monkeypatch.setattr(mod.mproto, "CHECKPOINTS_DEV_DIR", tmp_path / "ckpt")
+    with pytest.raises(mholdout.HoldoutViolationError, match=r"301:7 \(cycle touches the holdout period"):
+        mod.main(["--model", "gru_ae", "--smoke", "--device", "cpu"])
 
 
 def test_build_holdout_manifest_script_is_dry_run_safe() -> None:
@@ -193,8 +217,6 @@ def test_build_holdout_manifest_script_is_dry_run_safe() -> None:
 # build_holdout_manifest.py CLI behaviour (task 1.2)
 # ---------------------------------------------------------------------------
 def _import_build_script():
-    import importlib.util
-
     spec = importlib.util.spec_from_file_location(
         "build_holdout_manifest", REPO_ROOT / "scripts/build_holdout_manifest.py",
     )
@@ -219,6 +241,7 @@ def test_cli_writes_then_refuses_then_force_records_reason(
         "created": "2026-11-14",
         "test_period_start": "2024-01-01",
         "test_fields": [101, 102],
+        "kmeans": {"test_block_fields": [101, 102]},
         "dev_fields": [201],
         "train_fields": [301],
         "monitoring_only_fields": [401],
@@ -250,6 +273,7 @@ def test_cli_dry_run_writes_nothing(monkeypatch, tmp_path: Path, capsys) -> None
         "created": "2026-11-14",
         "test_period_start": "2024-01-01",
         "test_fields": [101],
+        "kmeans": {"test_block_fields": [101]},
         "train_fields": [301],
         "cycles": {},
         "manifest_sha256": "f" * 64,
@@ -266,7 +290,7 @@ def test_cli_skip_cycle_check_requires_dry_run(monkeypatch, tmp_path: Path, caps
     _patch_loader(monkeypatch, mod, {"test_fields": [1], "test_period_start": "2024-01-01"})
     rc = mod.main(["--out", str(tmp_path / "x.json"), "--skip-cycle-file-check"])
     assert rc == 2
-    assert "--skip-cycle-file-check is only allowed with --dry-run" in capsys.readouterr().err
+    assert "--skip-cycle-file-check is only allowed for read-only inspection" in capsys.readouterr().err
 
 
 def test_cli_reports_missing_splits_without_traceback(monkeypatch, tmp_path: Path, capsys) -> None:
@@ -279,3 +303,40 @@ def test_cli_reports_missing_splits_without_traceback(monkeypatch, tmp_path: Pat
     assert mod.main(["--out", str(tmp_path / "x.json")]) == 2
     err = capsys.readouterr().err
     assert "cannot load the locked splits" in err
+
+
+@pytest.mark.parametrize("end", ["2024-01-01", "2025-04-01", "2021-12-31", None])
+def test_full_cycle_bounds_fail_closed(manifest, end):
+    assert not mholdout.train_only_mask(
+        [301], ["2022-01-01"], cycle_end_dates=[end], manifest=manifest,
+    )[0]
+    with pytest.raises(mholdout.HoldoutViolationError, match="301:7"):
+        mholdout.assert_train_only(
+            [301], ["301:7"], ["2022-01-01"], cycle_end_dates=[end], manifest=manifest,
+        )
+
+
+def test_archive_end_is_inclusive_for_cycle_bounds(manifest):
+    manifest["archive_end_date"] = "2023-10-01"
+    assert mholdout.train_only_mask(
+        [301, 302], ["2022-01-01", "2022-01-01"],
+        cycle_end_dates=["2023-10-01", "2023-10-02"], manifest=manifest,
+    ).tolist() == [True, False]
+
+
+def test_cli_audit_preserves_frozen_manifest_on_failure(monkeypatch, tmp_path, capsys):
+    mod = _import_build_script()
+    splits = {"test_period_start": "2024-01-01", "kmeans": {"test_block_fields": [101, 102]},
+              "train_fields": [301], "manifest_sha256": "f" * 64}
+    _patch_loader(monkeypatch, mod, splits)
+    manifest = mholdout.build_holdout_manifest(splits)
+    manifest["holdout_farms"] = [101, 301]
+    manifest["manifest_sha256"] = mholdout.holdout_manifest_hash(manifest)
+    path = mholdout.save_holdout_manifest(manifest, path=tmp_path / "holdout.json")
+    before = path.read_bytes()
+    capsys.readouterr()
+    assert mod.main(["--audit-existing", "--skip-cycle-file-check", "--out", str(path)]) == 2
+    result = json.loads(capsys.readouterr().out)
+    assert result["missing_spatial_fields"] == [102]
+    assert result["extra_frozen_fields"] == [301]
+    assert path.read_bytes() == before

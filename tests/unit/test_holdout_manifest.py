@@ -68,9 +68,9 @@ def manifest(splits_manifest: dict) -> dict:
 # ---------------------------------------------------------------------------
 # Task 1.1 — derivation, hashing, rebuild discipline
 # ---------------------------------------------------------------------------
-def test_holdout_farms_equal_locked_test_fields(manifest: dict, splits_manifest: dict) -> None:
+def test_holdout_farms_equal_locked_test_block(manifest: dict, splits_manifest: dict) -> None:
     """The farm set is exactly the locked test-field set — no new semantics."""
-    assert set(manifest["holdout_farms"]) == set(splits_manifest["test_fields"])
+    assert set(manifest["holdout_farms"]) == set(splits_manifest["kmeans"]["test_block_fields"])
     assert manifest["holdout_farms"] == sorted(manifest["holdout_farms"])
 
 
@@ -99,8 +99,8 @@ def test_derivation_is_pure_and_hashed(splits_manifest: dict) -> None:
 def test_derivation_records_splits_provenance(manifest: dict, splits_manifest: dict) -> None:
     derived = manifest["derived_from"]
     assert derived["splits_manifest_sha256"] == splits_manifest["manifest_sha256"]
-    assert derived["n_test_fields"] == len(splits_manifest["test_fields"])
-    assert "rule" in derived and "test_fields" in derived["rule"]
+    assert derived["n_test_fields"] == len(splits_manifest["kmeans"]["test_block_fields"])
+    assert "rule" in derived and "test_block_fields" in derived["rule"]
 
 
 def test_missing_split_key_is_refused(splits_manifest: dict) -> None:
@@ -117,7 +117,7 @@ def test_no_known_farms_is_refused(splits_manifest: dict) -> None:
         broken.pop(key)
     broken["kmeans"] = {"test_block_fields": [], "dev_block_fields": []}
     broken["test_fields"] = []
-    with pytest.raises(ValueError, match="no .*_fields|refusing"):
+    with pytest.raises(ValueError, match=r"no .*_fields|refusing"):
         mholdout.build_holdout_manifest(broken)
 
 
@@ -126,7 +126,7 @@ def test_empty_test_field_set_is_refused(splits_manifest: dict) -> None:
     broken = dict(splits_manifest)
     broken["test_fields"] = []
     broken["kmeans"] = dict(broken["kmeans"], test_block_fields=[])
-    with pytest.raises(ValueError, match="EMPTY test-field set"):
+    with pytest.raises(ValueError, match=r"no kmeans\.test_block_fields"):
         mholdout.build_holdout_manifest(broken)
 
 
@@ -181,3 +181,23 @@ def test_archive_end_recorded_when_given(splits_manifest: dict) -> None:
     assert mholdout.build_holdout_manifest(
         splits_manifest, created="2026-11-16",
     )["archive_end_date"] is None
+
+
+def test_spatial_block_not_row_derived_test_farms(splits_manifest):
+    # 103 has no test row; 301 has some dates in test but is not in the block.
+    splits_manifest["test_fields"] = [101, 102, 301]
+    manifest = mholdout.build_holdout_manifest(splits_manifest)
+    assert manifest["holdout_farms"] == [101, 102, 103]
+    assert mholdout.train_only_mask([103, 301], manifest=manifest).tolist() == [False, True]
+
+
+def test_legacy_extra_exclusions_unchanged_and_missing_members_rejected(manifest, splits_manifest):
+    manifest["holdout_farms"].append(301)
+    report = mholdout.audit_frozen_holdout(manifest, splits_manifest)
+    assert report["extra_frozen_fields"] == [301]
+    assert report["missing_spatial_fields"] == []
+    mholdout.assert_frozen_holdout_matches_splits(manifest, splits_manifest)
+    assert not mholdout.train_only_mask([301], manifest=manifest)[0]
+    manifest["holdout_farms"].remove(103)
+    with pytest.raises(mholdout.HoldoutViolationError, match=r"missing_spatial_fields.*103"):
+        mholdout.assert_frozen_holdout_matches_splits(manifest, splits_manifest)

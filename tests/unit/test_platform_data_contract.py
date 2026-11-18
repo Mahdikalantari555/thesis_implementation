@@ -14,6 +14,8 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
+import pytest
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -112,6 +114,7 @@ def test_contract_version_is_v5():
     assert CONTRACT_VERSION == 5
 
 
+@pytest.mark.real_data
 def test_series_has_contract_v3_fields():
     series = _series()
     obs = next(iter(series.values()))[0]
@@ -127,6 +130,7 @@ def test_series_has_contract_v3_fields():
     assert obs["scoreCollinearity"] == "cwsi"
 
 
+@pytest.mark.real_data
 def test_v5_payload_stress_fields():
     """v5 payload carries stressFlag / stressFlagModel / split + ladderRung."""
     raw = json.loads(SERIES_PATH.read_text(encoding="utf-8"))
@@ -154,6 +158,7 @@ def test_v5_payload_stress_fields():
             assert flags == {None}, f"{fid}: flags {flags} without a main checkpoint"
 
 
+@pytest.mark.real_data
 def test_provenance_matches_registry():
     series = _series()
     obs = next(iter(series.values()))[0]
@@ -163,6 +168,7 @@ def test_provenance_matches_registry():
         assert prov[ch] in ("observed", "modelled", "proxy", "absent", "legacy")
 
 
+@pytest.mark.real_data
 def test_channel_range_validation():
     series = _series()
     for fid, obs_list in series.items():
@@ -180,6 +186,7 @@ def test_channel_range_validation():
                 assert lo <= obs["temp"] <= hi
 
 
+@pytest.mark.real_data
 def test_staleness_guard():
     series = _series()
     obs_list = next(iter(series.values()))
@@ -237,6 +244,12 @@ def test_score_registry_parity():
     assert score_formula_id("gru_ae") == "gru_ae_main:causal_bin_mse"
     assert score_formula_id("sts_net") == "sts_net_490:bin_mse_1mexp"
     assert score_formula_id("b0_calendar") is None
+
+
+@pytest.mark.real_data
+def test_exported_score_registry_matches_source():
+    from load_model_checkpoints import score_formula_id
+
     # v5 payload self-description mirrors the registry
     raw = json.loads(SERIES_PATH.read_text(encoding="utf-8"))
     assert raw["checkpoints"] == SCORE_CHECKPOINTS
@@ -249,6 +262,7 @@ def test_score_registry_parity():
     assert "proxyFormulaId" not in raw
 
 
+@pytest.mark.real_data
 def test_score_provenance_values_in_series():
     """Every observation restricts score provenance to model|absent (v5: no proxy)."""
     series = _series()
@@ -262,6 +276,7 @@ def test_score_provenance_values_in_series():
                 assert value in ("model", "absent"), f"{fid} {key}: {value}"
 
 
+@pytest.mark.real_data
 def test_score_formula_ids_in_series():
     """Formula ids match provenance: model -> registered formula, absent -> None."""
     from load_model_checkpoints import score_formula_id
@@ -288,6 +303,7 @@ def test_score_formula_ids_in_series():
 # ── wire-platform-to-real-data: real weather + real metadata + honest labels ──
 
 
+@pytest.mark.real_data
 def test_weather_channels_carry_real_values():
     """Task 2.1: precip/temp non-null fraction > 0 over dated observations (target ≥ 90%)."""
     series = _series()
@@ -305,6 +321,7 @@ def test_weather_channels_carry_real_values():
     assert temp_nn / n > 0.9, f"temp non-null fraction {temp_nn / n:.3f} over {n} dated obs"
 
 
+@pytest.mark.real_data
 def test_null_channel_is_never_labelled_modelled_or_measured():
     """Spec: a null value's provenance is absent/legacy — never modelled/measured —
     and a present value is never labelled absent."""
@@ -333,6 +350,7 @@ def test_no_dead_stress_event_field():
     assert all("stressEvent" not in f for f in farms), "stressEvent must not ship in the payload"
 
 
+@pytest.mark.real_data
 def test_farm_metadata_matches_registry():
     """Task 3.2: spot-parity of farm/municipality/variety against farms.parquet."""
     import pandas as pd
@@ -659,6 +677,7 @@ def test_resolve_stress_flag_alarm_semantics():
     assert resolve_stress_flag(extended[: len(prefix)], 0.5, 2, True) == "suspected_stress"
 
 
+@pytest.mark.real_data
 def test_build_cycle_split_map():
     """Split tagging reads the locked manifest; unmapped cycles count as monitoring."""
     from cycle_inputs import build_cycle_split_map, cycle_split_tag
@@ -703,9 +722,7 @@ def _desk() -> dict:
     return json.loads(DESK_PATH.read_text(encoding="utf-8"))
 
 
-def _stage_rows() -> "pd.DataFrame":
-    import pandas as pd
-
+def _stage_rows() -> pd.DataFrame:
     return pd.read_parquet(STAGE_PARQUET_PATH)
 
 

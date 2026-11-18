@@ -47,16 +47,18 @@
    - `in_field` (F, 1, 32, 32) uint8 (static polygon mask)
    - `bbox_origin` (F, 2) uint16
    - `n_obs` (F, C_cycles, 36) uint8; `sensor_id` (F, C_cycles, 36) uint8
-   - `norm_stats` (channel, sensor) median/IQR + sha256 sidecar
+   - `cycle_ids`, `cycle_start_day`, `cycle_end_day`, and `cycle_valid`
+   - `norm_stats.json`: `stats` keyed by sensor, then channel; median/IQR and
+     observation count, with train cycle keys and lock/sidecar hashes
    - attrs: git sha, source product ids, QA bit list, cycles table sha,
      splits sha, creation date.
    Size ≈1.0 GB fp16 (1,717 usable cycles × 36 bins × 8 × 1024 px × 2 B) —
-   RAM-preloadable for training.
+   not including padding slots. Training lazily reads admitted cycles.
 
-8. **Resume = per-date manifest.** The exporter processes scene-by-scene,
-   appending one JSON line per completed date to `.manifest.jsonl` beside
-   the zarr; `--resume` skips completed dates. Partial work is never
-   reported as done (AGENTS.md §2.4).
+8. **Resume = per-field manifest.** The exporter reads scenes for one field
+   at a time and appends one JSON line per completed field to `.manifest.jsonl`
+   inside the store. `--resume` skips those fields and checks the locked cycle
+   binding and export selection; partial cycles do not become valid.
 
 ### Risks
 
@@ -73,3 +75,13 @@
   bin is recorded (`sensor_id`); no harmonization offsets in v1 —
   per-sensor σ standardization at scoring time handles the residual bias
   (document §7.3); cross-sensor offset estimation stays a later ablation.
+
+### Audit follow-up
+
+The exporter converts the source half-open window to inclusive offsets
+(`cycle_end_day = t_end - 1`) and binds them to the locked epoch; training and the offline sidecar builder share the locked-train cycle
+selector. Missing binding metadata is an error, not an inferred epoch. The
+sidecar's `stats` envelope is consumed by the same transform in training and
+scoring. Missing or zero-IQR entries for an individual sensor/channel retain raw
+units; a missing or malformed envelope is rejected. Existing stores/checkpoints
+are not migrated in place.

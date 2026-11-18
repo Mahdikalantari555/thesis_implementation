@@ -29,6 +29,7 @@ import platform
 import subprocess
 import sys
 import time
+from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -37,6 +38,7 @@ import torch
 from ssl_anomaly.io import patches as P
 from ssl_anomaly.models.patch_cnn_gru import build_patch_model, scorer_id
 from ssl_anomaly.monitor import holdout as H
+from ssl_anomaly.monitor import splits as S
 from ssl_anomaly.train import contamination as CT
 from ssl_anomaly.train import patch_data as PD
 from ssl_anomaly.train import run_plan as RP
@@ -64,7 +66,8 @@ def config_hash(cfg: dict) -> str:
         "arch", "seed", "epochs", "batch_size", "lr", "weight_decay", "d_model",
         "n_horizons", "aux_weight", "horizon_weights", "burn_in_bins",
         "trim_top_frac", "trim_after_epoch", "grad_clip", "max_fields",
-        "data_source", "holdout_sha256", "norm_sha256", "covariates",
+        "data_source", "holdout_sha256", "norm_sha256", "covariates", "input_protocol",
+        "splits_sha256", "admitted_cycles_sha256", "max_cycles", "contaminate_seed", "smoke",
         # patch-contamination-absorption task 1.2: a resumed run whose
         # contamination configuration changed is a different experiment.
         "contaminate_fraction", "trimmed_loss", "curation",
@@ -123,7 +126,7 @@ def load_checkpoint(path: Path, *, model, optimizer=None, scheduler=None,
         want = config_hash(cfg)
         if ck.get("config_hash") != want:
             raise RuntimeError(
-                f"config hash mismatch: checkpoint {ck.get('config_hash')[:12]} vs "
+                f"config hash mismatch: checkpoint {str(ck.get('config_hash'))[:12]} vs "
                 f"current {want[:12]} — resume would mix two configurations. "
                 "Pass --resume-checkpoint with the matching config, or start fresh."
             )
@@ -152,36 +155,16 @@ def build_scheduler(optimizer, epochs: int, *, warmup: int = 1):
     return torch.optim.lr_scheduler.LambdaLR(optimizer, fn)
 
 
-def _contaminate_sample(sample, rec: dict):
-    """Apply one planned contamination record to a PATCH sample.
-
-    A patch sample's tensors are ``(T, C, S, S)``, so the patch-tensor applier
-    is the correct physical perturbation here (the field-level one would need
-    a ``(T, C)`` tensor and would silently treat the pixel axes as channels).
-    Standardized values are contaminated in the standardized space with the
-    frozen IQR as the scale, which is exactly what the model sees.
-    """
-    from ssl_anomaly.monitor.patch_perturbations import (
-        FOOTPRINT_PROTOCOL,
-        inject_patch_drop,
-    )
+def _contaminate_values(raw, obs, in_field, *, rec: dict):
+    """Apply the preregistered raw-unit perturbation before standardization."""
+    from ssl_anomaly.monitor.patch_perturbations import FOOTPRINT_PROTOCOL, inject_patch_drop
     from ssl_anomaly.train.contamination import CONTAMINATION_INDEX
 
-    if CONTAMINATION_INDEX != "ndvi":  # pragma: no cover - frozen to ndvi
-        raise RuntimeError("contamination channel changed without updating the applier")
-    delta = float(rec["delta"]) / max(1e-9, float(rec.get("value_scale", 1.0)))
-    res = inject_patch_drop(
-        sample.x, sample.obs, index=CONTAMINATION_INDEX,
-        delta=delta, onset_bin=rec["onset_bin"], shape=rec["family"],
-        duration=rec["n_bins_window"], footprint=FOOTPRINT_PROTOCOL,
-        in_field=sample.pixel_valid.any(axis=0),
-        level_id=rec.get("level_id"),
-    )
-    return type(sample)(
-        field_id=sample.field_id, cycle_id=sample.cycle_id, x=res.x,
-        obs=sample.obs, pixel_valid=sample.pixel_valid,
-        covariates=sample.covariates, start_day=sample.start_day,
-    )
+    return inject_patch_drop(
+        raw, obs, index=CONTAMINATION_INDEX, delta=float(rec["delta"]),
+        onset_bin=rec["onset_bin"], shape=rec["family"], duration=rec["n_bins_window"],
+        footprint=FOOTPRINT_PROTOCOL, in_field=in_field, level_id=rec.get("level_id"),
+    ).x
 
 
 def trim_schedule(epoch: int, cfg: dict) -> float:
@@ -273,7 +256,6 @@ def train_one_seed(ds, *, cfg: dict, out_dir: Path, device: str, smoke: bool,
 
     epochs = 1 if smoke else int(cfg["epochs"])
     bs = int(cfg["batch_size"])
-    order_rng = np.random.default_rng(int(cfg["seed"]))
     n = len(ds)
     t_start = time.time()
     history: list[dict] = []
@@ -283,7 +265,7 @@ def train_one_seed(ds, *, cfg: dict, out_dir: Path, device: str, smoke: bool,
 
     for epoch in range(start_epoch, epochs):
         model.train()
-        order = order_rng.permutation(n)
+        order = np.random.default_rng([int(cfg["seed"]), epoch]).permutation(n)
         trim = trim_schedule(epoch, cfg)
         run_loss, run_n = 0.0, 0
         for b0 in range(0, n, bs):
@@ -292,16 +274,15 @@ def train_one_seed(ds, *, cfg: dict, out_dir: Path, device: str, smoke: bool,
                 continue
             samples = []
             for i in idx:
-                s = ds.sample(int(i))
                 rec = (contaminations or {}).get(int(i))
-                if rec is not None:
-                    s = _contaminate_sample(s, rec)
-                samples.append(s)
+                transform = partial(_contaminate_values, rec=rec) if rec is not None else None
+                samples.append(ds.sample(int(i), transform=transform))
             batch = PD.collate(samples)
             obs = mask_burn_in(batch["obs"], int(cfg["burn_in_bins"]))
             if example is None:
                 example = (torch.from_numpy(batch["x"][:1]).cpu(),
-                           torch.from_numpy(batch["pixel_valid"][:1]).cpu())
+                           torch.from_numpy(batch["pixel_valid"][:1]).cpu(),
+                           torch.from_numpy(batch["covariates"][:1]).cpu())
             x = torch.from_numpy(batch["x"]).to(device)
             out = model(
                 x,
@@ -366,6 +347,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--arch", choices=["patch_cnn_gru", "patch_pixelwise"],
                    default="patch_cnn_gru")
     p.add_argument("--store", default=str(REPO_ROOT / "data" / "processed" / P.PATCH_STORE_NAME))
+    p.add_argument("--splits", type=Path, default=S.SPLITS_LOCKED_PATH,
+                   help="verified locked splits that the store and holdout both reference")
     p.add_argument("--norm", default=None,
                    help=f"frozen normalization json (default: next to the store, {P.NORM_STATS_NAME})")
     p.add_argument("--holdout-manifest", default=None,
@@ -427,6 +410,13 @@ def cfg_from_args(args) -> dict:
         "trim_after_epoch": int(args.trim_after_epoch),
         "grad_clip": float(args.grad_clip),
         "max_fields": args.max_fields,
+        "max_cycles": args.max_cycles,
+        "contaminate_seed": int(args.contaminate_seed),
+        "input_protocol": PD.PATCH_INPUT_PROTOCOL,
+        "smoke": args.smoke,
+        "n_channels": P.N_CHANNELS,
+        "n_covariates": PD.N_COVARIATES,
+        "use_cnn": args.arch == "patch_cnn_gru",
         "data_source": str(args.store),
         "covariates": list(PD.COVARIATES),
         **CT.contamination_config(
@@ -462,35 +452,33 @@ def main(argv=None) -> int:
     )
     cfg["holdout_sha256"] = H.holdout_manifest_hash(holdout)
 
+    splits = S.load_splits_locked(path=args.splits, verify_cycle_files=False)
+    cfg["splits_sha256"] = splits["manifest_sha256"]
     all_fields = [int(f) for f in np.asarray(root["field_ids"][:])]
     if args.max_fields:
         all_fields = all_fields[: int(args.max_fields)]
     ds = PD.PatchCycleDataset(
-        root, all_fields, holdout_manifest=holdout, norm=norm,
+        root, all_fields, splits_manifest=splits, holdout_manifest=holdout, norm=norm,
         max_cycles=args.max_cycles,
     )
+    cfg["admitted_cycles_sha256"] = hashlib.sha256(
+        json.dumps([(c.key, c.start_day, c.end_day) for c in ds.cycles]).encode()
+    ).hexdigest()
     print(f"[patch] store {store_path} ({manifest.get('n_fields', '?')} fields)")
     print(f"[patch] {len(ds)} field-cycles from {len(ds.fields)} trainable fields "
           f"({len(ds.excluded_by_holdout)} excluded by the holdout manifest)")
     contamination_meta: dict = {"fraction": float(cfg["contaminate_fraction"])}
     contaminations: dict[int, dict] | None = None
     if cfg["contaminate_fraction"] > 0:
-        keys = [f"{fid}:{cid}" for fid, cid in ds._pairs]
+        keys = [c.key for c in ds.cycles]
+        row_by_key = {key: i for i, key in enumerate(keys)}
         excluded = set(ds.excluded_by_holdout)
         chosen = CT.select_contaminated_cycles(
             keys, fraction=cfg["contaminate_fraction"],
             seed=int(args.contaminate_seed), excluded_fields=excluded,
         )
-        rows = [ds._pairs.index((int(k.split(":")[0]), int(k.split(":")[1])))
-                for k in chosen]
-        # patch tensors are standardized, so the S4 Δ (raw NDVI units) is
-        # injected in standardized units: Δ / IQR of the ndvi channel.
-        ndvi_iqr = float(
-            ds.norm.get("L8", {}).get("ndvi", {}).get("iqr") or 1.0
-        )
-        contaminations = CT.plan_contamination(
-            rows, seed=int(args.contaminate_seed), value_scale=ndvi_iqr,
-        )
+        rows = [row_by_key[key] for key in chosen]
+        contaminations = CT.plan_contamination(rows, seed=int(args.contaminate_seed))
         print(f"[patch] contaminating {len(rows)}/{len(ds)} train cycles "
               f"(S4 persistent ndvi, seed {args.contaminate_seed})")
         contamination_meta = {
@@ -502,8 +490,8 @@ def main(argv=None) -> int:
             "n_selected": len(rows),
             "selected_keys": chosen,
             "onsets": {str(k): v["onset_bin"] for k, v in contaminations.items()},
-            "value_scale": next(iter(contaminations.values()))["value_scale"],
-            "units": "standardized (raw S4 delta divided by the frozen ndvi IQR)",
+            "value_scale": 1.0,
+            "units": "physical NDVI before frozen normalization",
         }
 
     print(f"[patch] arch={args.arch} device={device} params≈"
@@ -522,21 +510,38 @@ def main(argv=None) -> int:
     out_dir = Path(args.out) / f"{args.arch}_seed{args.seed}" / (
         "_smoke" if args.smoke else ""
     )
-    out_dir.mkdir(parents=True, exist_ok=True)
-    progress_path = out_dir / "progress.jsonl"
     resume_from = None
     if args.resume_checkpoint:
         resume_from = Path(args.resume_checkpoint)
-    elif args.resume and (out_dir / "last.pt").exists():
+    elif args.resume:
         resume_from = out_dir / "last.pt"
+    if resume_from is not None and not resume_from.is_file():
+        raise FileNotFoundError(f"no patch checkpoint to resume at {resume_from}")
+    if resume_from is None and any(out_dir.glob("*.pt")):
+        raise RuntimeError(f"patch checkpoints already exist in {out_dir}; use a new --out or resume")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    progress_path = out_dir / "progress.jsonl"
+
+    run_norm = out_dir / P.NORM_STATS_NAME
+    if run_norm.exists() and P.load_patch_norm(run_norm)["sha256"] != norm["sha256"]:
+        raise RuntimeError(f"frozen checkpoint norm does not match {norm_path}: {run_norm}")
 
     run = train_one_seed(ds, cfg=cfg, out_dir=out_dir, device=device, smoke=args.smoke,
                          resume_from=resume_from, progress_path=progress_path,
                          contaminations=contaminations)
+    if not run_norm.exists():
+        P.save_patch_norm(norm, run_norm)
+    manifest_path = out_dir / "run_manifest.json"
+    if resume_from is not None and not run["history"] and manifest_path.is_file():
+        print(f"[patch] run already complete; kept {manifest_path}")
+        return 0
     trained_model = run.pop("model")
     example = run.pop("example")
     report = {
-        "protocol": "patch_train_v1",
+        "protocol": "patch_train_v2",
+        "input_protocol": cfg["input_protocol"],
+        "splits_sha256": cfg["splits_sha256"],
+        "unnormalized_channels": sorted(ds.unnormalized_channels),
         "arch": args.arch,
         "scorer_id": scorer_id(args.arch == "patch_cnn_gru"),
         "config": {k: v for k, v in cfg.items() if k != "horizon_weights"} | {
@@ -576,7 +581,7 @@ def main(argv=None) -> int:
     else:
         report["benchmark"] = None
         report["benchmark_absent_reason"] = "--no-benchmark"
-    (out_dir / "run_manifest.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+    manifest_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(f"[patch] done in {run['wall_time_s']}s — wrote {out_dir / 'run_manifest.json'}")
     return 0
 

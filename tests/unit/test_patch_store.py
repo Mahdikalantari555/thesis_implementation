@@ -18,7 +18,10 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
+from tests.patch_fixtures import bind_patch_store  # noqa: E402
+
 from ssl_anomaly.io import patches as P  # noqa: E402
+from ssl_anomaly.monitor.holdout import HoldoutViolationError  # noqa: E402
 
 zarr = pytest.importorskip("zarr")
 
@@ -44,6 +47,7 @@ def fill_cycle(root, fi: int, ci: int, *, value: float, sensor: int = 1, in_fiel
     root["sensor_id"][fi, ci] = sensor
     root["cycle_valid"][fi, ci] = 1
     root["cycle_ids"][fi, ci] = 100 + ci
+    root["cycle_end_day"][fi, ci] = P.MAX_CYCLE_DAYS - 1
     if in_field:
         root["in_field"][fi, 0] = np.ones((size, size), dtype=np.uint8)
 
@@ -55,7 +59,7 @@ def test_store_has_the_frozen_arrays_and_dtypes(tmp_path: Path) -> None:
     root = make_store(tmp_path)
     for name in ("values", "pixel_valid", "in_field", "bbox_origin",
                  "n_obs", "sensor_id", "field_ids", "cycle_ids",
-                 "cycle_start_day", "cycle_valid"):
+                 "cycle_start_day", "cycle_end_day", "cycle_valid"):
         assert name in root, f"{name} missing from the store"
     assert root["values"].shape == (3, 2, P.N_BINS, P.N_CHANNELS, 8, 8)
     assert root["values"].dtype == np.float16
@@ -114,22 +118,22 @@ def test_schema_is_derived_from_constants_not_hard_coded(tmp_path: Path) -> None
 # ---------------------------------------------------------------------------
 # Task 2.2 — leakage-free normalization
 # ---------------------------------------------------------------------------
-def test_norm_artifact_uses_train_fields_only(tmp_path: Path) -> None:
-    root = make_store(tmp_path, field_ids=(301, 302, 101))   # 101 is a holdout field
-    fill_cycle(root, 0, 0, value=0.30)    # train field
-    fill_cycle(root, 1, 0, value=0.32)    # train field
-    fill_cycle(root, 2, 0, value=9.00)    # HOLDOUT field — must not contribute
+def fit(root, train_keys=None):
+    splits, holdout = bind_patch_store(root, spatial=(101,), known=(101, 301, 302), train_keys=train_keys)
+    return P.build_patch_norm(root=root, splits_manifest=splits, holdout_manifest=holdout)
 
-    norm = P.build_patch_norm(root=root, train_field_ids=[301, 302],
-                              splits_sha256="a" * 64)
-    stats = norm["stats"]["L8"]
-    assert stats["ndvi"]["n"] > 0
-    assert 0.29 < stats["ndvi"]["median"] < 0.33, (
-        f"median {stats['ndvi']['median']} shows the holdout field leaked in"
-    )
+
+def test_norm_artifact_uses_train_fields_only(tmp_path: Path) -> None:
+    root = make_store(tmp_path, field_ids=(301, 302, 101))
+    fill_cycle(root, 0, 0, value=0.30)
+    fill_cycle(root, 1, 0, value=0.32)
+    fill_cycle(root, 2, 0, value=9.00)
+    norm = fit(root)
+    stats = norm["stats"]["L8"]["ndvi"]
+    assert stats["n"] > 0
+    assert 0.29 < stats["median"] < 0.33
     assert norm["field_ids_used"] == [301, 302]
-    assert 101 not in norm["field_ids_used"]
-    assert norm["splits_sha256"] == "a" * 64
+    assert norm["splits_sha256"] == root.attrs["splits_manifest_sha256"]
     assert norm["n_train_fields"] == 2
 
 
@@ -137,50 +141,48 @@ def test_norm_artifact_is_per_sensor(tmp_path: Path) -> None:
     root = make_store(tmp_path, field_ids=(301, 302))
     fill_cycle(root, 0, 0, value=0.30, sensor=P.SENSOR_IDS["L8"])
     fill_cycle(root, 1, 0, value=0.60, sensor=P.SENSOR_IDS["L9"])
-    norm = P.build_patch_norm(root=root, train_field_ids=[301, 302])
+    norm = fit(root)
     assert 0.28 < norm["stats"]["L8"]["ndvi"]["median"] < 0.32
     assert 0.58 < norm["stats"]["L9"]["ndvi"]["median"] < 0.62
 
 
-def test_per_cycle_mask_is_honoured(tmp_path: Path) -> None:
-    """A train field's holdout-PERIOD cycle must be excludable."""
-    root = make_store(tmp_path, field_ids=(301,), n_cycles=2)
+def test_norm_ignores_same_fields_dev_and_holdout_periods(tmp_path: Path) -> None:
+    root = make_store(tmp_path, field_ids=(301,), n_cycles=3)
     fill_cycle(root, 0, 0, value=0.30)
-    fill_cycle(root, 0, 1, value=9.00)          # post-2024 cycle of a train field
-    mask = np.zeros((1, 2), dtype=bool)
-    mask[0, 0] = True                            # only the pre-2024 cycle is train
-    norm = P.build_patch_norm(root=root, train_field_ids=[301], train_cycle_mask=mask)
-    median = norm["stats"]["L8"]["ndvi"]["median"]
-    assert 0.29 < median < 0.31, f"median {median} shows the masked cycle leaked in"
-    assert norm["n_train_cycles"] == 1
+    fill_cycle(root, 0, 1, value=9.00)
+    fill_cycle(root, 0, 2, value=9.00)
+    root["cycle_start_day"][0, 2] = root["cycle_end_day"][0, 2] = 4100
+    norm = fit(root, train_keys=["301:100"])
+    assert 0.29 < norm["stats"]["L8"]["ndvi"]["median"] < 0.31
+    assert norm["train_cycle_keys"] == ["301:100"]
 
 
-def test_norm_refuses_without_train_fields(tmp_path: Path) -> None:
-    root = make_store(tmp_path, field_ids=(101,))
-    fill_cycle(root, 0, 0, value=0.3)
-    with pytest.raises(ValueError, match="no train fields"):
-        P.build_patch_norm(root=root, train_field_ids=[999])
+def test_norm_rejects_cutoff_crossing_locked_train_cycle(tmp_path: Path) -> None:
+    root = make_store(tmp_path, field_ids=(301,))
+    fill_cycle(root, 0, 0, value=0.30)
+    root["cycle_end_day"][0, 0] = 4100
+    with pytest.raises(HoldoutViolationError, match="301:100"):
+        fit(root)
+
+
+def test_norm_refuses_without_train_cycles(tmp_path: Path) -> None:
+    root = make_store(tmp_path, field_ids=(301,))
+    fill_cycle(root, 0, 0, value=0.30)
+    with pytest.raises(ValueError, match="no admissible locked train cycles"):
+        fit(root, train_keys=[])
 
 
 def test_norm_refuses_without_finite_observations(tmp_path: Path) -> None:
     root = make_store(tmp_path, field_ids=(301,))
-    root["cycle_valid"][0, 0] = 1          # a cycle with no values at all
+    root["cycle_valid"][0, 0] = 1
     with pytest.raises(ValueError, match="no finite in-field"):
-        P.build_patch_norm(root=root, train_field_ids=[301])
-
-
-def test_norm_mask_shape_is_validated(tmp_path: Path) -> None:
-    root = make_store(tmp_path, field_ids=(301,))
-    fill_cycle(root, 0, 0, value=0.3)
-    with pytest.raises(ValueError, match="train_cycle_mask shape"):
-        P.build_patch_norm(root=root, train_field_ids=[301],
-                           train_cycle_mask=np.ones((9, 9), dtype=bool))
+        fit(root)
 
 
 def test_norm_roundtrip_is_hash_verified(tmp_path: Path) -> None:
     root = make_store(tmp_path, field_ids=(301,))
     fill_cycle(root, 0, 0, value=0.3)
-    norm = P.build_patch_norm(root=root, train_field_ids=[301])
+    norm = fit(root)
     path = P.save_patch_norm(norm, tmp_path / "norm_stats.json")
     loaded = P.load_patch_norm(path)
     assert loaded["sha256"] == P.norm_stats_sha256(norm)
@@ -190,7 +192,7 @@ def test_norm_roundtrip_is_hash_verified(tmp_path: Path) -> None:
 def test_norm_tampering_is_detected(tmp_path: Path) -> None:
     root = make_store(tmp_path, field_ids=(301,))
     fill_cycle(root, 0, 0, value=0.3)
-    norm = P.build_patch_norm(root=root, train_field_ids=[301])
+    norm = fit(root)
     path = P.save_patch_norm(norm, tmp_path / "norm_stats.json")
     data = json.loads(path.read_text(encoding="utf-8"))
     data["stats"]["L8"]["ndvi"]["median"] = 0.99
@@ -245,3 +247,41 @@ def test_output_sha256_is_deterministic_and_value_sensitive(tmp_path: Path) -> N
     assert sha1 == sha2, "the store hash must be deterministic"
     fill_cycle(root, 0, 0, value=0.31)
     assert P.output_sha256(root) != sha1, "a value change must move the hash"
+
+
+@pytest.mark.parametrize("attr", ["splits_manifest_sha256", "cycle_source_sha256", "cycle_epoch"])
+def test_norm_refuses_store_with_unbound_provenance(tmp_path, attr):
+    root = make_store(tmp_path, field_ids=(301,))
+    fill_cycle(root, 0, 0, value=0.3)
+    splits, holdout = bind_patch_store(root, spatial=(101,), known=(101, 301))
+    del root.attrs[attr]
+    with pytest.raises(ValueError, match="re-extract to a new store"):
+        P.build_patch_norm(root=root, splits_manifest=splits, holdout_manifest=holdout)
+
+
+def test_norm_refuses_out_of_cycle_count_before_reading_any_values(tmp_path, monkeypatch):
+    root = make_store(tmp_path, field_ids=(301,))
+    fill_cycle(root, 0, 0, value=0.3)
+    root["cycle_end_day"][0, 0] = 14
+    monkeypatch.setattr(P, "read_patch_observations", lambda *_: pytest.fail("premature value read"))
+    with pytest.raises(HoldoutViolationError, match=r"301:100 has acquisition counts after its end"):
+        fit(root)
+
+
+def test_norm_ignores_finite_values_under_invalid_pixel_mask(tmp_path):
+    root = make_store(tmp_path, field_ids=(301,))
+    fill_cycle(root, 0, 0, value=0.3)
+    root["values"][0, 0, :, :, :, :6] = 50
+    root["pixel_valid"][0, 0, :, 0, :, :6] = 0
+    norm = fit(root)
+    assert norm["stats"]["L8"]["ndvi"]["median"] == pytest.approx(0.3, abs=0.001)
+
+
+@pytest.mark.parametrize("stats", [{}, {"L8": {}}, {"L8": {"ndvi": {"med": 0.3, "iqr": 0.2}}}])
+def test_load_refuses_malformed_envelope_even_with_a_valid_hash(tmp_path, stats):
+    norm = {"stats": stats, "channel_order": list(P.CHANNELS)}
+    norm["sha256"] = P.norm_stats_sha256(norm)
+    path = tmp_path / "norm_stats.json"
+    path.write_text(json.dumps(norm))
+    with pytest.raises(ValueError, match="invalid patch normalization"):
+        P.load_patch_norm(path)

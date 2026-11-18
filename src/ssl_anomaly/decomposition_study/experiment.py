@@ -6,6 +6,7 @@ import hashlib
 import json
 import subprocess
 import time
+from contextlib import ExitStack
 from dataclasses import asdict
 from functools import partial
 from importlib.metadata import version
@@ -613,7 +614,8 @@ def study_case(
     for family, dose in tqdm(jobs, desc=f"Validation {branch}/{protocol}", disable=run.quiet):
         key = f"{family}_{dose:g}" if dose is not None else family
         result_path = challenges / f"{key}.json"
-        if result_path.exists():
+        uplift_path = challenges / f"{key}_uplift.npz"
+        if result_path.exists() and (dose is None or uplift_path.is_file()):
             result = json.loads(result_path.read_text(encoding="utf-8"))
         else:
             changed = None
@@ -672,25 +674,31 @@ def study_case(
                         for name, keys, joint in paired_sets(clean, challenged)
                     },
                 }
+                # Commit the row-level dose support before the completed metric JSON.
+                npz_save(
+                    uplift_path,
+                    **{
+                        k: ev.changed_uplift(v[:, exp], challenged[k][:, exp], changed[:, exp])
+                        for k, v in clean.items()
+                    },
+                )
             json_save(result_path, result)
         log(event="challenge", family=family, dose=dose)
         if dose is None:
             missing = result
         else:
             cases[key] = result
-    dose_response = {
-        k: {
-            family: ev.correlation(
-                np.asarray(ev.DOSES),
-                np.array(
-                    [cases[f"{family}_{d:g}"]["arms"][k]["median_score_uplift"] for d in ev.DOSES],
-                    dtype=float,
-                ),
-            )
-            for family in ev.FAMILIES
-        }
-        for k in clean
-    }
+    dose_response: dict[str, dict] = {k: {} for k in clean}
+    for family in ev.FAMILIES:
+        with ExitStack() as stack:
+            by_dose = [
+                stack.enter_context(np.load(challenges / f"{family}_{d:g}_uplift.npz"))
+                for d in ev.DOSES
+            ]
+            for k in clean:
+                dose_response[k][family] = ev.matched_dose_response(
+                    np.asarray(ev.DOSES), [data[k] for data in by_dose]
+                )
     report = {
         "provenance": run.provenance,
         "branch": branch,

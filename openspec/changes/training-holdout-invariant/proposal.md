@@ -19,7 +19,7 @@ not by convention.
 ## What Changes
 
 - **Frozen holdout manifest** — derived from splits_locked `9aa5eb11…`
-  (no new split invention): `holdout_farms` = `test_fields` (51) plus any
+  (no new split invention): `holdout_farms` = `kmeans.test_block_fields` plus any
   field added to the registry after the archive freeze (future fields are
   holdout by default, per the product vision); `holdout_date_start` =
   2024-01-01 plus every acquisition after the 538-date archive end (future

@@ -9,13 +9,12 @@ The manifest is a **pure derivation** of the locked splits
 (``data/processed/splits_locked.json``, ``9aa5eb11…``) — no new split
 semantics are invented here:
 
-- ``holdout_farms``    = the locked ``test_fields`` (whole-field spatial
-  holdout, ALL periods, which the split assignment already guarantees by
-  sending every uncensored cycle of a test-block field to ``test``).
+- ``holdout_farms``    = the locked ``kmeans.test_block_fields`` (whole-field
+  spatial holdout, including members with no eligible test rows).
 - ``holdout_date_start`` = the locked ``test_period_start`` (2024-01-01):
   temporal holdout for every other field.
 - future-by-default   = any farm id absent from ``known_farm_ids`` (fields
-  registered after the archive freeze) and any cycle starting after
+  registered after the archive freeze) and any observation after
   ``archive_end_date`` are holdout, per the 2026-11-14 product vision.
 
 Enforcement is fail-closed: :func:`assert_train_only` raises
@@ -48,7 +47,7 @@ HOLDOUT_MANIFEST_PATH = REPO_ROOT / "data/processed/holdout_manifest.json"
 MANIFEST_VERSION = 1
 REBUILD_HINT = (
     "the holdout manifest is derived once from the locked splits; rebuild it "
-    "only with scripts/build_holdout_manifest.py --force <reason>"
+    "only with scripts/build_holdout_manifest.py --force --reason <reason>"
 )
 
 # Split-manifest keys whose union defines the farms known at freeze time.
@@ -88,6 +87,56 @@ def _known_farm_ids(splits_manifest: dict) -> list[int]:
     return sorted(known)
 
 
+def _test_block_fields(splits_manifest: dict) -> set[int]:
+    block = (splits_manifest.get("kmeans") or {}).get("test_block_fields")
+    if not block:
+        raise ValueError(
+            "locked splits manifest has no kmeans.test_block_fields; refusing to infer "
+            "spatial holdout from the row-derived test_fields"
+        )
+    return {int(f) for f in block}
+
+
+def _frozen_day(value: Any, label: str) -> pd.Timestamp:
+    day = pd.Timestamp(value)
+    if pd.isna(day) or day.tzinfo is not None:
+        raise ValueError(f"{label} must be a valid calendar date")
+    return day.normalize()
+
+
+def audit_frozen_holdout(manifest: dict, splits_manifest: dict) -> dict:
+    """Compare a hash-verified freeze against its locked source without modifying it."""
+    spatial = _test_block_fields(splits_manifest)
+    frozen = {int(f) for f in manifest["holdout_farms"]}
+    source = splits_manifest.get("manifest_sha256")
+    return {
+        "holdout_manifest_sha256": manifest.get("manifest_sha256"),
+        "splits_manifest_sha256": source,
+        "source_matches": bool(source) and (
+            manifest.get("derived_from", {}).get("splits_manifest_sha256") == source
+        ),
+        "cutoff_matches": _frozen_day(manifest["holdout_date_start"], "holdout_date_start")
+        == _frozen_day(splits_manifest["test_period_start"], "test_period_start"),
+        "missing_spatial_fields": sorted(spatial - frozen),
+        "extra_frozen_fields": sorted(frozen - spatial),
+    }
+
+
+def assert_frozen_holdout_matches_splits(manifest: dict, splits_manifest: dict) -> None:
+    audit = audit_frozen_holdout(manifest, splits_manifest)
+    if (
+        not audit["source_matches"]
+        or not audit["cutoff_matches"]
+        or audit["missing_spatial_fields"]
+        or not manifest.get("known_farm_ids")
+    ):
+        raise HoldoutViolationError(
+            f"Frozen holdout disagrees with locked splits: {audit}. "
+            "Run scripts/build_holdout_manifest.py --audit-existing; "
+            "do not regenerate or weaken the freeze automatically."
+        )
+
+
 def build_holdout_manifest(
     splits_manifest: dict,
     *,
@@ -100,31 +149,20 @@ def build_holdout_manifest(
     No new split semantics are introduced — the farm and date sets are exactly
     the locked assignment's test farms and test-period start.
     """
-    for key in ("test_fields", "test_period_start"):
-        if key not in splits_manifest:
-            raise KeyError(
-                f"locked splits manifest is missing {key!r}; the holdout manifest is a "
-                "pure derivation and cannot be built from an incomplete split manifest"
-            )
+    if "test_period_start" not in splits_manifest:
+        raise KeyError("locked splits manifest is missing test_period_start")
 
-    test_fields = sorted(int(f) for f in splits_manifest["test_fields"])
+    test_fields = sorted(_test_block_fields(splits_manifest))
     known = _known_farm_ids(splits_manifest)
     if not known:
         raise ValueError(
             "locked splits manifest exposes no *_fields lists; refusing to build a "
             "holdout manifest that cannot detect future (unknown) fields"
         )
-    if not test_fields:
-        raise ValueError(
-            "the locked splits manifest has an EMPTY test-field set — a manifest with no "
-            "spatial holdout is corrupt or truncated; refusing to derive a holdout "
-            "manifest from it (fail-closed)"
-        )
-
-    date_start = pd.Timestamp(splits_manifest["test_period_start"]).strftime("%Y-%m-%d")
+    date_start = _frozen_day(splits_manifest["test_period_start"], "test_period_start").date().isoformat()
     end_date = None
     if archive_end_date is not None:
-        end_date = pd.Timestamp(archive_end_date).strftime("%Y-%m-%d")
+        end_date = _frozen_day(archive_end_date, "archive_end_date").date().isoformat()
 
     manifest: dict[str, Any] = {
         "version": MANIFEST_VERSION,
@@ -136,7 +174,7 @@ def build_holdout_manifest(
             "test_period_start": date_start,
             "n_test_fields": len(test_fields),
             "n_known_farms": len(known),
-            "rule": ("holdout_farms = locked test_fields (whole-field, all periods); "
+            "rule": ("holdout_farms = locked kmeans.test_block_fields (whole-field, all periods); "
                      "holdout_date_start = locked test_period_start (temporal holdout "
                      "for every other field) — no new split semantics"),
         },
@@ -149,7 +187,7 @@ def build_holdout_manifest(
             "after the archive freeze and never enters training"
         ),
         "future_dates_rule": (
-            "holdout by default — any acquisition/cycle starting after archive_end_date "
+            "holdout by default — any acquisition after archive_end_date "
             "is reserved for validation"
         ),
     }
@@ -237,20 +275,34 @@ def split_cycle_key(key: str) -> tuple[int, str]:
 
 def _normalize_dates(values: Sequence[Any] | np.ndarray) -> pd.DatetimeIndex:
     """Coerce str / datetime64 / Timestamp values to a normalized DatetimeIndex."""
-    return pd.DatetimeIndex(pd.to_datetime(list(values))).normalize()
+    return pd.DatetimeIndex(pd.to_datetime(list(values), format="mixed", errors="coerce")).normalize()
+
+
+def _cycle_date_bounds(n: int, starts, ends):
+    if starts is None:
+        if ends is not None:
+            raise ValueError("cycle_end_dates require cycle_start_dates")
+        return None
+    dates = _normalize_dates(starts)
+    end_dates = dates if ends is None else _normalize_dates(ends)
+    if len(dates) != n or len(end_dates) != n:
+        raise ValueError("cycle_start_dates/cycle_end_dates length must match field_ids length")
+    return dates, end_dates
 
 
 def train_only_mask(
     field_ids: Iterable[int],
     cycle_start_dates: Sequence[Any] | None = None,
     *,
+    cycle_end_dates: Sequence[Any] | None = None,
     manifest: dict | None = None,
 ) -> np.ndarray:
     """Boolean mask: True where a (field, cycle) pair is admissible for training.
 
     A pair is inadmissible when its farm is a holdout farm, is unknown at
-    freeze time (future-by-default), or its cycle starts inside the holdout
-    period / after the archive end.
+    freeze time (future-by-default), or its observation window touches the
+    holdout period or extends after the archive end. Point checks reuse the
+    start date as the end; cycle consumers supply both bounds.
     """
     manifest = manifest if manifest is not None else load_holdout_manifest()
     fields = np.asarray(list(field_ids), dtype=np.int64)
@@ -263,18 +315,16 @@ def train_only_mask(
     if known_farms:
         mask &= np.isin(fields, list(known_farms))
 
-    if cycle_start_dates is not None:
-        starts = _normalize_dates(cycle_start_dates)
-        if len(starts) != len(fields):
-            raise ValueError(
-                f"cycle_start_dates length {len(starts)} != field_ids length {len(fields)}"
-            )
+    bounds = _cycle_date_bounds(len(fields), cycle_start_dates, cycle_end_dates)
+    if bounds is not None:
+        starts, ends = bounds
+        mask &= starts.notna() & ends.notna() & (starts <= ends)
         date_start = manifest.get("holdout_date_start")
         if date_start:
-            mask &= starts < pd.Timestamp(date_start)
+            mask &= ends < _frozen_day(date_start, "holdout_date_start")
         archive_end = manifest.get("archive_end_date")
         if archive_end:
-            mask &= starts <= pd.Timestamp(archive_end)
+            mask &= ends <= _frozen_day(archive_end, "archive_end_date")
     return mask
 
 
@@ -286,6 +336,7 @@ def assert_train_only(
     cycle_keys: Sequence[str] | None = None,
     cycle_start_dates: Sequence[Any] | None = None,
     *,
+    cycle_end_dates: Sequence[Any] | None = None,
     manifest: dict | None = None,
     context: str = "",
     max_listed: int = 8,
@@ -302,6 +353,9 @@ def assert_train_only(
     cycle_start_dates
         Cycle start dates aligned with ``field_ids`` (or with ``cycle_keys``),
         used for the temporal holdout check.
+    cycle_end_dates
+        Inclusive latest dates, mandatory for cycle consumers; omitted only
+        for point-date or farm-only assertions.
     manifest
         Pre-loaded manifest (loaded hash-verified when omitted).
     context
@@ -327,13 +381,9 @@ def assert_train_only(
     date_start = manifest.get("holdout_date_start")
     archive_end = manifest.get("archive_end_date")
 
-    starts = None
-    if cycle_start_dates is not None:
-        starts = _normalize_dates(cycle_start_dates)
-        if len(starts) != len(fields):
-            raise ValueError(
-                f"cycle_start_dates length {len(starts)} != field_ids length {len(fields)}"
-            )
+    bounds = _cycle_date_bounds(len(fields), cycle_start_dates, cycle_end_dates)
+    cutoff = _frozen_day(date_start, "holdout_date_start") if date_start else None
+    last = _frozen_day(archive_end, "archive_end_date") if archive_end else None
 
     def _pair(i: int, why: str) -> str:
         key = cycle_keys[i] if cycle_keys is not None else f"{fields[i]}:?"
@@ -346,11 +396,14 @@ def assert_train_only(
             reasons.append("holdout farm")
         elif known_farms and fid not in known_farms:
             reasons.append("farm unknown at freeze (future-by-default holdout)")
-        if starts is not None:
-            if date_start and starts[i] >= pd.Timestamp(date_start):
-                reasons.append(f"cycle starts inside the holdout period (>= {date_start})")
-            elif archive_end and starts[i] > pd.Timestamp(archive_end):
-                reasons.append(f"cycle starts after the archive end ({archive_end})")
+        if bounds is not None:
+            start, end = bounds[0][i], bounds[1][i]
+            if pd.isna(start) or pd.isna(end) or start > end:
+                reasons.append("missing or inverted date bounds")
+            elif cutoff is not None and end >= cutoff:
+                reasons.append(f"cycle touches the holdout period (>= {date_start})")
+            elif last is not None and end > last:
+                reasons.append(f"cycle extends after the archive end ({archive_end})")
         if reasons:
             violations.append(_pair(i, "; ".join(reasons)))
 
@@ -362,7 +415,7 @@ def assert_train_only(
             f"Holdout leak{where}: {len(violations)} training input(s) touch the frozen "
             f"holdout — {'; '.join(shown)}{more}. Training aborted before the first batch "
             "(training-holdout-invariant, fail-closed). Holdout farms are the locked "
-            "test-block fields (all periods) and every cycle starting on/after "
+            "test-block fields (all periods) and every cycle touching dates on/after "
             f"{date_start}; test cycles may only be read by "
             "scripts/freeze_main_model.py --final-test."
         )
@@ -373,6 +426,7 @@ def filter_train_only(
     cycle_keys: Sequence[str],
     cycle_start_dates: Sequence[Any] | None = None,
     *,
+    cycle_end_dates: Sequence[Any] | None = None,
     manifest: dict | None = None,
     context: str = "",
 ) -> list[str]:
@@ -384,7 +438,11 @@ def filter_train_only(
     """
     manifest = manifest if manifest is not None else load_holdout_manifest()
     fields = [int(f) for f in field_ids]
-    mask = train_only_mask(fields, cycle_start_dates, manifest=manifest)
+    if len(cycle_keys) != len(fields):
+        raise ValueError("cycle_keys length must match field_ids length")
+    mask = train_only_mask(
+        fields, cycle_start_dates, cycle_end_dates=cycle_end_dates, manifest=manifest
+    )
     kept = [k for k, ok in zip(cycle_keys, mask) if ok]
     if context:
         log.info(
@@ -417,12 +475,14 @@ class HoldoutGuard:
         cycle_keys: Sequence[str] | None = None,
         cycle_start_dates: Sequence[Any] | None = None,
         *,
+        cycle_end_dates: Sequence[Any] | None = None,
         context: str | None = None,
     ) -> None:
         assert_train_only(
             field_ids,
             cycle_keys,
             cycle_start_dates,
+            cycle_end_dates=cycle_end_dates,
             manifest=self._holdout_manifest,
             context=context or self._holdout_context,
         )
@@ -432,11 +492,14 @@ class HoldoutGuard:
         field_ids: Iterable[int],
         cycle_keys: Sequence[str],
         cycle_start_dates: Sequence[Any] | None = None,
+        *,
+        cycle_end_dates: Sequence[Any] | None = None,
     ) -> list[str]:
         return filter_train_only(
             field_ids,
             cycle_keys,
             cycle_start_dates,
+            cycle_end_dates=cycle_end_dates,
             manifest=self._holdout_manifest,
             context=self._holdout_context,
         )
@@ -446,7 +509,9 @@ __all__ = [
     "HOLDOUT_MANIFEST_PATH",
     "HoldoutGuard",
     "HoldoutViolationError",
+    "assert_frozen_holdout_matches_splits",
     "assert_train_only",
+    "audit_frozen_holdout",
     "build_holdout_manifest",
     "filter_train_only",
     "holdout_manifest_hash",

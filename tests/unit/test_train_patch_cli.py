@@ -15,6 +15,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from tests.patch_fixtures import bind_patch_store
 
 from ssl_anomaly.io import patches as P
 from ssl_anomaly.monitor import holdout as H
@@ -36,8 +37,6 @@ def _make_store(tmp_path: Path, cycles: int = 3) -> Path:
     g = np.random.default_rng(0)
     store = tmp_path / "patches.zarr"
     root = P.create_store(store, field_ids=list(FIELDS), max_cycles=cycles)
-    per_ch = {ch: {"median": 0.4, "iqr": 0.1, "n": 500} for ch in P.CHANNELS}
-    norm = {name: dict(per_ch) for name in ("L8", "L9", "unknown")}
     for i, f in enumerate(FIELDS):
         root["field_ids"][i] = f
         infield = np.zeros((S, S), dtype=np.uint8)
@@ -52,30 +51,20 @@ def _make_store(tmp_path: Path, cycles: int = 3) -> Path:
             root["sensor_id"][i, c] = P.SENSOR_IDS["L8"]
             root["cycle_ids"][i, c] = 1000 + c
             root["cycle_start_day"][i, c] = 40 + 20 * c
+            root["cycle_end_day"][i, c] = 40 + 20 * c + P.MAX_CYCLE_DAYS - 1
             root["cycle_valid"][i, c] = 1
+    splits, holdout = bind_patch_store(root)
+    (tmp_path / "splits.json").write_text(json.dumps(splits))
+    H.save_holdout_manifest(holdout, path=tmp_path / "holdout.json")
+    norm = P.build_patch_norm(root=root, splits_manifest=splits, holdout_manifest=holdout)
     P.save_patch_norm(norm, tmp_path / P.NORM_STATS_NAME)
     return store
-
-
-def _holdout(tmp_path: Path) -> Path:
-    manifest = {
-        "manifest_version": H.MANIFEST_VERSION,
-        "holdout_farms": [103],
-        "known_farm_ids": list(FIELDS),
-        "holdout_date_start": None,
-        "archive_end_date": "2022-12-31",
-        "created": "2026-11-16",
-        "git_sha": "test",
-    }
-    manifest["manifest_sha256"] = H.holdout_manifest_hash(manifest)
-    path = tmp_path / "holdout.json"
-    path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    return path
 
 
 def _args(store: Path, holdout: Path, out: Path, *extra: str) -> list[str]:
     return [
         "--store", str(store), "--holdout-manifest", str(holdout),
+        "--splits", str(store.parent / "splits.json"),
         "--out", str(out), "--epochs", "2", "--batch-size", "2",
         "--d-model", "8", "--n-horizons", "1", *extra,
     ]
@@ -85,7 +74,7 @@ def _args(store: Path, holdout: Path, out: Path, *extra: str) -> list[str]:
 def env(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("patch_train")
     store = _make_store(tmp)
-    holdout = _holdout(tmp)
+    holdout = tmp / "holdout.json"
     return tmp, store, holdout
 
 
@@ -120,6 +109,8 @@ def test_smoke_run_writes_checkpoint_progress_and_manifest(env):
     # the holdout field is excluded from the training set
     assert manifest["n_trainable_fields"] == 2
     assert manifest["n_excluded_by_holdout"] == 1
+    assert manifest["input_protocol"] == tp.PD.PATCH_INPUT_PROTOCOL
+    assert manifest["unnormalized_channels"] == []
     # progress rows are complete enough to resume from
     rows = [json.loads(line) for line in (run_dir / "progress.jsonl").read_text().splitlines()]
     assert rows
@@ -132,9 +123,16 @@ def test_resume_restores_state(env):
     out = tmp / "resume_out"
     assert tp.main(_args(store, holdout, out, "--smoke", "--seed", "42")) == 0
     last = out / "patch_cnn_gru_seed42" / "_smoke" / "last.pt"
-    assert last.exists()
-    rc = tp.main(_args(store, holdout, out, "--resume", "--seed", "42"))
+    before = last.read_bytes()
+    progress = last.with_name("progress.jsonl")
+    events = progress.read_text()
+    report = last.with_name("run_manifest.json")
+    original = report.read_bytes()
+    rc = tp.main(_args(store, holdout, out, "--smoke", "--resume", "--seed", "42"))
     assert rc == 0
+    assert last.read_bytes() == before
+    assert progress.read_text() == events
+    assert report.read_bytes() == original
 
 
 def test_config_hash_mismatch_refuses_to_resume(env):
@@ -258,3 +256,20 @@ def test_clean_default_is_unchanged(env):
     assert cfg["contaminate_fraction"] == 0.0
     assert cfg["trimmed_loss"] is True
     assert cfg["curation"] is False
+
+
+def test_offline_norm_builder_freezes_and_refuses_overwrite(env):
+    tmp, store, holdout = env
+    spec = importlib.util.spec_from_file_location("build_patch_norm", REPO / "scripts/build_patch_norm.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    sidecar = tmp / "new_norm.json"
+    argv = ["--store", str(store), "--splits", str(tmp / "splits.json"),
+            "--holdout-manifest", str(holdout), "--out", str(sidecar)]
+    assert mod.main(argv) == 0
+    result = P.load_patch_norm(sidecar)
+    assert result["n_train_cycles"] == 6
+    assert result["train_cycle_keys"] == [f"{field}:{1000 + c}" for field in (101, 102) for c in range(3)]
+    before = sidecar.read_bytes()
+    assert mod.main(argv) == 2
+    assert sidecar.read_bytes() == before

@@ -20,6 +20,6 @@ def tmp_data_dir(tmp_path: Path) -> Path:
     import sys
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
     from generate_synthetic_data import generate
-    out = tmp_path / "processed"
+    out = tmp_path / "data" / "processed"
     generate(n_fields=20, n_years=6, out=out, seed=123)
     return out

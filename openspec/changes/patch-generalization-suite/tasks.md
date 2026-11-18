@@ -7,7 +7,7 @@
       normalization re-fit from in-fold train data only (leakage test);
       quadrant-cell cycle selection respects dev_temporal_cutoff and
       dev-eligibility.
-- [x] 1.2 `scripts/run_generalization_matrix.py`: per arm × cell × fold
+- [ ] 1.2 `scripts/run_generalization_matrix.py`: per arm × cell × fold
       training/eval driver with --estimate-runtime, --resume, progress
       output; reuses train_main/train_patch checkpoints where folds permit
       (in-block cell) and retrains for held-out cells.
@@ -29,7 +29,7 @@
 - [ ] 3.2 Persian finding (persian-writing skill): the matrix, the confound
       analysis, and which arms earn L3 — honest negatives explicit.
 
-## Implementation notes (1.1-1.3 complete; 2.x/3.x data-blocked)
+## Implementation notes (1.1/1.3 complete; 1.2 planning and reporting only)
 
 `monitor/generalization.py` (28 tests), `monitor/generalization_matrix.py`
 (21 tests), `scripts/run_generalization_matrix.py` (11 tests).
@@ -45,10 +45,9 @@
   store: `--plan`, `--estimate-runtime`, `--report`, `--execute`. Cells: 5
   spatial folds + 5 quadrants + 1 temporal column, and the temporal cell's
   retrain decision follows the cutoff (so a reusable in-block checkpoint is
-  used instead of re-training). `--execute` refuses without a per-fold store:
-  training on the full store would leak the held-out blocks, so the block is an
-  error, not a silent fallback. Resume scans torn/unhashed artifacts and
-  re-does them; the runtime estimate separates the 1-seed screening pass from
+  used instead of re-training). `--execute --dry-run` prints the plan; actual
+  execution is blocked until fold-aware calibration and evaluation are wired.
+  The report tooling can scan artifact records; the runtime estimate separates the 1-seed screening pass from
   the 3-seed final pass (6×1 vs 2×3 — the design's cost control made numeric).
 - **1.3** `sensor_era` (contiguous runs, `unknown` never attributed to a
   neighbour), `era_shares`, `year_drift` (quantile shift vs the first year) and
@@ -64,3 +63,14 @@ computed against hand-worked cases in the tests.
 
 Still data-blocked: 2.1 (screening runs), 2.2 (matrix report from real runs),
 3.1/3.2 (verdict + Persian finding).
+
+
+## Holdout audit follow-up
+
+- [ ] A.1 Wire fold-aware locked dev calibration/evaluation and per-fold
+      artifacts before enabling execution. The previous `--execute` path
+      attempted ordinary locked-dev evaluation, not the requested held-out
+      fold/dates, and had no complete checkpoint/σ/norm handoff. Keep planning,
+      estimates, historical reports, and dry runs available; do not start
+      expensive retrains from this incomplete driver. Fold definitions cannot
+      override the global holdout or locked train membership.

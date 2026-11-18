@@ -104,7 +104,7 @@ def test_load_cycles_drops_censored_and_indexes_densely(tmp_path):
     p = tmp_path / "cycles.parquet"
     df.to_parquet(p, index=False)
     got = X.load_cycles(p)
-    assert got.tolist() == [[1, 0, 0], [1, 1, 100], [2, 0, 50]]
+    assert got.tolist() == [[1, 0, 0, 89], [1, 1, 100, 199], [2, 0, 50, 149]]
 
 
 def test_load_cycles_names_a_missing_column(tmp_path):
@@ -128,7 +128,7 @@ def test_load_cycles_refuses_an_all_censored_table(tmp_path):
 
 # --- runtime estimate ----------------------------------------------------
 def test_estimate_runtime_counts_only_in_cycle_scene_reads():
-    cycles = np.array([[1, 0, 0]])
+    cycles = np.array([[1, 0, 0, 539]])
     # cycle window is 540 days, so the third scene (day 366) is still inside:
     # the counter must follow the window, not the calendar year.
     scenes = [(date(2024, 1, 1), Path("a")), (date(2024, 1, 20), Path("b")),
@@ -146,12 +146,12 @@ def test_cycle_day_offsets_are_not_absolute_dates():
     assert X.day_index(date(2024, 1, 20), date(2024, 1, 10)) == 10
     # without the conversion the offset would be ~19_700 days and no scene
     # would ever land in a cycle
-    assert X.estimate_runtime(1, np.array([[1, 0, 0]]), [(date(2024, 1, 10), Path("a"))])[
+    assert X.estimate_runtime(1, np.array([[1, 0, 0, 0]]), [(date(2024, 1, 10), Path("a"))])[
         "n_window_reads"] == 8
 
 
 def test_estimate_runtime_scales_with_fields():
-    cycles = np.array([[1, 0, 0], [2, 0, 0]])
+    cycles = np.array([[1, 0, 0, 0], [2, 0, 0, 0]])
     scenes = [(date(2024, 1, 1), Path("a"))]
     assert X.estimate_runtime(2, cycles, scenes)["n_window_reads"] == 16
 
@@ -381,6 +381,11 @@ def test_resume_skips_completed_fields(tmp_path, capsys):
     assert "field 101" not in out       # both fields were already done
     # ...and the run is reproducible: the manifest did not grow
     assert len(X.read_manifest(store)) == 2
+    before = X.manifest_path(store).read_bytes()
+    # A differently scaled re-export could mix physical units across fields.
+    assert X.main(base + ["--resume", "--band-scale", "landsat"]) == 3
+    assert "export selection differs" in capsys.readouterr().err
+    assert X.manifest_path(store).read_bytes() == before
 
 
 def test_rerun_without_resume_is_refused_on_a_foreign_store(tmp_path):
@@ -426,3 +431,35 @@ def test_missing_mask_is_a_clean_error(tmp_path, capsys):
                    "--cycles", str(cycles), "--out", str(tmp_path / "s.zarr")])
     assert code == 2
     assert "field mask not found" in capsys.readouterr().err
+
+
+def test_locked_export_preserves_ids_and_does_not_read_past_cycle_end(tmp_path):
+    import pandas as pd
+
+    from ssl_anomaly.monitor import splits as S
+
+    mask, scenes, cycles = _make_world(tmp_path)
+    a = pd.read_parquet(cycles).assign(cycle_id=[38, 42], t_end=[0, 11], t_start=[-5, 0])
+    a.to_parquet(cycles, index=False)
+    splits = {"base_date": "2024-01-10", "cycle_file_hashes": {
+        "cycles_parquet_sha256": X.file_sha256(cycles),
+    }}
+    splits["manifest_sha256"] = S.manifest_hash(splits)
+    lock = tmp_path / "locked.json"
+    lock.write_text(json.dumps(splits))
+    store = tmp_path / "patches_v2.zarr"
+    argv = ["--mask", str(mask), "--scenes-root", str(scenes), "--cycles", str(cycles),
+            "--splits", str(lock), "--out", str(store)]
+    assert X.main(argv) == 0
+    root = P.open_store(store)
+    assert root.attrs["cycle_epoch"] == "2024-01-10"
+    assert root.attrs["splits_manifest_sha256"] == splits["manifest_sha256"]
+    assert root["cycle_ids"][:, 0].tolist() == [38, 42]
+    assert root["cycle_end_day"][:, 0].tolist() == [-1, 10]
+    assert root["n_obs"][0, 0].sum() == 0  # first scene is day 0, after first cycle
+    assert root["n_obs"][1, 0].sum() >= 1
+    with pytest.raises(ValueError, match="--epoch disagrees"):
+        X.main(argv + ["--resume", "--epoch", "2024-01-09"])
+    a.assign(t_end=[1, 11]).to_parquet(cycles, index=False)
+    with pytest.raises(ValueError, match="locked splits parquet hash"):
+        X.main(argv + ["--resume"])

@@ -24,7 +24,6 @@ from ssl_anomaly.cli import cli
 from ssl_anomaly.eval import (
     analyze_false_alarm_confounders,
     build_expert_event_review_packet,
-    build_provenance,
     cluster_field_ci,
     compare_detectors_wilcoxon_holm,
     evaluate_e_align_three_metrics,
@@ -41,8 +40,8 @@ from ssl_anomaly.eval import (
     save_splits_json,
     simulate_490_field_archive,
     simulate_progressive_onset_archive,
-    subsample_cloud_completeness,
     simulated_output_path,
+    subsample_cloud_completeness,
 )
 from ssl_anomaly.io.era5 import compute_dynamic_gdd_from_era5, load_era5_zarr, write_era5_zarr
 from ssl_anomaly.models import (
@@ -295,9 +294,10 @@ def test_mlflow_sqlite_tracking_cli_and_hydra_configs(tmp_path: Path) -> None:
     runner = CliRunner()
     res = runner.invoke(cli, ["--help"])
     assert res.exit_code == 0
-    assert "research" in res.output
+    assert {"ingest", "segment", "baseline", "train", "evaluate", "export"} <= set(res.output.split())
 
 
+@pytest.mark.real_data
 def test_real_archive_provenance_fields_complete() -> None:
     """R3: All provenance fields present and non-empty on real490 archive."""
     archive = load_real490_archive()
@@ -324,6 +324,7 @@ def test_require_real_archive_fail_closed() -> None:
     assert excinfo.value.code == 1
 
 
+@pytest.mark.real_data
 def test_real490_no_32farm_cwsi_et_borrow() -> None:
     """R4: No 32-farm cwsi_et reaches a 490 report; proxies absent."""
     archive = load_real490_archive()

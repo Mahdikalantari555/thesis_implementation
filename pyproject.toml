@@ -70,6 +70,7 @@ markers = [
   "golden: golden regression tests",
   "parity: backend parity tests (Rust vs NumPy)",
   "integration: end-to-end integration tests",
+  "real_data: requires authorized archive files or an untracked real export; fails if missing",
 ]
 
 [tool.ruff]

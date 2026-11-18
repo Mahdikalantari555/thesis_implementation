@@ -52,6 +52,14 @@ The study SHALL report D1 (SSL reconstruction error) and D2/D3/D4 (field-local r
 
 The study SHALL report historical reconstruction, temporal stability and paired synthetic anomaly sensitivity at field and acquisition levels. Synthetic changes SHALL be made only to held-out observations and SHALL cover abrupt drops, gradual drops, added oscillation, altered seasonality and persistent trend disturbance. It SHALL report missingness robustness and any available indicator agreement or adjacency-based consistency, not stress accuracy.
 
+#### Scenario: Support changes with synthetic dose
+
+- **WHEN** the study summarizes a dose-response trend for one arm and family
+- **THEN** every dose uses the same intersection of actually changed,
+  finitely scored field-dates with a finite clean baseline; report per-dose
+  support lost and leave an unsupported trend absent. Per-dose sensitivity
+  metrics retain their native support.
+
 #### Scenario: Indicators unavailable or dependent
 - **WHEN** quality-approved TVDI, CWSI or ETa observations are missing or share upstream inputs with the model
 - **THEN** the report records missing coverage or the shared-input limitation without using indicators for calibration, selection or ground truth
