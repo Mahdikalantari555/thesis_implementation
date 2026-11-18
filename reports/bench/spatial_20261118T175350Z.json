@@ -1,0 +1,204 @@
+{
+  "protocol": "spatial_benchmark_v1",
+  "created": "2026-11-18T17:53:41+00:00",
+  "python": "3.12.14",
+  "torch": "2.15.0+cpu",
+  "platform": "Windows-11-10.0.26300-SP0",
+  "cpu_count": 20,
+  "data_source": "data/processed/patches_poc.zarr",
+  "store_validation": {
+    "n_fields": 56,
+    "max_cycles": 6,
+    "n_bins": 36,
+    "n_channels": 8,
+    "patch_size": 48,
+    "n_cycles_recorded": 138,
+    "bytes_estimate": 8590000
+  },
+  "synthetic": false,
+  "data_access": {
+    "lazy_random": {
+      "n_reads": 8,
+      "seconds": 0.0592,
+      "seconds_per_read": 0.0074,
+      "mb_per_second": 179.3,
+      "bytes_per_read": 1327104
+    },
+    "materialized": {
+      "n_cycles": 4,
+      "seconds": 0.0115,
+      "bytes": 5308416,
+      "mb": 5.31,
+      "mb_per_second": 462.9,
+      "resident_ram_mb_after": 438.9
+    },
+    "bulk_speedup": 2.58,
+    "decision": "materialize-per-field",
+    "decision_rule": "materialize only when bulk throughput beats scattered reads by >2x AND the per-field slice fits the recorded RAM headroom; otherwise stay lazy"
+  },
+  "representations": {
+    "R1_32px": {
+      "arch": "patch_cnn_gru",
+      "window_px": 32,
+      "device": "cpu",
+      "batch_size": 2,
+      "step_seconds": 0.8994,
+      "samples_per_second": 2.224,
+      "cpu_utilization": 99.9,
+      "peak_ram_mb": 867.3,
+      "n_parameters": 91028,
+      "spatial_support": {
+        "size_px": 32,
+        "side_m": 960.0,
+        "area_px": 1024,
+        "area_ha": 92.16,
+        "min_resolvable_ha": 0.09,
+        "min_resolvable_m2": 900.0
+      },
+      "note": "full-field 32x32",
+      "epoch_seconds_at_100_samples": 44.97,
+      "total_hours_30ep_3seeds_at_100_samples": 1.124
+    },
+    "R2_16px": {
+      "arch": "patch_cnn_gru",
+      "window_px": 16,
+      "device": "cpu",
+      "batch_size": 2,
+      "step_seconds": 0.5413,
+      "samples_per_second": 3.695,
+      "cpu_utilization": 99.9,
+      "peak_ram_mb": 867.3,
+      "n_parameters": 91028,
+      "spatial_support": {
+        "size_px": 16,
+        "side_m": 480.0,
+        "area_px": 256,
+        "area_ha": 23.04,
+        "min_resolvable_ha": 0.09,
+        "min_resolvable_m2": 900.0
+      },
+      "note": "sub-crop 16x16 + field aggregation",
+      "epoch_seconds_at_100_samples": 27.07,
+      "total_hours_30ep_3seeds_at_100_samples": 0.677
+    },
+    "R3_32px": {
+      "arch": "patch_cnn_gru",
+      "window_px": 32,
+      "device": "cpu",
+      "batch_size": 2,
+      "step_seconds": 1.1439,
+      "samples_per_second": 1.748,
+      "cpu_utilization": 99.9,
+      "peak_ram_mb": 888.2,
+      "n_parameters": 91028,
+      "spatial_support": {
+        "size_px": 32,
+        "side_m": 960.0,
+        "area_px": 1024,
+        "area_ha": 92.16,
+        "min_resolvable_ha": 0.09,
+        "min_resolvable_m2": 900.0
+      },
+      "note": "multi-scale stem (dilation branches)",
+      "epoch_seconds_at_100_samples": 57.19,
+      "total_hours_30ep_3seeds_at_100_samples": 1.43
+    },
+    "R1_pixelwise_32px": {
+      "arch": "patch_pixelwise",
+      "window_px": 32,
+      "device": "cpu",
+      "batch_size": 2,
+      "step_seconds": 0.5877,
+      "samples_per_second": 3.403,
+      "cpu_utilization": 99.9,
+      "peak_ram_mb": 901.7,
+      "n_parameters": 36020,
+      "spatial_support": {
+        "size_px": 32,
+        "side_m": 960.0,
+        "area_px": 1024,
+        "area_ha": 92.16,
+        "min_resolvable_ha": 0.09,
+        "min_resolvable_m2": 900.0
+      },
+      "note": "CNN-off control",
+      "epoch_seconds_at_100_samples": 29.39,
+      "total_hours_30ep_3seeds_at_100_samples": 0.735
+    }
+  },
+  "capacity": {
+    "reference": 91028.0,
+    "tolerance": 0.2,
+    "flags": {
+      "R1_32px": {
+        "n_parameters": 91028,
+        "relative_deviation": 0.0,
+        "flagged": false
+      },
+      "R2_16px": {
+        "n_parameters": 91028,
+        "relative_deviation": 0.0,
+        "flagged": false
+      },
+      "R3_32px": {
+        "n_parameters": 91028,
+        "relative_deviation": 0.0,
+        "flagged": false
+      },
+      "R1_pixelwise_32px": {
+        "n_parameters": 36020,
+        "relative_deviation": -0.6043,
+        "flagged": true
+      }
+    }
+  },
+  "geometry_memo": {
+    "median_field_side_px": 16.7,
+    "max_field_side_px": 19.6,
+    "default_window_px": 32,
+    "default_window_margin_over_max_field": 0.633,
+    "excluded_window_px": 64,
+    "excluded_window_ratio_to_median_field": 3.83,
+    "excluded_window_margin_over_max_field": 2.265,
+    "reason": "a 64 px window is dominated by neighbouring fields and padding for every measured field; allowing it by default would put the farm-boundary invariant's geometry beyond what the archive supports",
+    "decision": "32 px default; 64 px only behind an explicit flag"
+  },
+  "spatial_arithmetic": {
+    "gsd_m": 30.0,
+    "ha_per_px": 0.09,
+    "windows": {
+      "R1_32px": {
+        "size_px": 32,
+        "side_m": 960.0,
+        "area_px": 1024,
+        "area_ha": 92.16,
+        "min_resolvable_ha": 0.09,
+        "min_resolvable_m2": 900.0
+      },
+      "R2_16px": {
+        "size_px": 16,
+        "side_m": 480.0,
+        "area_px": 256,
+        "area_ha": 23.04,
+        "min_resolvable_ha": 0.09,
+        "min_resolvable_m2": 900.0
+      },
+      "R3_32px": {
+        "size_px": 32,
+        "side_m": 960.0,
+        "area_px": 1024,
+        "area_ha": 92.16,
+        "min_resolvable_ha": 0.09,
+        "min_resolvable_m2": 900.0
+      },
+      "R1_pixelwise_32px": {
+        "size_px": 32,
+        "side_m": 960.0,
+        "area_px": 1024,
+        "area_ha": 92.16,
+        "min_resolvable_ha": 0.09,
+        "min_resolvable_m2": 900.0
+      }
+    }
+  }
+}

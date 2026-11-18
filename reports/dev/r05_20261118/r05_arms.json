@@ -1,0 +1,211 @@
+{
+  "run_id": "r05_20261118",
+  "presets": [
+    "level",
+    "lower",
+    "spread",
+    "dist"
+  ],
+  "far_target": 0.05,
+  "persistence_k": 2,
+  "min_n": 8,
+  "n_reference_cycles": 516,
+  "splits_sha256": "9aa5eb111b31e73ba1ab30ebed52d7e9ef22c7e9e1de7cbd799e99ccf22e8565",
+  "arms": [
+    {
+      "arm": "r05_level",
+      "preset": "level",
+      "n_channels": 8,
+      "channels": [
+        "ndvi_median",
+        "blue_median",
+        "green_median",
+        "red_median",
+        "nir_median",
+        "swir1_median",
+        "swir2_median",
+        "lst_median"
+      ],
+      "stats_used": [
+        "median"
+      ],
+      "n_cycles": 516,
+      "n_train": 447,
+      "n_dev": 69,
+      "tau": 15.6580461119594,
+      "far_target": 0.05,
+      "far_achieved": 0.043478260869565216,
+      "persistence_k": 2,
+      "dev_alarm_rate": 0.043478260869565216,
+      "alarm_concentration_all": {
+        "n_alarms": 30,
+        "n_fields_alarmed": 27,
+        "share_top_field": 0.06666666666666667
+      },
+      "training": "none (rule-based: B1PhaseZCausal on the arm's channel block)",
+      "wall_time_s": 0.28,
+      "labels": {
+        "basis": "locally anchored (frozen pooled phenophase constants)"
+      }
+    },
+    {
+      "arm": "r05_lower",
+      "preset": "lower",
+      "n_channels": 8,
+      "channels": [
+        "ndvi_p10",
+        "blue_p10",
+        "green_p10",
+        "red_p10",
+        "nir_p10",
+        "swir1_p10",
+        "swir2_p10",
+        "lst_p10"
+      ],
+      "stats_used": [
+        "p10"
+      ],
+      "n_cycles": 516,
+      "n_train": 447,
+      "n_dev": 69,
+      "tau": 14.411780100785066,
+      "far_target": 0.05,
+      "far_achieved": 0.043478260869565216,
+      "persistence_k": 2,
+      "dev_alarm_rate": 0.043478260869565216,
+      "alarm_concentration_all": {
+        "n_alarms": 31,
+        "n_fields_alarmed": 29,
+        "share_top_field": 0.06451612903225806
+      },
+      "training": "none (rule-based: B1PhaseZCausal on the arm's channel block)",
+      "wall_time_s": 0.29,
+      "labels": {
+        "basis": "locally anchored (frozen pooled phenophase constants)"
+      }
+    },
+    {
+      "arm": "r05_spread",
+      "preset": "spread",
+      "n_channels": 14,
+      "channels": [
+        "blue_std",
+        "green_std",
+        "red_std",
+        "nir_std",
+        "swir1_std",
+        "swir2_std",
+        "lst_std",
+        "blue_iqr",
+        "green_iqr",
+        "red_iqr",
+        "nir_iqr",
+        "swir1_iqr",
+        "swir2_iqr",
+        "lst_iqr"
+      ],
+      "stats_used": [
+        "iqr",
+        "std"
+      ],
+      "n_cycles": 516,
+      "n_train": 447,
+      "n_dev": 69,
+      "tau": 18.40118257260737,
+      "far_target": 0.05,
+      "far_achieved": 0.043478260869565216,
+      "persistence_k": 2,
+      "dev_alarm_rate": 0.043478260869565216,
+      "alarm_concentration_all": {
+        "n_alarms": 32,
+        "n_fields_alarmed": 29,
+        "share_top_field": 0.0625
+      },
+      "training": "none (rule-based: B1PhaseZCausal on the arm's channel block)",
+      "wall_time_s": 0.42,
+      "labels": {
+        "basis": "locally anchored (frozen pooled phenophase constants)"
+      }
+    },
+    {
+      "arm": "r05_dist",
+      "preset": "dist",
+      "n_channels": 45,
+      "channels": [
+        "ndvi_median",
+        "blue_median",
+        "green_median",
+        "red_median",
+        "nir_median",
+        "swir1_median",
+        "swir2_median",
+        "lst_median",
+        "blue_std",
+        "green_std",
+        "red_std",
+        "nir_std",
+        "swir1_std",
+        "swir2_std",
+        "lst_std",
+        "ndvi_p10",
+        "blue_p10",
+        "green_p10",
+        "red_p10",
+        "nir_p10",
+        "swir1_p10",
+        "swir2_p10",
+        "lst_p10",
+        "ndvi_p25",
+        "blue_p25",
+        "green_p25",
+        "red_p25",
+        "nir_p25",
+        "swir1_p25",
+        "swir2_p25",
+        "lst_p25",
+        "blue_p75",
+        "green_p75",
+        "red_p75",
+        "nir_p75",
+        "swir1_p75",
+        "swir2_p75",
+        "lst_p75",
+        "blue_iqr",
+        "green_iqr",
+        "red_iqr",
+        "nir_iqr",
+        "swir1_iqr",
+        "swir2_iqr",
+        "lst_iqr"
+      ],
+      "stats_used": [
+        "iqr",
+        "median",
+        "p10",
+        "p25",
+        "p75",
+        "std"
+      ],
+      "n_cycles": 516,
+      "n_train": 447,
+      "n_dev": 69,
+      "tau": 19.842100734393856,
+      "far_target": 0.05,
+      "far_achieved": 0.043478260869565216,
+      "persistence_k": 2,
+      "dev_alarm_rate": 0.043478260869565216,
+      "alarm_concentration_all": {
+        "n_alarms": 14,
+        "n_fields_alarmed": 13,
+        "share_top_field": 0.14285714285714285
+      },
+      "training": "none (rule-based: B1PhaseZCausal on the arm's channel block)",
+      "wall_time_s": 0.51,
+      "labels": {
+        "basis": "locally anchored (frozen pooled phenophase constants)"
+      }
+    }
+  ],
+  "self_check": null,
+  "created": "2026-11-18T20:08:11"
+}

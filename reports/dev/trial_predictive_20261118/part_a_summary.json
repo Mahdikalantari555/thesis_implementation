@@ -1,0 +1,1463 @@
+{
+  "type": "trial_part_a_natural",
+  "created": "2026-11-18 20:19:27",
+  "wall_time_s": 7.4,
+  "gate": "cycle-FAR within the 5% budget on clean evaluation cycles; no alarm concentration in a handful of fields (top-2 flag share < 0.5 when any flags exist)",
+  "ladder_rung": "L2",
+  "claim_noun": "synthetic anomaly",
+  "data_source": "real490 (masked rebuild from stats.zarr)",
+  "splits_locked_sha256": "9aa5eb111b31e73ba1ab30ebed52d7e9ef22c7e9e1de7cbd799e99ccf22e8565",
+  "eval_subset_sha256": "6186edf8a06f82d3",
+  "git_sha": "023ccf6f",
+  "device": "cpu",
+  "date_range": {
+    "first": "2021-03-03",
+    "last": "2024-12-24"
+  },
+  "smoke": false,
+  "notes": "",
+  "per_arm": {
+    "b1:2026": {
+      "model": "b1",
+      "run_id": "b1_20261114",
+      "seed": 2026,
+      "tau": 9.152414351659438,
+      "k": 2,
+      "calibration_source": "reports\\dev\\b1_20261114\\metrics_b1_sev_recon_only.json",
+      "n_eval_cycles": 34,
+      "cycle_far_clean_eval": 0.0,
+      "far_budget": 0.05,
+      "cycle_far_within_budget": true,
+      "event_far_clean_eval": {
+        "event_far": 0.0012626262626262627,
+        "n_events": 1,
+        "n_false_events": 1,
+        "n_scored_bins": 792,
+        "gap_bins": 2
+      },
+      "field_distribution": {
+        "per_field": {
+          "13": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.1388093472312079,
+            "iqr_max_over_tau": [
+              0.1388093472312079,
+              0.1388093472312079
+            ],
+            "max_over_tau": 0.1388093472312079
+          },
+          "14": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.16263641278300564,
+            "iqr_max_over_tau": [
+              0.16263641278300564,
+              0.16263641278300564
+            ],
+            "max_over_tau": 0.16263641278300564
+          },
+          "18": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.2235632044619356,
+            "iqr_max_over_tau": [
+              0.2235632044619356,
+              0.2235632044619356
+            ],
+            "max_over_tau": 0.2235632044619356
+          },
+          "19": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.5303029823475013,
+            "iqr_max_over_tau": [
+              0.5303029823475013,
+              0.5303029823475013
+            ],
+            "max_over_tau": 0.5303029823475013
+          },
+          "25": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.08509808878251938,
+            "iqr_max_over_tau": [
+              0.08509808878251938,
+              0.08509808878251938
+            ],
+            "max_over_tau": 0.08509808878251938
+          },
+          "27": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.10290854375782627,
+            "iqr_max_over_tau": [
+              0.10202538394118439,
+              0.10379170357446815
+            ],
+            "max_over_tau": 0.10467486339111003
+          },
+          "58": {
+            "n_cycles": 4,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.18165015944654628,
+            "iqr_max_over_tau": [
+              0.12149796727212128,
+              0.23718803120259296
+            ],
+            "max_over_tau": 0.2596058201795337
+          },
+          "59": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.1319085092791212,
+            "iqr_max_over_tau": [
+              0.1319085092791212,
+              0.1319085092791212
+            ],
+            "max_over_tau": 0.1319085092791212
+          },
+          "60": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.39442602501101737,
+            "iqr_max_over_tau": [
+              0.39442602501101737,
+              0.39442602501101737
+            ],
+            "max_over_tau": 0.39442602501101737
+          },
+          "61": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.23556925220228997,
+            "iqr_max_over_tau": [
+              0.23556925220228997,
+              0.23556925220228997
+            ],
+            "max_over_tau": 0.23556925220228997
+          },
+          "62": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.10562516594707105,
+            "iqr_max_over_tau": [
+              0.10562516594707105,
+              0.10562516594707105
+            ],
+            "max_over_tau": 0.10562516594707105
+          },
+          "63": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 1,
+            "median_max_over_tau": 0.7559141657695042,
+            "iqr_max_over_tau": [
+              0.5654286045617585,
+              0.9463997269772499
+            ],
+            "max_over_tau": 1.1368852881849958
+          },
+          "65": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.9452916397281508,
+            "iqr_max_over_tau": [
+              0.9452916397281508,
+              0.9452916397281508
+            ],
+            "max_over_tau": 0.9452916397281508
+          },
+          "66": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.11775139909699261,
+            "iqr_max_over_tau": [
+              0.11775139909699261,
+              0.11775139909699261
+            ],
+            "max_over_tau": 0.11775139909699261
+          },
+          "69": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.29286996864600334,
+            "iqr_max_over_tau": [
+              0.20968741196469842,
+              0.3760525253273083
+            ],
+            "max_over_tau": 0.45923508200861324
+          },
+          "70": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.33970889766926154,
+            "iqr_max_over_tau": [
+              0.33970889766926154,
+              0.33970889766926154
+            ],
+            "max_over_tau": 0.33970889766926154
+          },
+          "71": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.6752862734787537,
+            "iqr_max_over_tau": [
+              0.6752862734787537,
+              0.6752862734787537
+            ],
+            "max_over_tau": 0.6752862734787537
+          },
+          "105": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.7152443060084845,
+            "iqr_max_over_tau": [
+              0.6888034551190712,
+              0.741685156897898
+            ],
+            "max_over_tau": 0.7681260077873115
+          },
+          "106": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.2295077911943465,
+            "iqr_max_over_tau": [
+              0.2295077911943465,
+              0.2295077911943465
+            ],
+            "max_over_tau": 0.2295077911943465
+          },
+          "107": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.18654625383191892,
+            "iqr_max_over_tau": [
+              0.13434208301575262,
+              0.23875042464808519
+            ],
+            "max_over_tau": 0.29095459546425145
+          },
+          "109": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.5942159461888737,
+            "iqr_max_over_tau": [
+              0.5942159461888737,
+              0.5942159461888737
+            ],
+            "max_over_tau": 0.5942159461888737
+          },
+          "110": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.11936596744507172,
+            "iqr_max_over_tau": [
+              0.11936596744507172,
+              0.11936596744507172
+            ],
+            "max_over_tau": 0.11936596744507172
+          },
+          "112": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.15741880063931857,
+            "iqr_max_over_tau": [
+              0.15741880063931857,
+              0.15741880063931857
+            ],
+            "max_over_tau": 0.15741880063931857
+          },
+          "114": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.12470518904152417,
+            "iqr_max_over_tau": [
+              0.1071657540993063,
+              0.14224462398374202
+            ],
+            "max_over_tau": 0.15978405892595987
+          },
+          "115": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.11653725617564033,
+            "iqr_max_over_tau": [
+              0.11653725617564033,
+              0.11653725617564033
+            ],
+            "max_over_tau": 0.11653725617564033
+          }
+        },
+        "n_fields": 25,
+        "n_flagged_cycles_total": 1,
+        "top2_field_flag_share": 1.0,
+        "fields_with_flags": 1
+      },
+      "temporal_stability": {
+        "n_cycles_scored": 34,
+        "cv_within_cycle_median": 1.0652006919317962,
+        "above_tau_bins_per_cycle_median": 0.0,
+        "above_tau_bins_per_cycle_max": 1,
+        "median_rel_noise_over_tau": 0.021539653049382358
+      },
+      "determinism_recompute_mismatches": 0,
+      "gate_no_concentration": false,
+      "wall_time_s": 1.0
+    },
+    "gru_ae:2026": {
+      "model": "gru_ae",
+      "run_id": "gru_ae_20261114",
+      "seed": 2026,
+      "tau": 11.683615214124151,
+      "k": 1,
+      "calibration_source": "reports\\dev\\gru_ae_20261114\\metrics_gru_ae_sev_recon_only.json",
+      "n_eval_cycles": 34,
+      "cycle_far_clean_eval": 0.0,
+      "far_budget": 0.05,
+      "cycle_far_within_budget": true,
+      "event_far_clean_eval": {
+        "event_far": 0.0,
+        "n_events": 0,
+        "n_false_events": 0,
+        "n_scored_bins": 792,
+        "gap_bins": 2
+      },
+      "field_distribution": {
+        "per_field": {
+          "13": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.06595620597952614,
+            "iqr_max_over_tau": [
+              0.06595620597952614,
+              0.06595620597952614
+            ],
+            "max_over_tau": 0.06595620597952614
+          },
+          "14": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.0708681795136251,
+            "iqr_max_over_tau": [
+              0.0708681795136251,
+              0.0708681795136251
+            ],
+            "max_over_tau": 0.0708681795136251
+          },
+          "18": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.4084819409948911,
+            "iqr_max_over_tau": [
+              0.4084819409948911,
+              0.4084819409948911
+            ],
+            "max_over_tau": 0.4084819409948911
+          },
+          "19": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.531394257751449,
+            "iqr_max_over_tau": [
+              0.531394257751449,
+              0.531394257751449
+            ],
+            "max_over_tau": 0.531394257751449
+          },
+          "25": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.14127568187764805,
+            "iqr_max_over_tau": [
+              0.14127568187764805,
+              0.14127568187764805
+            ],
+            "max_over_tau": 0.14127568187764805
+          },
+          "27": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.17539767320508168,
+            "iqr_max_over_tau": [
+              0.17526163335027437,
+              0.175533713059889
+            ],
+            "max_over_tau": 0.1756697529146963
+          },
+          "58": {
+            "n_cycles": 4,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.1408056179312869,
+            "iqr_max_over_tau": [
+              0.10208118922373395,
+              0.17725304462783997
+            ],
+            "max_over_tau": 0.19873689354684607
+          },
+          "59": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.17534708719277808,
+            "iqr_max_over_tau": [
+              0.17534708719277808,
+              0.17534708719277808
+            ],
+            "max_over_tau": 0.17534708719277808
+          },
+          "60": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.12683172576590682,
+            "iqr_max_over_tau": [
+              0.12683172576590682,
+              0.12683172576590682
+            ],
+            "max_over_tau": 0.12683172576590682
+          },
+          "61": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.3760452116542592,
+            "iqr_max_over_tau": [
+              0.3760452116542592,
+              0.3760452116542592
+            ],
+            "max_over_tau": 0.3760452116542592
+          },
+          "62": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.0868544638507865,
+            "iqr_max_over_tau": [
+              0.0868544638507865,
+              0.0868544638507865
+            ],
+            "max_over_tau": 0.0868544638507865
+          },
+          "63": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.3746953112308156,
+            "iqr_max_over_tau": [
+              0.3005654208576011,
+              0.44882520160403017
+            ],
+            "max_over_tau": 0.5229550919772447
+          },
+          "65": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.41221751150171176,
+            "iqr_max_over_tau": [
+              0.41221751150171176,
+              0.41221751150171176
+            ],
+            "max_over_tau": 0.41221751150171176
+          },
+          "66": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.2197841535398473,
+            "iqr_max_over_tau": [
+              0.2197841535398473,
+              0.2197841535398473
+            ],
+            "max_over_tau": 0.2197841535398473
+          },
+          "69": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.13621611417461169,
+            "iqr_max_over_tau": [
+              0.12861552606055615,
+              0.14381670228866722
+            ],
+            "max_over_tau": 0.15141729040272273
+          },
+          "70": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.825337477613857,
+            "iqr_max_over_tau": [
+              0.825337477613857,
+              0.825337477613857
+            ],
+            "max_over_tau": 0.825337477613857
+          },
+          "71": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.3721860666229241,
+            "iqr_max_over_tau": [
+              0.3721860666229241,
+              0.3721860666229241
+            ],
+            "max_over_tau": 0.3721860666229241
+          },
+          "105": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.18043463309571223,
+            "iqr_max_over_tau": [
+              0.17851156478967287,
+              0.18235770140175162
+            ],
+            "max_over_tau": 0.18428076970779098
+          },
+          "106": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.12961330198521656,
+            "iqr_max_over_tau": [
+              0.12961330198521656,
+              0.12961330198521656
+            ],
+            "max_over_tau": 0.12961330198521656
+          },
+          "107": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.12067642399158918,
+            "iqr_max_over_tau": [
+              0.09130507663632048,
+              0.15004777134685787
+            ],
+            "max_over_tau": 0.17941911870212657
+          },
+          "109": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.18777545625076408,
+            "iqr_max_over_tau": [
+              0.18777545625076408,
+              0.18777545625076408
+            ],
+            "max_over_tau": 0.18777545625076408
+          },
+          "110": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.1958137570092815,
+            "iqr_max_over_tau": [
+              0.1958137570092815,
+              0.1958137570092815
+            ],
+            "max_over_tau": 0.1958137570092815
+          },
+          "112": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.07959784640325392,
+            "iqr_max_over_tau": [
+              0.07959784640325392,
+              0.07959784640325392
+            ],
+            "max_over_tau": 0.07959784640325392
+          },
+          "114": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.11323104670506176,
+            "iqr_max_over_tau": [
+              0.1053979540940227,
+              0.12106413931610083
+            ],
+            "max_over_tau": 0.1288972319271399
+          },
+          "115": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.09525665125654545,
+            "iqr_max_over_tau": [
+              0.09525665125654545,
+              0.09525665125654545
+            ],
+            "max_over_tau": 0.09525665125654545
+          }
+        },
+        "n_fields": 25,
+        "n_flagged_cycles_total": 0,
+        "top2_field_flag_share": NaN,
+        "fields_with_flags": 0
+      },
+      "temporal_stability": {
+        "n_cycles_scored": 34,
+        "cv_within_cycle_median": 1.2091127967966295,
+        "above_tau_bins_per_cycle_median": 0.0,
+        "above_tau_bins_per_cycle_max": 0,
+        "median_rel_noise_over_tau": 0.01370662719963933
+      },
+      "determinism_recompute_mismatches": 0,
+      "gate_no_concentration": true,
+      "wall_time_s": 2.5
+    },
+    "gru_pred:13": {
+      "model": "gru_pred",
+      "run_id": "gru_pred_20261118",
+      "seed": 13,
+      "tau": 11.740093831127759,
+      "k": 1,
+      "calibration_source": "reports\\dev\\gru_pred_20261118\\metrics_gru_pred_sev_recon_only.json",
+      "n_eval_cycles": 34,
+      "cycle_far_clean_eval": 0.029411764705882353,
+      "far_budget": 0.05,
+      "cycle_far_within_budget": true,
+      "event_far_clean_eval": {
+        "event_far": 0.0012626262626262627,
+        "n_events": 1,
+        "n_false_events": 1,
+        "n_scored_bins": 792,
+        "gap_bins": 2
+      },
+      "field_distribution": {
+        "per_field": {
+          "13": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.0892084444776809,
+            "iqr_max_over_tau": [
+              0.0892084444776809,
+              0.0892084444776809
+            ],
+            "max_over_tau": 0.0892084444776809
+          },
+          "14": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.09454645219579216,
+            "iqr_max_over_tau": [
+              0.09454645219579216,
+              0.09454645219579216
+            ],
+            "max_over_tau": 0.09454645219579216
+          },
+          "18": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.29897263098549665,
+            "iqr_max_over_tau": [
+              0.29897263098549665,
+              0.29897263098549665
+            ],
+            "max_over_tau": 0.29897263098549665
+          },
+          "19": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.5117956562129402,
+            "iqr_max_over_tau": [
+              0.5117956562129402,
+              0.5117956562129402
+            ],
+            "max_over_tau": 0.5117956562129402
+          },
+          "25": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.0914317657382691,
+            "iqr_max_over_tau": [
+              0.0914317657382691,
+              0.0914317657382691
+            ],
+            "max_over_tau": 0.0914317657382691
+          },
+          "27": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.11794142640006025,
+            "iqr_max_over_tau": [
+              0.09941609381659698,
+              0.1364667589835235
+            ],
+            "max_over_tau": 0.1549920915669868
+          },
+          "58": {
+            "n_cycles": 4,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.1210130290978731,
+            "iqr_max_over_tau": [
+              0.10380116082414294,
+              0.15598784655365258
+            ],
+            "max_over_tau": 0.224674603552109
+          },
+          "59": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.23374184142724835,
+            "iqr_max_over_tau": [
+              0.23374184142724835,
+              0.23374184142724835
+            ],
+            "max_over_tau": 0.23374184142724835
+          },
+          "60": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.1321967727721707,
+            "iqr_max_over_tau": [
+              0.1321967727721707,
+              0.1321967727721707
+            ],
+            "max_over_tau": 0.1321967727721707
+          },
+          "61": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.32135664684377696,
+            "iqr_max_over_tau": [
+              0.32135664684377696,
+              0.32135664684377696
+            ],
+            "max_over_tau": 0.32135664684377696
+          },
+          "62": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.09295273422925307,
+            "iqr_max_over_tau": [
+              0.09295273422925307,
+              0.09295273422925307
+            ],
+            "max_over_tau": 0.09295273422925307
+          },
+          "63": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.28347321906097867,
+            "iqr_max_over_tau": [
+              0.2345298979363866,
+              0.33241654018557076
+            ],
+            "max_over_tau": 0.38135986131016286
+          },
+          "65": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.6031122847651555,
+            "iqr_max_over_tau": [
+              0.6031122847651555,
+              0.6031122847651555
+            ],
+            "max_over_tau": 0.6031122847651555
+          },
+          "66": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.148671271479692,
+            "iqr_max_over_tau": [
+              0.148671271479692,
+              0.148671271479692
+            ],
+            "max_over_tau": 0.148671271479692
+          },
+          "69": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.13697392937538033,
+            "iqr_max_over_tau": [
+              0.12260509552067056,
+              0.15134276323009008
+            ],
+            "max_over_tau": 0.16571159708479982
+          },
+          "70": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 1,
+            "median_max_over_tau": 1.4452770265827235,
+            "iqr_max_over_tau": [
+              1.4452770265827235,
+              1.4452770265827235
+            ],
+            "max_over_tau": 1.4452770265827235
+          },
+          "71": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.20447573122888105,
+            "iqr_max_over_tau": [
+              0.20447573122888105,
+              0.20447573122888105
+            ],
+            "max_over_tau": 0.20447573122888105
+          },
+          "105": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.13094337159493802,
+            "iqr_max_over_tau": [
+              0.13092051519677272,
+              0.1309662279931033
+            ],
+            "max_over_tau": 0.13098908439126858
+          },
+          "106": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.11727928794976508,
+            "iqr_max_over_tau": [
+              0.11727928794976508,
+              0.11727928794976508
+            ],
+            "max_over_tau": 0.11727928794976508
+          },
+          "107": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.10030505379382351,
+            "iqr_max_over_tau": [
+              0.08178165023561085,
+              0.11882845735203619
+            ],
+            "max_over_tau": 0.13735186091024887
+          },
+          "109": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.2067036810610807,
+            "iqr_max_over_tau": [
+              0.2067036810610807,
+              0.2067036810610807
+            ],
+            "max_over_tau": 0.2067036810610807
+          },
+          "110": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.12213484715250664,
+            "iqr_max_over_tau": [
+              0.12213484715250664,
+              0.12213484715250664
+            ],
+            "max_over_tau": 0.12213484715250664
+          },
+          "112": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.057047943687591404,
+            "iqr_max_over_tau": [
+              0.057047943687591404,
+              0.057047943687591404
+            ],
+            "max_over_tau": 0.057047943687591404
+          },
+          "114": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.11985927233023924,
+            "iqr_max_over_tau": [
+              0.1066233255222129,
+              0.13309521913826558
+            ],
+            "max_over_tau": 0.14633116594629192
+          },
+          "115": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.08990620986337344,
+            "iqr_max_over_tau": [
+              0.08990620986337344,
+              0.08990620986337344
+            ],
+            "max_over_tau": 0.08990620986337344
+          }
+        },
+        "n_fields": 25,
+        "n_flagged_cycles_total": 1,
+        "top2_field_flag_share": 1.0,
+        "fields_with_flags": 1
+      },
+      "temporal_stability": {
+        "n_cycles_scored": 34,
+        "cv_within_cycle_median": 0.9890206957801086,
+        "above_tau_bins_per_cycle_median": 0.0,
+        "above_tau_bins_per_cycle_max": 1,
+        "median_rel_noise_over_tau": 0.013825102462573081
+      },
+      "determinism_recompute_mismatches": 0,
+      "gate_no_concentration": false,
+      "wall_time_s": 1.3
+    },
+    "gru_pred:42": {
+      "model": "gru_pred",
+      "run_id": "gru_pred_20261118",
+      "seed": 42,
+      "tau": 12.520710922858969,
+      "k": 1,
+      "calibration_source": "reports\\dev\\gru_pred_20261118\\metrics_gru_pred_sev_recon_only.json",
+      "n_eval_cycles": 34,
+      "cycle_far_clean_eval": 0.0,
+      "far_budget": 0.05,
+      "cycle_far_within_budget": true,
+      "event_far_clean_eval": {
+        "event_far": 0.0,
+        "n_events": 0,
+        "n_false_events": 0,
+        "n_scored_bins": 792,
+        "gap_bins": 2
+      },
+      "field_distribution": {
+        "per_field": {
+          "13": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.06685751686846658,
+            "iqr_max_over_tau": [
+              0.06685751686846658,
+              0.06685751686846658
+            ],
+            "max_over_tau": 0.06685751686846658
+          },
+          "14": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.08931553958429281,
+            "iqr_max_over_tau": [
+              0.08931553958429281,
+              0.08931553958429281
+            ],
+            "max_over_tau": 0.08931553958429281
+          },
+          "18": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.33440098865005224,
+            "iqr_max_over_tau": [
+              0.33440098865005224,
+              0.33440098865005224
+            ],
+            "max_over_tau": 0.33440098865005224
+          },
+          "19": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.43227808050336974,
+            "iqr_max_over_tau": [
+              0.43227808050336974,
+              0.43227808050336974
+            ],
+            "max_over_tau": 0.43227808050336974
+          },
+          "25": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.08924005678760077,
+            "iqr_max_over_tau": [
+              0.08924005678760077,
+              0.08924005678760077
+            ],
+            "max_over_tau": 0.08924005678760077
+          },
+          "27": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.11807332787927152,
+            "iqr_max_over_tau": [
+              0.09713329346377199,
+              0.13901336229477107
+            ],
+            "max_over_tau": 0.1599533967102706
+          },
+          "58": {
+            "n_cycles": 4,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.13218582128043083,
+            "iqr_max_over_tau": [
+              0.09923767928031044,
+              0.1650031570625053
+            ],
+            "max_over_tau": 0.18984536014722947
+          },
+          "59": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.20959928659542076,
+            "iqr_max_over_tau": [
+              0.20959928659542076,
+              0.20959928659542076
+            ],
+            "max_over_tau": 0.20959928659542076
+          },
+          "60": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.12605095465315314,
+            "iqr_max_over_tau": [
+              0.12605095465315314,
+              0.12605095465315314
+            ],
+            "max_over_tau": 0.12605095465315314
+          },
+          "61": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.3522212609496178,
+            "iqr_max_over_tau": [
+              0.3522212609496178,
+              0.3522212609496178
+            ],
+            "max_over_tau": 0.3522212609496178
+          },
+          "62": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.08542120856242631,
+            "iqr_max_over_tau": [
+              0.08542120856242631,
+              0.08542120856242631
+            ],
+            "max_over_tau": 0.08542120856242631
+          },
+          "63": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.2679355061013843,
+            "iqr_max_over_tau": [
+              0.22399825062540218,
+              0.31187276157736643
+            ],
+            "max_over_tau": 0.3558100170533486
+          },
+          "65": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.48188997550829976,
+            "iqr_max_over_tau": [
+              0.48188997550829976,
+              0.48188997550829976
+            ],
+            "max_over_tau": 0.48188997550829976
+          },
+          "66": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.1407526162728547,
+            "iqr_max_over_tau": [
+              0.1407526162728547,
+              0.1407526162728547
+            ],
+            "max_over_tau": 0.1407526162728547
+          },
+          "69": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.12331060993379629,
+            "iqr_max_over_tau": [
+              0.11657123996282048,
+              0.1300499799047721
+            ],
+            "max_over_tau": 0.1367893498757479
+          },
+          "70": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.6545379864925398,
+            "iqr_max_over_tau": [
+              0.6545379864925398,
+              0.6545379864925398
+            ],
+            "max_over_tau": 0.6545379864925398
+          },
+          "71": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.14598318249957057,
+            "iqr_max_over_tau": [
+              0.14598318249957057,
+              0.14598318249957057
+            ],
+            "max_over_tau": 0.14598318249957057
+          },
+          "105": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.11775257171442927,
+            "iqr_max_over_tau": [
+              0.11319237644093,
+              0.12231276698792852
+            ],
+            "max_over_tau": 0.12687296226142777
+          },
+          "106": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.14452568444884625,
+            "iqr_max_over_tau": [
+              0.14452568444884625,
+              0.14452568444884625
+            ],
+            "max_over_tau": 0.14452568444884625
+          },
+          "107": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.09147050952735727,
+            "iqr_max_over_tau": [
+              0.0730303636666572,
+              0.10991065538805736
+            ],
+            "max_over_tau": 0.12835080124875745
+          },
+          "109": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.2568923712244869,
+            "iqr_max_over_tau": [
+              0.2568923712244869,
+              0.2568923712244869
+            ],
+            "max_over_tau": 0.2568923712244869
+          },
+          "110": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.1647034039647175,
+            "iqr_max_over_tau": [
+              0.1647034039647175,
+              0.1647034039647175
+            ],
+            "max_over_tau": 0.1647034039647175
+          },
+          "112": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.12211420656537658,
+            "iqr_max_over_tau": [
+              0.12211420656537658,
+              0.12211420656537658
+            ],
+            "max_over_tau": 0.12211420656537658
+          },
+          "114": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.10367083309062157,
+            "iqr_max_over_tau": [
+              0.0996718773102006,
+              0.10766978887104255
+            ],
+            "max_over_tau": 0.11166874465146352
+          },
+          "115": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.09588886645237168,
+            "iqr_max_over_tau": [
+              0.09588886645237168,
+              0.09588886645237168
+            ],
+            "max_over_tau": 0.09588886645237168
+          }
+        },
+        "n_fields": 25,
+        "n_flagged_cycles_total": 0,
+        "top2_field_flag_share": NaN,
+        "fields_with_flags": 0
+      },
+      "temporal_stability": {
+        "n_cycles_scored": 34,
+        "cv_within_cycle_median": 1.1430617118330777,
+        "above_tau_bins_per_cycle_median": 0.0,
+        "above_tau_bins_per_cycle_max": 0,
+        "median_rel_noise_over_tau": 0.012171262787580035
+      },
+      "determinism_recompute_mismatches": 0,
+      "gate_no_concentration": true,
+      "wall_time_s": 1.2
+    },
+    "gru_pred:2026": {
+      "model": "gru_pred",
+      "run_id": "gru_pred_20261118",
+      "seed": 2026,
+      "tau": 11.270706572020186,
+      "k": 1,
+      "calibration_source": "reports\\dev\\gru_pred_20261118\\metrics_gru_pred_sev_recon_only.json",
+      "n_eval_cycles": 34,
+      "cycle_far_clean_eval": 0.029411764705882353,
+      "far_budget": 0.05,
+      "cycle_far_within_budget": true,
+      "event_far_clean_eval": {
+        "event_far": 0.0012626262626262627,
+        "n_events": 1,
+        "n_false_events": 1,
+        "n_scored_bins": 792,
+        "gap_bins": 2
+      },
+      "field_distribution": {
+        "per_field": {
+          "13": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.10194416516566415,
+            "iqr_max_over_tau": [
+              0.10194416516566415,
+              0.10194416516566415
+            ],
+            "max_over_tau": 0.10194416516566415
+          },
+          "14": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.08951468484810836,
+            "iqr_max_over_tau": [
+              0.08951468484810836,
+              0.08951468484810836
+            ],
+            "max_over_tau": 0.08951468484810836
+          },
+          "18": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.5832600032095537,
+            "iqr_max_over_tau": [
+              0.5832600032095537,
+              0.5832600032095537
+            ],
+            "max_over_tau": 0.5832600032095537
+          },
+          "19": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.4667201781646506,
+            "iqr_max_over_tau": [
+              0.4667201781646506,
+              0.4667201781646506
+            ],
+            "max_over_tau": 0.4667201781646506
+          },
+          "25": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.1107351459779518,
+            "iqr_max_over_tau": [
+              0.1107351459779518,
+              0.1107351459779518
+            ],
+            "max_over_tau": 0.1107351459779518
+          },
+          "27": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.11647787548915264,
+            "iqr_max_over_tau": [
+              0.10500532857533212,
+              0.1279504224029732
+            ],
+            "max_over_tau": 0.1394229693167937
+          },
+          "58": {
+            "n_cycles": 4,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.12322247595180938,
+            "iqr_max_over_tau": [
+              0.08216758191608632,
+              0.1869092739523545
+            ],
+            "max_over_tau": 0.2834866015607785
+          },
+          "59": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.24222276624512706,
+            "iqr_max_over_tau": [
+              0.24222276624512706,
+              0.24222276624512706
+            ],
+            "max_over_tau": 0.24222276624512706
+          },
+          "60": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.1206721467425835,
+            "iqr_max_over_tau": [
+              0.1206721467425835,
+              0.1206721467425835
+            ],
+            "max_over_tau": 0.1206721467425835
+          },
+          "61": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.2943441940644237,
+            "iqr_max_over_tau": [
+              0.2943441940644237,
+              0.2943441940644237
+            ],
+            "max_over_tau": 0.2943441940644237
+          },
+          "62": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.09834360720401203,
+            "iqr_max_over_tau": [
+              0.09834360720401203,
+              0.09834360720401203
+            ],
+            "max_over_tau": 0.09834360720401203
+          },
+          "63": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.3235712486753384,
+            "iqr_max_over_tau": [
+              0.27673230043104474,
+              0.37041019691963206
+            ],
+            "max_over_tau": 0.41724914516392575
+          },
+          "65": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.5681563288224594,
+            "iqr_max_over_tau": [
+              0.5681563288224594,
+              0.5681563288224594
+            ],
+            "max_over_tau": 0.5681563288224594
+          },
+          "66": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.14497382283240742,
+            "iqr_max_over_tau": [
+              0.14497382283240742,
+              0.14497382283240742
+            ],
+            "max_over_tau": 0.14497382283240742
+          },
+          "69": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.12806742938361407,
+            "iqr_max_over_tau": [
+              0.1074652833793204,
+              0.14866957538790776
+            ],
+            "max_over_tau": 0.16927172139220142
+          },
+          "70": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 1,
+            "median_max_over_tau": 1.6144413158399347,
+            "iqr_max_over_tau": [
+              1.6144413158399347,
+              1.6144413158399347
+            ],
+            "max_over_tau": 1.6144413158399347
+          },
+          "71": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.50260102057235,
+            "iqr_max_over_tau": [
+              0.50260102057235,
+              0.50260102057235
+            ],
+            "max_over_tau": 0.50260102057235
+          },
+          "105": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.18233239663860196,
+            "iqr_max_over_tau": [
+              0.17222044895924235,
+              0.19244434431796156
+            ],
+            "max_over_tau": 0.20255629199732117
+          },
+          "106": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.10847455361835857,
+            "iqr_max_over_tau": [
+              0.10847455361835857,
+              0.10847455361835857
+            ],
+            "max_over_tau": 0.10847455361835857
+          },
+          "107": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.10435427178719187,
+            "iqr_max_over_tau": [
+              0.0862860828156951,
+              0.12242246075868864
+            ],
+            "max_over_tau": 0.1404906497301854
+          },
+          "109": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.2642980908667694,
+            "iqr_max_over_tau": [
+              0.2642980908667694,
+              0.2642980908667694
+            ],
+            "max_over_tau": 0.2642980908667694
+          },
+          "110": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.15827149077418606,
+            "iqr_max_over_tau": [
+              0.15827149077418606,
+              0.15827149077418606
+            ],
+            "max_over_tau": 0.15827149077418606
+          },
+          "112": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.08075761341680923,
+            "iqr_max_over_tau": [
+              0.08075761341680923,
+              0.08075761341680923
+            ],
+            "max_over_tau": 0.08075761341680923
+          },
+          "114": {
+            "n_cycles": 2,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.10570251983093079,
+            "iqr_max_over_tau": [
+              0.09724664427497012,
+              0.11415839538689145
+            ],
+            "max_over_tau": 0.12261427094285211
+          },
+          "115": {
+            "n_cycles": 1,
+            "n_flagged_cycles": 0,
+            "median_max_over_tau": 0.10699520230524698,
+            "iqr_max_over_tau": [
+              0.10699520230524698,
+              0.10699520230524698
+            ],
+            "max_over_tau": 0.10699520230524698
+          }
+        },
+        "n_fields": 25,
+        "n_flagged_cycles_total": 1,
+        "top2_field_flag_share": 1.0,
+        "fields_with_flags": 1
+      },
+      "temporal_stability": {
+        "n_cycles_scored": 34,
+        "cv_within_cycle_median": 0.9522894132597409,
+        "above_tau_bins_per_cycle_median": 0.0,
+        "above_tau_bins_per_cycle_max": 2,
+        "median_rel_noise_over_tau": 0.01520110483034511
+      },
+      "determinism_recompute_mismatches": 0,
+      "gate_no_concentration": false,
+      "wall_time_s": 1.3
+    }
+  },
+  "outputs": {
+    "b1:2026": "reports\\dev\\trial_predictive_20261118\\part_a_b1_seed2026.json",
+    "gru_ae:2026": "reports\\dev\\trial_predictive_20261118\\part_a_gru_ae_seed2026.json",
+    "gru_pred:13": "reports\\dev\\trial_predictive_20261118\\part_a_gru_pred_seed13.json",
+    "gru_pred:42": "reports\\dev\\trial_predictive_20261118\\part_a_gru_pred_seed42.json",
+    "gru_pred:2026": "reports\\dev\\trial_predictive_20261118\\part_a_gru_pred_seed2026.json"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "run_id": "gru_ae_s13",
+  "created": "2026-11-18 19:21:56",
+  "git_sha": "c2486fd6",
+  "splits_locked_sha256": "9aa5eb111b31e73ba1ab30ebed52d7e9ef22c7e9e1de7cbd799e99ccf22e8565",
+  "config": {
+    "model": "gru_ae",
+    "epochs": 1,
+    "batch_size": 32,
+    "lr": 0.001,
+    "mask_ratio": 0.3,
+    "use_doy": true,
+    "seed": 13,
+    "smoke": true
+  },
+  "config_hash": "8f7cbf649579",
+  "seeds": [
+    13
+  ],
+  "device": "cpu",
+  "wall_time_s": 2.0,
+  "n_train_cycles": 16,
+  "n_dev_cycles": 4,
+  "determinism_flags": {
+    "torch_num_threads": 14,
+    "cudnn_deterministic": false,
+    "cudnn_benchmark": false,
+    "deterministic_algorithms": true
+  },
+  "parameter_count": 174008,
+  "data_source": "real490 (masked rebuild from stats.zarr)"
+}

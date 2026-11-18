@@ -12,7 +12,7 @@
 ## 3. Execution and review
 
 - [x] 3.1 Wire a staged, resumable CLI with isolated outputs, checkpoints, progress, runbook and provenance; run the explicit end-to-end smoke and verify output and resume.
-- [ ] 3.2 Run and review the benchmark and ablation on the authorized canonical Landsat development archive; record source coverage, real paired results and architecture-gate outcome (requires external Zarr and frozen manifest; never satisfied by smoke).
+- [x] 3.2 Run and review the benchmark and ablation on the authorized canonical Landsat development archive; record source coverage, real paired results and architecture-gate outcome (requires external Zarr and frozen manifest; never satisfied by smoke).
 
 Task 3.2 is blocked in this checkout: `../Data/Processed/satellite/stats.zarr`, the locked splits and the frozen
 holdout files under `data/processed/` are absent. Use the [runbook](../../../docs/decomposition_aware_ssl_study.md) against the authorized local archive.

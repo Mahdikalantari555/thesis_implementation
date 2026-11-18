@@ -1,0 +1,435 @@
+{
+  "type": "trial_part_d_indicators",
+  "created": "2026-11-18 20:25:36",
+  "wall_time_s": 12.6,
+  "availability": {
+    "gate": "indicators already available under Data/Processed; anything else = absent",
+    "CWSI_ET": {
+      "status": "present_32field_subset",
+      "processed_hits": [
+        "satellite\\stats_current.zarr\\cwsi_et"
+      ],
+      "note": "satellite/stats_current.zarr variable cwsi_et (32 fields \u00d7 539 scene dates) \u2014 the ONLY processed CWSI artifact; matched to (cycle, bin) cells whose 15-day bin window contains a scene date, uncovered cells stay NaN (absent); CWSI_LST has no processed field artifact (METRIC rasters under Data/Metric/products/CWSI_LST only, out of trial scope)"
+    },
+    "CWSI_LST": {
+      "status": "absent",
+      "processed_hits": [],
+      "note": "no processed field stats under Data/Processed (METRIC rasters only)"
+    },
+    "ETa_ETrF": {
+      "status": "absent",
+      "processed_hits": [],
+      "note": "Data/Metric/products/ETaDaily + ETrF rasters exist; no processed field stats under Data/Processed"
+    },
+    "TVDI": {
+      "status": "derived_from_existing_stats",
+      "processed_hits": [],
+      "note": "no stored TVDI artifact; computable from EXISTING per-scene per-field LST/NDVI statistics (design allowance) \u2014 DERIVED proxy, Sandholt-style across-field NDVI\u2013LST feature space per bin; disclosed LST/NDVI dependence"
+    },
+    "ndvi_savi_temporal": {
+      "status": "present",
+      "note": "channels of the natural dev cycles themselves (total model-input dependence, disclosed)"
+    }
+  },
+  "cwsi_et_coverage": {
+    "n_cycles_with_field_coverage": 11,
+    "n_matched_cells": 352,
+    "n_cells_total": 2484,
+    "note": "first scene whose date falls inside each 15-day bin window; fields outside the 32-field subset stay entirely absent"
+  },
+  "dependence_structure": "the model input includes LST and NDVI; CWSI_ET derives from the METRIC energy balance (which consumes LST), and TVDI / the NDVI-deficit proxy are LST- and/or NDVI-derived \u2014 agreement is CORROBORATING evidence for output validity (proxy agreement toward L4), NOT independent ground truth and NOT proof of stress; the noun is 'suspected stress' / 'synthetic anomaly'; no L4 claim is made from correlation alone",
+  "tvdi_envelope": {
+    "min_points": 8,
+    "n_ndvi_bins": 5,
+    "edge_quantile": 0.9,
+    "n_bins_with_envelope": 24,
+    "degenerate_bins": 12
+  },
+  "indicator_definitions": {
+    "cwsi_et_32field_subset": "processed per-field CWSI_ET from stats_current.zarr (32-field subset), matched by 15-day bin windows; high CWSI = more water stress",
+    "tvdi_derived_proxy": "per bin: across-field NDVI\u2013LST feature space of the dev cycles at that bin; dry edge = q90 LST per NDVI quintile, wet edge = q10; TVDI = (LST\u2212wet)/(dry\u2212wet) clipped [0,1]",
+    "ndvi_phase_deficit_mad": "per bin: (across-field median NDVI \u2212 field NDVI) / across-field MAD (\u00d71.4826); positive = deficit vs the phenology phase norm"
+  },
+  "ladder_rung": "L2",
+  "claim_noun": "synthetic anomaly",
+  "data_source": "real490 (masked rebuild from stats.zarr)",
+  "splits_locked_sha256": "9aa5eb111b31e73ba1ab30ebed52d7e9ef22c7e9e1de7cbd799e99ccf22e8565",
+  "eval_subset_sha256": "6186edf8a06f82d3",
+  "git_sha": "74732dd3",
+  "device": "cpu",
+  "date_range": {
+    "first": "2021-03-03",
+    "last": "2024-12-24"
+  },
+  "smoke": false,
+  "notes": "",
+  "per_arm": {
+    "b1:2026": {
+      "model": "b1",
+      "run_id": "b1_20261114",
+      "seed": 2026,
+      "tau": 9.152414351659438,
+      "k": 2,
+      "calibration_source": "reports\\dev\\b1_20261114\\metrics_b1_sev_recon_only.json",
+      "n_dev_cycles": 69,
+      "cycle_far_clean_dev": 0.028985507246376812,
+      "agreement": {
+        "tvdi_derived_proxy": {
+          "indicator_high_cut": 0.8719373884454252,
+          "threshold_quantile": 0.75,
+          "n_flagged_bins_observed": 5,
+          "n_flagged_high": 4,
+          "n_unflagged_bins_observed": 1373,
+          "n_unflagged_high": 341,
+          "high_rate_flagged": 0.8,
+          "high_rate_flagged_wilson95": [
+            0.37553462976252533,
+            0.9637758913675698
+          ],
+          "high_rate_unflagged": 0.24836125273124546,
+          "high_rate_unflagged_wilson95": [
+            0.22623059763144623,
+            0.2718960780485104
+          ],
+          "rate_difference": 0.5516387472687546,
+          "n_flagged_cycles": 0
+        },
+        "ndvi_phase_deficit_mad": {
+          "indicator_high_cut": 0.7046301662921906,
+          "threshold_quantile": 0.75,
+          "n_flagged_bins_observed": 7,
+          "n_flagged_high": 0,
+          "n_unflagged_bins_observed": 1440,
+          "n_unflagged_high": 362,
+          "high_rate_flagged": 0.0,
+          "high_rate_flagged_wilson95": [
+            5.551115123125783e-17,
+            0.35433043506668743
+          ],
+          "high_rate_unflagged": 0.2513888888888889,
+          "high_rate_unflagged_wilson95": [
+            0.22966420139184485,
+            0.27443647695769
+          ],
+          "rate_difference": -0.2513888888888889,
+          "n_flagged_cycles": 0
+        },
+        "cwsi_et_32field_subset": {
+          "indicator_high_cut": 0.4404957517981529,
+          "threshold_quantile": 0.75,
+          "n_flagged_bins_observed": 0,
+          "n_flagged_high": 0,
+          "n_unflagged_bins_observed": 352,
+          "n_unflagged_high": 88,
+          "high_rate_flagged": NaN,
+          "high_rate_flagged_wilson95": [
+            NaN,
+            NaN
+          ],
+          "high_rate_unflagged": 0.25,
+          "high_rate_unflagged_wilson95": [
+            0.20762751764195822,
+            0.2977701935092736
+          ],
+          "rate_difference": NaN,
+          "n_flagged_cycles": 0
+        }
+      }
+    },
+    "gru_ae:2026": {
+      "model": "gru_ae",
+      "run_id": "gru_ae_20261114",
+      "seed": 2026,
+      "tau": 11.683615214124151,
+      "k": 1,
+      "calibration_source": "reports\\dev\\gru_ae_20261114\\metrics_gru_ae_sev_recon_only.json",
+      "n_dev_cycles": 69,
+      "cycle_far_clean_dev": 0.028985507246376812,
+      "agreement": {
+        "tvdi_derived_proxy": {
+          "indicator_high_cut": 0.8719373884454252,
+          "threshold_quantile": 0.75,
+          "n_flagged_bins_observed": 3,
+          "n_flagged_high": 0,
+          "n_unflagged_bins_observed": 1375,
+          "n_unflagged_high": 345,
+          "high_rate_flagged": 0.0,
+          "high_rate_flagged_wilson95": [
+            5.551115123125783e-17,
+            0.5614970317550454
+          ],
+          "high_rate_unflagged": 0.2509090909090909,
+          "high_rate_unflagged_wilson95": [
+            0.22870935844288076,
+            0.27449676027516823
+          ],
+          "rate_difference": -0.2509090909090909,
+          "n_flagged_cycles": 0
+        },
+        "ndvi_phase_deficit_mad": {
+          "indicator_high_cut": 0.7046301662921906,
+          "threshold_quantile": 0.75,
+          "n_flagged_bins_observed": 3,
+          "n_flagged_high": 0,
+          "n_unflagged_bins_observed": 1444,
+          "n_unflagged_high": 362,
+          "high_rate_flagged": 0.0,
+          "high_rate_flagged_wilson95": [
+            5.551115123125783e-17,
+            0.5614970317550454
+          ],
+          "high_rate_unflagged": 0.25069252077562326,
+          "high_rate_unflagged_wilson95": [
+            0.22901935630994286,
+            0.27368862624329926
+          ],
+          "rate_difference": -0.25069252077562326,
+          "n_flagged_cycles": 0
+        },
+        "cwsi_et_32field_subset": {
+          "indicator_high_cut": 0.4404957517981529,
+          "threshold_quantile": 0.75,
+          "n_flagged_bins_observed": 1,
+          "n_flagged_high": 0,
+          "n_unflagged_bins_observed": 351,
+          "n_unflagged_high": 88,
+          "high_rate_flagged": 0.0,
+          "high_rate_flagged_wilson95": [
+            0.0,
+            0.7934506856227626
+          ],
+          "high_rate_unflagged": 0.25071225071225073,
+          "high_rate_unflagged_wilson95": [
+            0.2082338040540209,
+            0.29858819870290687
+          ],
+          "rate_difference": -0.25071225071225073,
+          "n_flagged_cycles": 0
+        }
+      }
+    },
+    "gru_pred:13": {
+      "model": "gru_pred",
+      "run_id": "gru_pred_20261118",
+      "seed": 13,
+      "tau": 11.740093831127759,
+      "k": 1,
+      "calibration_source": "reports\\dev\\gru_pred_20261118\\metrics_gru_pred_sev_recon_only.json",
+      "n_dev_cycles": 69,
+      "cycle_far_clean_dev": 0.028985507246376812,
+      "agreement": {
+        "tvdi_derived_proxy": {
+          "indicator_high_cut": 0.8719373884454252,
+          "threshold_quantile": 0.75,
+          "n_flagged_bins_observed": 2,
+          "n_flagged_high": 0,
+          "n_unflagged_bins_observed": 1376,
+          "n_unflagged_high": 345,
+          "high_rate_flagged": 0.0,
+          "high_rate_flagged_wilson95": [
+            0.0,
+            0.6576197724933469
+          ],
+          "high_rate_unflagged": 0.2507267441860465,
+          "high_rate_unflagged_wilson95": [
+            0.22854083403942002,
+            0.27430060066692513
+          ],
+          "rate_difference": -0.2507267441860465,
+          "n_flagged_cycles": 0
+        },
+        "ndvi_phase_deficit_mad": {
+          "indicator_high_cut": 0.7046301662921906,
+          "threshold_quantile": 0.75,
+          "n_flagged_bins_observed": 2,
+          "n_flagged_high": 0,
+          "n_unflagged_bins_observed": 1445,
+          "n_unflagged_high": 362,
+          "high_rate_flagged": 0.0,
+          "high_rate_flagged_wilson95": [
+            0.0,
+            0.6576197724933469
+          ],
+          "high_rate_unflagged": 0.2505190311418685,
+          "high_rate_unflagged_wilson95": [
+            0.22885871107179215,
+            0.27350229909224016
+          ],
+          "rate_difference": -0.2505190311418685,
+          "n_flagged_cycles": 0
+        },
+        "cwsi_et_32field_subset": {
+          "indicator_high_cut": 0.4404957517981529,
+          "threshold_quantile": 0.75,
+          "n_flagged_bins_observed": 0,
+          "n_flagged_high": 0,
+          "n_unflagged_bins_observed": 352,
+          "n_unflagged_high": 88,
+          "high_rate_flagged": NaN,
+          "high_rate_flagged_wilson95": [
+            NaN,
+            NaN
+          ],
+          "high_rate_unflagged": 0.25,
+          "high_rate_unflagged_wilson95": [
+            0.20762751764195822,
+            0.2977701935092736
+          ],
+          "rate_difference": NaN,
+          "n_flagged_cycles": 0
+        }
+      }
+    },
+    "gru_pred:42": {
+      "model": "gru_pred",
+      "run_id": "gru_pred_20261118",
+      "seed": 42,
+      "tau": 12.520710922858969,
+      "k": 1,
+      "calibration_source": "reports\\dev\\gru_pred_20261118\\metrics_gru_pred_sev_recon_only.json",
+      "n_dev_cycles": 69,
+      "cycle_far_clean_dev": 0.028985507246376812,
+      "agreement": {
+        "tvdi_derived_proxy": {
+          "indicator_high_cut": 0.8719373884454252,
+          "threshold_quantile": 0.75,
+          "n_flagged_bins_observed": 3,
+          "n_flagged_high": 0,
+          "n_unflagged_bins_observed": 1375,
+          "n_unflagged_high": 345,
+          "high_rate_flagged": 0.0,
+          "high_rate_flagged_wilson95": [
+            5.551115123125783e-17,
+            0.5614970317550454
+          ],
+          "high_rate_unflagged": 0.2509090909090909,
+          "high_rate_unflagged_wilson95": [
+            0.22870935844288076,
+            0.27449676027516823
+          ],
+          "rate_difference": -0.2509090909090909,
+          "n_flagged_cycles": 0
+        },
+        "ndvi_phase_deficit_mad": {
+          "indicator_high_cut": 0.7046301662921906,
+          "threshold_quantile": 0.75,
+          "n_flagged_bins_observed": 3,
+          "n_flagged_high": 0,
+          "n_unflagged_bins_observed": 1444,
+          "n_unflagged_high": 362,
+          "high_rate_flagged": 0.0,
+          "high_rate_flagged_wilson95": [
+            5.551115123125783e-17,
+            0.5614970317550454
+          ],
+          "high_rate_unflagged": 0.25069252077562326,
+          "high_rate_unflagged_wilson95": [
+            0.22901935630994286,
+            0.27368862624329926
+          ],
+          "rate_difference": -0.25069252077562326,
+          "n_flagged_cycles": 0
+        },
+        "cwsi_et_32field_subset": {
+          "indicator_high_cut": 0.4404957517981529,
+          "threshold_quantile": 0.75,
+          "n_flagged_bins_observed": 1,
+          "n_flagged_high": 0,
+          "n_unflagged_bins_observed": 351,
+          "n_unflagged_high": 88,
+          "high_rate_flagged": 0.0,
+          "high_rate_flagged_wilson95": [
+            0.0,
+            0.7934506856227626
+          ],
+          "high_rate_unflagged": 0.25071225071225073,
+          "high_rate_unflagged_wilson95": [
+            0.2082338040540209,
+            0.29858819870290687
+          ],
+          "rate_difference": -0.25071225071225073,
+          "n_flagged_cycles": 0
+        }
+      }
+    },
+    "gru_pred:2026": {
+      "model": "gru_pred",
+      "run_id": "gru_pred_20261118",
+      "seed": 2026,
+      "tau": 11.270706572020186,
+      "k": 1,
+      "calibration_source": "reports\\dev\\gru_pred_20261118\\metrics_gru_pred_sev_recon_only.json",
+      "n_dev_cycles": 69,
+      "cycle_far_clean_dev": 0.043478260869565216,
+      "agreement": {
+        "tvdi_derived_proxy": {
+          "indicator_high_cut": 0.8719373884454252,
+          "threshold_quantile": 0.75,
+          "n_flagged_bins_observed": 3,
+          "n_flagged_high": 0,
+          "n_unflagged_bins_observed": 1375,
+          "n_unflagged_high": 345,
+          "high_rate_flagged": 0.0,
+          "high_rate_flagged_wilson95": [
+            5.551115123125783e-17,
+            0.5614970317550454
+          ],
+          "high_rate_unflagged": 0.2509090909090909,
+          "high_rate_unflagged_wilson95": [
+            0.22870935844288076,
+            0.27449676027516823
+          ],
+          "rate_difference": -0.2509090909090909,
+          "n_flagged_cycles": 0
+        },
+        "ndvi_phase_deficit_mad": {
+          "indicator_high_cut": 0.7046301662921906,
+          "threshold_quantile": 0.75,
+          "n_flagged_bins_observed": 4,
+          "n_flagged_high": 0,
+          "n_unflagged_bins_observed": 1443,
+          "n_unflagged_high": 362,
+          "high_rate_flagged": 0.0,
+          "high_rate_flagged_wilson95": [
+            0.0,
+            0.4898908364545973
+          ],
+          "high_rate_unflagged": 0.25086625086625086,
+          "high_rate_unflagged_wilson95": [
+            0.2291802274827688,
+            0.27387520708706337
+          ],
+          "rate_difference": -0.25086625086625086,
+          "n_flagged_cycles": 0
+        },
+        "cwsi_et_32field_subset": {
+          "indicator_high_cut": 0.4404957517981529,
+          "threshold_quantile": 0.75,
+          "n_flagged_bins_observed": 0,
+          "n_flagged_high": 0,
+          "n_unflagged_bins_observed": 352,
+          "n_unflagged_high": 88,
+          "high_rate_flagged": NaN,
+          "high_rate_flagged_wilson95": [
+            NaN,
+            NaN
+          ],
+          "high_rate_unflagged": 0.25,
+          "high_rate_unflagged_wilson95": [
+            0.20762751764195822,
+            0.2977701935092736
+          ],
+          "rate_difference": NaN,
+          "n_flagged_cycles": 0
+        }
+      }
+    }
+  },
+  "outputs": {
+    "b1:2026": "reports\\dev\\trial_predictive_20261118\\part_d_b1_seed2026.json",
+    "gru_ae:2026": "reports\\dev\\trial_predictive_20261118\\part_d_gru_ae_seed2026.json",
+    "gru_pred:13": "reports\\dev\\trial_predictive_20261118\\part_d_gru_pred_seed13.json",
+    "gru_pred:42": "reports\\dev\\trial_predictive_20261118\\part_d_gru_pred_seed42.json",
+    "gru_pred:2026": "reports\\dev\\trial_predictive_20261118\\part_d_gru_pred_seed2026.json"
+  }
+}

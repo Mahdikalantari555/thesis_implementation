@@ -1,0 +1,72 @@
+{
+  "model": "b1",
+  "run_id": "b1_20261114",
+  "seed": 2026,
+  "tau": 9.152414351659438,
+  "k": 2,
+  "calibration_source": "reports\\dev\\b1_20261114\\metrics_b1_sev_recon_only.json",
+  "n_dev_cycles": 69,
+  "cycle_far_clean_dev": 0.028985507246376812,
+  "agreement": {
+    "tvdi_derived_proxy": {
+      "indicator_high_cut": 0.8719373884454252,
+      "threshold_quantile": 0.75,
+      "n_flagged_bins_observed": 5,
+      "n_flagged_high": 4,
+      "n_unflagged_bins_observed": 1373,
+      "n_unflagged_high": 341,
+      "high_rate_flagged": 0.8,
+      "high_rate_flagged_wilson95": [
+        0.37553462976252533,
+        0.9637758913675698
+      ],
+      "high_rate_unflagged": 0.24836125273124546,
+      "high_rate_unflagged_wilson95": [
+        0.22623059763144623,
+        0.2718960780485104
+      ],
+      "rate_difference": 0.5516387472687546,
+      "n_flagged_cycles": 0
+    },
+    "ndvi_phase_deficit_mad": {
+      "indicator_high_cut": 0.7046301662921906,
+      "threshold_quantile": 0.75,
+      "n_flagged_bins_observed": 7,
+      "n_flagged_high": 0,
+      "n_unflagged_bins_observed": 1440,
+      "n_unflagged_high": 362,
+      "high_rate_flagged": 0.0,
+      "high_rate_flagged_wilson95": [
+        5.551115123125783e-17,
+        0.35433043506668743
+      ],
+      "high_rate_unflagged": 0.2513888888888889,
+      "high_rate_unflagged_wilson95": [
+        0.22966420139184485,
+        0.27443647695769
+      ],
+      "rate_difference": -0.2513888888888889,
+      "n_flagged_cycles": 0
+    },
+    "cwsi_et_32field_subset": {
+      "indicator_high_cut": 0.4404957517981529,
+      "threshold_quantile": 0.75,
+      "n_flagged_bins_observed": 0,
+      "n_flagged_high": 0,
+      "n_unflagged_bins_observed": 352,
+      "n_unflagged_high": 88,
+      "high_rate_flagged": NaN,
+      "high_rate_flagged_wilson95": [
+        NaN,
+        NaN
+      ],
+      "high_rate_unflagged": 0.25,
+      "high_rate_unflagged_wilson95": [
+        0.20762751764195822,
+        0.2977701935092736
+      ],
+      "rate_difference": NaN,
+      "n_flagged_cycles": 0
+    }
+  }
+}

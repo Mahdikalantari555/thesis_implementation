@@ -1,0 +1,138 @@
+{
+  "type": "trial_part_b_severity",
+  "created": "2026-11-18 20:23:07",
+  "wall_time_s": 208.1,
+  "protocol": "severity_sweep_v1 (unchanged finding-18 protocol)",
+  "ladder_rung": "L2",
+  "claim_noun": "synthetic anomaly",
+  "smoke": false,
+  "notes": "",
+  "outputs": {
+    "b1": "reports\\dev\\trial_b1_20261114\\metrics_b1_sev_recon_only.json",
+    "gru_ae": "reports\\dev\\trial_gru_ae_20261114\\metrics_gru_ae_sev_recon_only.json",
+    "gru_pred": "reports\\dev\\trial_gru_pred_20261114\\metrics_gru_pred_sev_recon_only.json"
+  },
+  "recompute_crosscheck_vs_finding18": {
+    "b1": {
+      "reference": "reports\\dev\\b1_20261114\\metrics_b1_sev_recon_only.json",
+      "seeds_compared": [
+        2026
+      ],
+      "n_cells_per_seed": 24,
+      "mismatches": [],
+      "pass": true
+    },
+    "gru_ae": {
+      "reference": "reports\\dev\\gru_ae_20261114\\metrics_gru_ae_sev_recon_only.json",
+      "seeds_compared": [
+        2026
+      ],
+      "n_cells_per_seed": 24,
+      "mismatches": [],
+      "pass": true
+    }
+  },
+  "three_arm_comparison": {
+    "b1": [
+      {
+        "seed": 2026,
+        "tau": 9.152414351659438,
+        "k": 2,
+        "far_achieved": 0.02857142857142857,
+        "mdm80": {
+          "acute/ndvi": ">S6",
+          "acute/savi": ">S6",
+          "persistent/ndvi": ">S6",
+          "persistent/savi": ">S6"
+        },
+        "cells_S6": {
+          "S6/acute/ndvi": 0.17647058823529413,
+          "S6/acute/savi": 0.29411764705882354,
+          "S6/persistent/ndvi": 0.17647058823529413,
+          "S6/persistent/savi": 0.29411764705882354
+        },
+        "event_far_clean_eval": 0.0012626262626262627
+      }
+    ],
+    "gru_ae": [
+      {
+        "seed": 2026,
+        "tau": 11.683615214124151,
+        "k": 1,
+        "far_achieved": 0.02857142857142857,
+        "mdm80": {
+          "acute/ndvi": ">S6",
+          "acute/savi": ">S6",
+          "persistent/ndvi": ">S6",
+          "persistent/savi": ">S6"
+        },
+        "cells_S6": {
+          "S6/acute/ndvi": 0.029411764705882353,
+          "S6/acute/savi": 0.04411764705882353,
+          "S6/persistent/ndvi": 0.1323529411764706,
+          "S6/persistent/savi": 0.04411764705882353
+        },
+        "event_far_clean_eval": 0.0
+      }
+    ],
+    "gru_pred": [
+      {
+        "seed": 13,
+        "tau": 11.740093831127759,
+        "k": 1,
+        "far_achieved": 0.02857142857142857,
+        "mdm80": {
+          "acute/ndvi": ">S6",
+          "acute/savi": ">S6",
+          "persistent/ndvi": ">S6",
+          "persistent/savi": ">S6"
+        },
+        "cells_S6": {
+          "S6/acute/ndvi": 0.04411764705882353,
+          "S6/acute/savi": 0.04411764705882353,
+          "S6/persistent/ndvi": 0.11764705882352941,
+          "S6/persistent/savi": 0.04411764705882353
+        },
+        "event_far_clean_eval": 0.0012626262626262627
+      },
+      {
+        "seed": 42,
+        "tau": 12.520710922858969,
+        "k": 1,
+        "far_achieved": 0.02857142857142857,
+        "mdm80": {
+          "acute/ndvi": ">S6",
+          "acute/savi": ">S6",
+          "persistent/ndvi": ">S6",
+          "persistent/savi": ">S6"
+        },
+        "cells_S6": {
+          "S6/acute/ndvi": 0.0,
+          "S6/acute/savi": 0.058823529411764705,
+          "S6/persistent/ndvi": 0.014705882352941176,
+          "S6/persistent/savi": 0.058823529411764705
+        },
+        "event_far_clean_eval": 0.0
+      },
+      {
+        "seed": 2026,
+        "tau": 11.270706572020186,
+        "k": 1,
+        "far_achieved": 0.02857142857142857,
+        "mdm80": {
+          "acute/ndvi": ">S6",
+          "acute/savi": ">S6",
+          "persistent/ndvi": ">S6",
+          "persistent/savi": ">S6"
+        },
+        "cells_S6": {
+          "S6/acute/ndvi": 0.029411764705882353,
+          "S6/acute/savi": 0.17647058823529413,
+          "S6/persistent/ndvi": 0.08823529411764706,
+          "S6/persistent/savi": 0.19117647058823528
+        },
+        "event_far_clean_eval": 0.0012626262626262627
+      }
+    ]
+  }
+}

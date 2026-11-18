@@ -1,0 +1,12 @@
+{
+  "run_id": "gru_pred_s13_20261118",
+  "model_id": "gru_pred",
+  "seed": 13,
+  "n_train_cycles": 16,
+  "splits_locked_sha256": "9aa5eb111b31e73ba1ab30ebed52d7e9ef22c7e9e1de7cbd799e99ccf22e8565",
+  "holdout_manifest_sha256": "392847121a1da41dc5c11ce5b23add0e4b30f68203c62890853084dbd991db21",
+  "n_holdout_farms": 0,
+  "mad_k": 1.4826,
+  "scale_floor": 0.001,
+  "computed_from": "train split only (cycles listed in splits_locked.json train)"
+}

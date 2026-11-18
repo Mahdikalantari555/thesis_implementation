@@ -1,0 +1,72 @@
+{
+  "model": "gru_ae",
+  "run_id": "gru_ae_20261114",
+  "seed": 2026,
+  "tau": 11.683615214124151,
+  "k": 1,
+  "calibration_source": "reports\\dev\\gru_ae_20261114\\metrics_gru_ae_sev_recon_only.json",
+  "n_dev_cycles": 69,
+  "cycle_far_clean_dev": 0.028985507246376812,
+  "agreement": {
+    "tvdi_derived_proxy": {
+      "indicator_high_cut": 0.8719373884454252,
+      "threshold_quantile": 0.75,
+      "n_flagged_bins_observed": 3,
+      "n_flagged_high": 0,
+      "n_unflagged_bins_observed": 1375,
+      "n_unflagged_high": 345,
+      "high_rate_flagged": 0.0,
+      "high_rate_flagged_wilson95": [
+        5.551115123125783e-17,
+        0.5614970317550454
+      ],
+      "high_rate_unflagged": 0.2509090909090909,
+      "high_rate_unflagged_wilson95": [
+        0.22870935844288076,
+        0.27449676027516823
+      ],
+      "rate_difference": -0.2509090909090909,
+      "n_flagged_cycles": 0
+    },
+    "ndvi_phase_deficit_mad": {
+      "indicator_high_cut": 0.7046301662921906,
+      "threshold_quantile": 0.75,
+      "n_flagged_bins_observed": 3,
+      "n_flagged_high": 0,
+      "n_unflagged_bins_observed": 1444,
+      "n_unflagged_high": 362,
+      "high_rate_flagged": 0.0,
+      "high_rate_flagged_wilson95": [
+        5.551115123125783e-17,
+        0.5614970317550454
+      ],
+      "high_rate_unflagged": 0.25069252077562326,
+      "high_rate_unflagged_wilson95": [
+        0.22901935630994286,
+        0.27368862624329926
+      ],
+      "rate_difference": -0.25069252077562326,
+      "n_flagged_cycles": 0
+    },
+    "cwsi_et_32field_subset": {
+      "indicator_high_cut": 0.4404957517981529,
+      "threshold_quantile": 0.75,
+      "n_flagged_bins_observed": 1,
+      "n_flagged_high": 0,
+      "n_unflagged_bins_observed": 351,
+      "n_unflagged_high": 88,
+      "high_rate_flagged": 0.0,
+      "high_rate_flagged_wilson95": [
+        0.0,
+        0.7934506856227626
+      ],
+      "high_rate_unflagged": 0.25071225071225073,
+      "high_rate_unflagged_wilson95": [
+        0.2082338040540209,
+        0.29858819870290687
+      ],
+      "rate_difference": -0.25071225071225073,
+      "n_flagged_cycles": 0
+    }
+  }
+}

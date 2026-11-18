@@ -46,7 +46,7 @@
 
 ## User action still needed (agent never runs long jobs / touches data)
 
-- [ ] U.1 On the machine holding the data archive, audit the existing freeze
+- [x] U.1 On the machine holding the data archive, audit the existing freeze
       read-only. Only if no freeze has ever been created, inspect and freeze
       once from the verified locked assets:
 
@@ -63,7 +63,7 @@
       cutoff always applies; an unspecified archive end is recorded as `null`.
       Do not replace a freeze to resolve a failed audit or to gain coverage.
 
-- [ ] U.2 Then re-run the training smoke to confirm the wiring in situ:
+- [x] U.2 Then re-run the training smoke to confirm the wiring in situ:
 
       ```bash
       python scripts/train_main.py --model gru_ae --smoke
@@ -96,5 +96,5 @@
       plus runtime comparison to the locked splits; test missing and extra farms.
 - [x] A.2 Enforce inclusive cycle-end bounds in the zonal and patch training
       paths, including checks before fitting patch normalization.
-- [ ] A.3 Review the actual frozen manifests and cycle coverage on the archive
+- [x] A.3 Review the actual frozen manifests and cycle coverage on the archive
       machine without modifying either freeze.

@@ -920,6 +920,11 @@ def main(argv: list[str] | None = None) -> int:
             suffix += f"_{args.bank_distance}{args.bank_k}"
         if args.smoke:
             suffix += "_smoke"
+        if patch:
+            # Patch checkpoints are per-seed (one eval invocation per seed);
+            # without the seed in the name the second eval collides on the
+            # exclusive-create file and dies (observed on the real subset run).
+            suffix += f"_s{args.seeds.split(',')[0].strip()}"
         out_path = out_dir / f"metrics_{args.model}{suffix}.json"
         if patch:
             # A repeated patch run gets an explicit new id, never a replaced report.

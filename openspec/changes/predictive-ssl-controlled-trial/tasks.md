@@ -11,33 +11,33 @@
       as `gru_ae_main`; objective = causal one-step-ahead masked prediction;
       train split only; `--resume`, progress.jsonl, wall-time summary.
       No existing model/arm behavior changes.
-- [ ] 1.3 Train seeds {13, 42, 2026} — USER-RUN (agent hands exact commands
+- [x] 1.3 Train seeds {13, 42, 2026} — USER-RUN (agent hands exact commands
       with conda env, cwd, expected wall time ≤15 min/seed, output paths;
       agent verifies the smoke first and reviews produced files after).
-- [ ] 1.4 `scripts/freeze_main_model.py`: extend freeze/final-test to the
+- [x] 1.4 `scripts/freeze_main_model.py`: extend freeze/final-test to the
       `gru_pred` arm (same sidecar schema: τ, k, per-bin q95, frozen seed,
       hashes); the one locked `--final-test` run remains the ONLY reader of
       test cycles.
 
 ## 2. Four-part evaluation (owner's design, verbatim)
 
-- [ ] 2.1 **Part A — natural data:** clean cycle-FAR + event-FAR (POT gap ≤2)
+- [x] 2.1 **Part A — natural data:** clean cycle-FAR + event-FAR (POT gap ≤2)
       per arm at its calibrated τ; per-field clean-score distribution;
       temporal stability. Gate: new arm must not exceed the 5% cycle-FAR
       budget and must not concentrate alarms in a few fields.
-- [ ] 2.2 **Part B — severity protocol unchanged:** `scripts/eval_dev.py`
+- [x] 2.2 **Part B — severity protocol unchanged:** `scripts/eval_dev.py`
       support for the `gru_pred` arm; the finding-18 sweep verbatim
       (S1–S6 × {acute,persistent} × {ndvi,savi}, identical injections,
       rounds=2, eval subset hash `6186edf8a06f82d3`): per-cell detection +
       Wilson CIs, event-FAR, MDM80 (">S6" censoring allowed), AUPRC per
       family with prevalence reported, median detection delay; B1 +
       gru_ae_main recomputed in the SAME run on the same injections.
-- [ ] 2.3 **Part C — absorption experiment:** `diagnostics.decompose_injection`
+- [x] 2.3 **Part C — absorption experiment:** `diagnostics.decompose_injection`
       with the predictive scorer on persistent-family injections: error at
       the three checkpoints (before onset / first step after / several steps
       after) + the absorption ratio A vs gru_ae_main's measured
       α ≈ 0.38–0.50; honest pre-registered caveat for adaptive absorption.
-- [ ] 2.4 **Part D — independent indicators:** data-availability check FIRST
+- [x] 2.4 **Part D — independent indicators:** data-availability check FIRST
       (CWSI_ET/CWSI_LST, ETa/ETrF, TVDI from existing per-scene LST/NDVI
       field stats; anything unavailable = `absent`, never synthesized);
       agreement of each arm's flagged (field, bin) events with the available

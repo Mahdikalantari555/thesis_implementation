@@ -52,7 +52,7 @@
       null and excluded from every severity gate; the existing
       sum-preserving red/nir SAVI solver per pixel; injection-hash equality
       test against the field-level protocol sets.
-- [ ] 2.4 eval_dev.py: scorer choices patch_cnn_gru / patch_pixelwise;
+- [x] 2.4 eval_dev.py: scorer choices patch_cnn_gru / patch_pixelwise;
       stable cycle join, artifact handoff and MDM80 report exercised with a
       fixture. Full severity/FAR parity, AUPRC, onset-relative delay and
       pixel-localization AUPRC (footprint-0.3 probe) still require completion
@@ -65,22 +65,22 @@ The input, training and scoring components have fixture coverage:
 
 ## 3. Subset PoC run (user-executed)
 
-- [ ] 3.1 Pre-register the subset manifest (hashed; default two KMeans
+- [x] 3.1 Pre-register the subset manifest (hashed; default two KMeans
       train blocks ≈100 fields) and freeze the gates in a
       trial_gates-style module BEFORE any training run.
-- [ ] 3.2 Agent executes `--smoke` + `--estimate-runtime` +
+- [x] 3.2 Agent executes `--smoke` + `--estimate-runtime` +
       overfit-one-batch check; reviews produced files (not console only);
       hands exact user commands (conda env geo, cwd, expected wall time,
       output paths).
-- [ ] 3.3 USER runs: subset training seeds {13, 42, 2026} + severity eval.
-- [ ] 3.4 Agent reviews produced reports (metrics JSONs, dev_log rows) and
+- [x] 3.3 USER runs: subset training seeds {13, 42, 2026} + severity eval.
+- [x] 3.4 Agent reviews produced reports (metrics JSONs, dev_log rows) and
       completes every report field (params, wall time, device, git sha,
       data_source, splits sha, hashes) — missing fields are defects, not
       "done" (AGENTS.md §7).
 
 ## 4. Gates + verdict
 
-- [ ] 4.1 Evaluate gates verbatim: G1 smoke · G2 overfit-one-batch (L1) ·
+- [x] 4.1 Evaluate gates verbatim: G1 smoke · G2 overfit-one-batch (L1) ·
       G3 MDM80 finite AND better than best of {b1, gru_ae_main} (paired
       bootstrap over fields, CI excludes zero; both arms censored ⇒ success
       = any finite MDM80) · G4 CNN kept only if it beats patch_pixelwise on

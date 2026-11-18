@@ -1,0 +1,10 @@
+{
+  "run_id": "gru_ae_20261114",
+  "model_id": "gru_ae",
+  "seed": 2026,
+  "n_train_cycles": 447,
+  "splits_locked_sha256": "9aa5eb111b31e73ba1ab30ebed52d7e9ef22c7e9e1de7cbd799e99ccf22e8565",
+  "mad_k": 1.4826,
+  "scale_floor": 0.001,
+  "computed_from": "train split only (cycles listed in splits_locked.json train)"
+}

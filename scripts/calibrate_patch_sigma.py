@@ -86,6 +86,10 @@ def main(argv: list[str] | None = None) -> int:
     field_ids = np.array([int(k.split(":")[0]) for k in dev_keys], dtype=np.int64)
     cycle_ids = np.array([int(k.split(":")[1]) for k in dev_keys], dtype=np.int64)
     batch = PE.patch_batch_for_cycles(root, field_ids, cycle_ids, norm=norm)
+    # batch['in_field'] is per-SAMPLE ((N, S, S)) — predict_pixels maps each
+    # chunk row back through idx into that table.
+    n_samples = int(batch["X"].shape[0])
+    field_rows = np.arange(n_samples, dtype=np.int64)
 
     n_bins = batch["X"].shape[1]
     unit_sigma = np.full((int(np.ceil(n_bins / PS.PHASE_BIN)), P.N_CHANNELS, 3), 1.0)
@@ -108,6 +112,7 @@ def main(argv: list[str] | None = None) -> int:
         sl = slice(n0, min(n, n0 + args.chunk))
         info = scorer.predict_pixels(
             batch["X"][sl], batch["pixel_valid"][sl],
+            idx=field_rows[sl],
             sensor_ids=batch["sensor_id"][sl],
             covariates=batch["covariates"][sl],
         )
