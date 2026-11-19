@@ -87,10 +87,27 @@ The input, training and scoring components have fixture coverage:
       MDM80 or localization AUPRC · G5 estimate before run + ≤2×
       gru_ae_main compute. Honest-negative protocol; no goalpost movement
       after the first training run starts.
-- [ ] 4.2 Finding 23 (Persian, persian-writing skill): patch-level PoC
+      **Verdicts (2026-11-18 finding 23 + 2026-11-19 probe):** G1 PASS;
+      G2 PASS with note; G3 PASS (both patch arms MDM80 = S1 on all four
+      families, field-level arms all >S6, eval hash 6186edf8);
+      **G4 RESOLVED AGAINST the CNN** — the footprint-0.3 localization
+      probe (`scripts/probe_patch_localization.py`, reports
+      `reports/dev/patch_localization_probe/`, 6 checkpoints × 3 seeds on
+      the same eval subset) gives pooled cell AUPRC patch_cnn_gru
+      0.4504 ± 0.0137 vs patch_pixelwise 0.4507 ± 0.0053 (gap −0.0003 <
+      0.01 marginal band): the CNN does not beat the control, so
+      **patch_pixelwise is the scale-up candidate** (D2 simplicity rule
+      applies for any residual tie). G5 estimate-before-run PASS; the
+      ≤2× letter FAILS (~10–20×, recorded verbatim, ≤15 min/seed laptop
+      budget is the operative constraint). Scale-up verdict now waits on
+      the full-archive training + dev severity gate only.
+- [x] 4.2 Finding 23 (Persian, persian-writing skill): patch-level PoC
       verdict with all gate numbers, n, date ranges, seeds, device, hashes
       and explicit L1–L2 rung labelling; scale-up decision (full train run)
       only if G1–G5 pass; otherwise the floor result is recorded verbatim.
+      **Done 2026-11-19: `docs/findings/23_patch_level_poc.fa.md`
+      (orthography/BiDi audit clean) + the English finding's G4 section
+      updated.**
 
 ### 2.2 / 2.4 notes (data-free half complete)
 
