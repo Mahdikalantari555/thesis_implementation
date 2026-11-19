@@ -1,0 +1,233 @@
+{
+  "created": "2026-11-19 22:31:23",
+  "git_sha": "36b616139b13529c938467236e15d702ad5e14a0",
+  "python": "3.12.14",
+  "numpy": "2.5.2",
+  "pandas": "3.0.5",
+  "device": "cpu",
+  "wall_s": 288.3,
+  "smoke": false,
+  "n_fields": 490,
+  "inputs": {
+    "stats_zarr": "Data/Processed/satellite/stats.zarr",
+    "bands": [
+      "blue",
+      "green",
+      "red",
+      "nir",
+      "swir1",
+      "swir2",
+      "lst"
+    ],
+    "n_dates": 538,
+    "date_start": "2013-03-30",
+    "date_end": "2026-09-10",
+    "epoch": "2013-03-30",
+    "cycles_parquet": "data/processed/cycles_490.parquet",
+    "cycles_parquet_sha256": "930a6cdeff01a165"
+  },
+  "v1_params": {
+    "min_cycle_days": 180,
+    "max_cycle_days": 540,
+    "min_prominence": 0.15,
+    "plateau_frac": 0.7,
+    "rise_frac": 0.15
+  },
+  "v1_verification": {
+    "reproduced_clean_cycles": 799,
+    "boundary_pair_recount": 799,
+    "locked_clean_cycles": 799,
+    "matched_windows": 1755,
+    "mismatch_examples": []
+  },
+  "fusion_params": {
+    "ctx_days": 120,
+    "min_gap": 5,
+    "edge_guard": 30,
+    "vf_min": 0.5,
+    "season_months": [
+      11,
+      12,
+      1,
+      2,
+      3
+    ],
+    "veg_th": 0.2,
+    "lst_th": 3.0,
+    "swir_th": 0.05
+  },
+  "headline": {
+    "v1_clean_cycles": 799,
+    "lost_spans": 1819,
+    "lost_field_years": 5625.7,
+    "v2_candidate_clean_cycles_primary": 3416,
+    "v2_delta_primary": 2617
+  },
+  "class_summary": [
+    {
+      "class": "obs_hole",
+      "spans": 2,
+      "field_years": 1.1
+    },
+    {
+      "class": "fusion_recoverable",
+      "spans": 1443,
+      "field_years": 5085.5
+    },
+    {
+      "class": "unresolved",
+      "spans": 374,
+      "field_years": 539.1
+    }
+  ],
+  "by_kind": [
+    {
+      "kind": "gap",
+      "spans": 868,
+      "field_years": 2987.2
+    },
+    {
+      "kind": "lead",
+      "spans": 476,
+      "field_years": 1400.8
+    },
+    {
+      "kind": "trail",
+      "spans": 475,
+      "field_years": 1237.8
+    }
+  ],
+  "threshold_grid_v2_clean_cycles": [
+    {
+      "veg": 0.15,
+      "lst": 2.0,
+      "swir": 0.03,
+      "v2_cycles": 3927,
+      "delta": 3128
+    },
+    {
+      "veg": 0.15,
+      "lst": 2.0,
+      "swir": 0.05,
+      "v2_cycles": 3722,
+      "delta": 2923
+    },
+    {
+      "veg": 0.15,
+      "lst": 3.0,
+      "swir": 0.03,
+      "v2_cycles": 3922,
+      "delta": 3123
+    },
+    {
+      "veg": 0.15,
+      "lst": 3.0,
+      "swir": 0.05,
+      "v2_cycles": 3708,
+      "delta": 2909
+    },
+    {
+      "veg": 0.15,
+      "lst": 5.0,
+      "swir": 0.03,
+      "v2_cycles": 3908,
+      "delta": 3109
+    },
+    {
+      "veg": 0.15,
+      "lst": 5.0,
+      "swir": 0.05,
+      "v2_cycles": 3679,
+      "delta": 2880
+    },
+    {
+      "veg": 0.2,
+      "lst": 2.0,
+      "swir": 0.03,
+      "v2_cycles": 3655,
+      "delta": 2856
+    },
+    {
+      "veg": 0.2,
+      "lst": 2.0,
+      "swir": 0.05,
+      "v2_cycles": 3428,
+      "delta": 2629
+    },
+    {
+      "veg": 0.2,
+      "lst": 3.0,
+      "swir": 0.03,
+      "v2_cycles": 3647,
+      "delta": 2848
+    },
+    {
+      "veg": 0.2,
+      "lst": 3.0,
+      "swir": 0.05,
+      "v2_cycles": 3416,
+      "delta": 2617
+    },
+    {
+      "veg": 0.2,
+      "lst": 5.0,
+      "swir": 0.03,
+      "v2_cycles": 3631,
+      "delta": 2832
+    },
+    {
+      "veg": 0.2,
+      "lst": 5.0,
+      "swir": 0.05,
+      "v2_cycles": 3386,
+      "delta": 2587
+    },
+    {
+      "veg": 0.25,
+      "lst": 2.0,
+      "swir": 0.03,
+      "v2_cycles": 3344,
+      "delta": 2545
+    },
+    {
+      "veg": 0.25,
+      "lst": 2.0,
+      "swir": 0.05,
+      "v2_cycles": 3106,
+      "delta": 2307
+    },
+    {
+      "veg": 0.25,
+      "lst": 3.0,
+      "swir": 0.03,
+      "v2_cycles": 3332,
+      "delta": 2533
+    },
+    {
+      "veg": 0.25,
+      "lst": 3.0,
+      "swir": 0.05,
+      "v2_cycles": 3093,
+      "delta": 2294
+    },
+    {
+      "veg": 0.25,
+      "lst": 5.0,
+      "swir": 0.03,
+      "v2_cycles": 3311,
+      "delta": 2512
+    },
+    {
+      "veg": 0.25,
+      "lst": 5.0,
+      "swir": 0.05,
+      "v2_cycles": 3059,
+      "delta": 2260
+    }
+  ],
+  "notes": [
+    "v2 candidate counts use the SAME 180\u2013540 d validity rule as v1 on the boundary set (v1 harvests \u222a accepted fusion candidates); no re-smoothing, no retuning \u2014 this is a diagnosis, not the final v2 detector.",
+    "unresolved spans = observations exist but no candidate fired; this mixes 'genuinely no harvest' with 'criteria still miss it' \u2014 resolvable only with external harvest records or a reviewed subsample.",
+    "Read-only study: no frozen artifact was written; outputs live only under the report directory. Any v3 detector change reopens the freeze chain (splits/holdout/store/norm) and stays a separate gated change."
+  ]
+}
