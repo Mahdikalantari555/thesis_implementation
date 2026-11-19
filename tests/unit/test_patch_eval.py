@@ -180,6 +180,126 @@ def test_persistent_cell_uses_the_frozen_duration():
     assert out["injections"][0]["duration_bins"] == int(sev.PERSISTENT_DURATION_BINS)
 
 
+# --- G4 localization probe -------------------------------------------------
+def test_localization_auprc_ranks_injected_pixels_first():
+    N, T, S = 2, 10, 8
+    in_field = np.zeros((N, S, S), bool)
+    in_field[:, :4, :4] = True
+    fp = np.zeros((N, S, S), bool)
+    fp[:, 1:3, 1:3] = True                      # 4 of 16 in-field pixels
+    z = np.full((N, T, S, S), 0.5)
+    for n in range(N):
+        for t in range(2, 5):                   # affected bins [2, 5)
+            z[n, t][fp[n]] = 10.0               # injected pixels rank on top
+    out = PE.localization_auprc(z, fp, in_field,
+                                np.array([2, 2]), np.array([3, 3]))
+    assert out["auprc"] == pytest.approx(1.0)
+    assert out["n_pos"] == 2 * 3 * 4
+    assert out["prevalence"] == pytest.approx(4 / 16)
+
+
+def test_localization_auprc_constant_scores_sits_at_prevalence():
+    N, T, S = 3, 10, 8
+    in_field = np.zeros((N, S, S), bool)
+    in_field[:, :6, :6] = True
+    fp = np.zeros((N, S, S), bool)
+    fp[:, :2, :2] = True
+    z = np.full((N, T, S, S), 0.7)              # no separation at all
+    out = PE.localization_auprc(z, fp, in_field,
+                                np.array([1, 1, 1]), np.array([4, 4, 4]))
+    assert out["auprc"] == pytest.approx(out["prevalence"])
+    assert out["prevalence"] == pytest.approx(4 / 36)
+
+
+def test_localization_auprc_ignores_bins_outside_the_injection_window():
+    N, T, S = 2, 10, 8
+    in_field = np.ones((N, S, S), bool)
+    fp = np.zeros((N, S, S), bool)
+    fp[:, :2, :2] = True
+    z = np.full((N, T, S, S), 0.5)
+    for n in range(N):
+        z[n, 7][fp[n]] = 10.0                   # huge score OUTSIDE [2, 4)
+    out = PE.localization_auprc(z, fp, in_field,
+                                np.array([2, 2]), np.array([2, 2]))
+    assert out["auprc"] == pytest.approx(out["prevalence"])
+
+
+def test_localization_auprc_returns_none_without_a_scored_class():
+    N, T, S = 2, 10, 8
+    in_field = np.ones((N, S, S), bool)
+    fp = np.zeros((N, S, S), bool)
+    fp[:, :2, :2] = True
+    z = np.full((N, T, S, S), np.nan)
+    # every positive pixel unscored (all-NaN window)
+    out = PE.localization_auprc(z, fp, in_field,
+                                np.array([0, 0]), np.array([3, 3]))
+    assert out["auprc"] is None and out["n_pos"] == 0
+    # footprint 1.0 leaves no negatives — an AP over one class is undefined
+    z2 = np.full((N, T, S, S), 0.5)
+    out2 = PE.localization_auprc(z2, in_field.copy(), in_field,
+                                 np.array([0, 0]), np.array([3, 3]))
+    assert out2["auprc"] is None and out2["n_neg"] == 0
+
+
+def _batch_const(n=3, value=0.5):
+    """Batch with a CONSTANT in-field value so an index drop separates perfectly."""
+    raw = np.full((n, T, C, S, S), value, dtype=np.float32)
+    return {"X": raw.copy(), "raw": raw, "obs": np.ones(raw.shape, bool),
+            "sensor_id": np.ones((n, T), int), "norm_stats": _norm(0.0, 1.0)["stats"],
+            "pixel_valid": np.ones((n, T, S, S), bool),
+            "in_field": np.ones((n, S, S), bool)}
+
+
+class _PixelStub:
+    """predict_pixels stand-in: anomaly = −NDVI (deterministic, no model)."""
+
+    def predict_pixels(self, X, pixel_valid, **kw):
+        return {"pixel_z2": -np.asarray(X)[..., 0, :, :], "resid": None,
+                "pred": None, "mask": None, "paths": None}
+
+
+def test_localization_cell_injects_the_requested_footprint():
+    out = PE.patch_localization_scores(
+        _PixelStub(), _batch_const(), level_id="S6", family=sev.ACUTE_FAMILY,
+        index="ndvi", round_idx=0)
+    fp = out["footprints"]
+    in_field = np.ones_like(fp, dtype=bool)
+    assert fp.shape == (3, S, S)
+    assert (fp & ~in_field).sum() == 0                       # ⊆ in_field
+    assert fp.sum() == 3 * round(PE.LOCALIZATION_FOOTPRINT * S * S)
+    assert out["footprint_realized"] == pytest.approx(
+        round(PE.LOCALIZATION_FOOTPRINT * S * S) / (S * S))  # pixel-rounded
+    assert (out["onset_bins"] == 3).all()                    # grand-growth phase start
+    assert fp.sum() == out["metrics"]["n_pos"] // out["duration_bins"]  # per affected bin
+    # constant pre-injection field + a −0.40 NDVI drop ⇒ injected pixels rank
+    # strictly above every non-injected pixel in the affected bins
+    assert out["metrics"]["auprc"] == pytest.approx(1.0)
+
+
+def test_localization_cell_persistent_uses_the_frozen_duration():
+    scorer = _scorer(n=3)
+    out = PE.patch_localization_scores(
+        scorer, _batch_const(), level_id="S3", family=sev.PERSISTENT_FAMILY,
+        index="ndvi", round_idx=0)
+    assert out["duration_bins"] == int(sev.PERSISTENT_DURATION_BINS)
+
+
+def test_localization_cell_refuses_an_unknown_level():
+    scorer = _scorer(n=1)
+    with pytest.raises(ValueError, match="unknown severity level"):
+        PE.patch_localization_scores(scorer, _batch_const(1), level_id="S99",
+                                     family=sev.ACUTE_FAMILY, index="ndvi")
+
+
+def test_localization_cell_full_footprint_has_no_negatives():
+    scorer = _scorer(n=2)
+    out = PE.patch_localization_scores(
+        scorer, _batch_const(2), level_id="S6", family=sev.ACUTE_FAMILY,
+        index="ndvi", round_idx=0, footprint=1.0)
+    assert out["metrics"]["n_neg"] == 0
+    assert out["metrics"]["auprc"] is None
+
+
 # --- the eval_dev patch path, end to end ---------------------------------
 def test_patch_severity_cli_consumes_the_new_trainer_checkpoint(tmp_path, monkeypatch):
     """Build the real norm, train the fixture and exercise the dev report path."""
@@ -249,7 +369,8 @@ def test_patch_severity_cli_consumes_the_new_trainer_checkpoint(tmp_path, monkey
         "--smoke",
     ]
     assert E.main(argv) == 0
-    path = tmp_path / "reports/r1/metrics_patch_cnn_gru_sev_patch_cnn_gru_smoke.json"
+    # per-seed suffix (eval_dev writes one report per seed, exclusive-create)
+    path = tmp_path / "reports/r1/metrics_patch_cnn_gru_sev_patch_cnn_gru_smoke_s13.json"
     assert "NaN" not in path.read_text()
     metrics = json.loads(path.read_text())
     assert metrics["ladder_rung"] == "engineering_smoke_only"

@@ -160,10 +160,13 @@ def test_missing_store_is_a_loud_error_with_the_next_step(env, tmp_path):
                  "--holdout-manifest", str(holdout)])
 
 
-def test_holdout_is_required(env):
+def test_holdout_is_required(env, tmp_path, monkeypatch):
     tmp, store, _holdout = env
     tp = _load_train_patch()
-    # no --holdout-manifest and the default frozen manifest does not exist here
+    # no --holdout-manifest and the frozen default redirected to a missing
+    # path (the repo's real data/processed/holdout_manifest.json exists on
+    # run machines and must not leak into this unit test)
+    monkeypatch.setattr(H, "HOLDOUT_MANIFEST_PATH", tmp_path / "absent.json")
     with pytest.raises(RuntimeError, match="holdout manifest missing"):
         tp.main(["--store", str(store), "--out", str(tmp / "x"), "--smoke"])
 

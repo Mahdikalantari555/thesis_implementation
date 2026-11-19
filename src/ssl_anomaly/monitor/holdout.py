@@ -257,10 +257,14 @@ def save_holdout_manifest(
 
 def load_holdout_manifest(
     *,
-    path: Path = HOLDOUT_MANIFEST_PATH,
+    path: Path | None = None,
     verify: bool = True,
 ) -> dict:
     """Load the frozen manifest, verifying its self-hash (fail-closed)."""
+    # Resolved at call time (not as a def-time default) so tests can redirect
+    # the frozen default via monkeypatched module constants.
+    if path is None:
+        path = HOLDOUT_MANIFEST_PATH
     path = Path(path)
     if not path.exists():
         raise RuntimeError(
