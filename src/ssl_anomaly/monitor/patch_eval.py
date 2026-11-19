@@ -158,3 +158,128 @@ def patch_arm_scores(
     return {"z2": out["z2"], "paths": out["score"], "p_value": out["p_value"],
             "observed": Minj.any(axis=(2, 3)),   # (N, T): any in-field pixel seen
             "injections": injections}
+
+
+# --- G4 localization probe (patch-level-controlled-trial task 2.4) --------
+# The PoC's MDM80 tied at S1 for both patch arms (finding 23), and the
+# pre-registered G4 rule says the CNN is kept only if it beats patch_pixelwise
+# on MDM80 or localization AUPRC — so the tie is broken here, on whether the
+# arm's per-pixel scores rank the actually-injected pixels above the rest of
+# the field when only PART of the field is injected.
+
+LOCALIZATION_FOOTPRINT = 0.3    # contiguous in-field blob; protocol gates use 1.0
+
+
+def localization_auprc(
+    pixel_z2: np.ndarray,         # (N, T, S, S); NaN outside the scored domain
+    footprint_masks: np.ndarray,  # (N, S, S) bool — injected pixels (⊆ in_field)
+    in_field: np.ndarray,         # (N, S, S) bool — the negative domain
+    onset_bins: np.ndarray,       # (N,) int
+    durations: np.ndarray,        # (N,) int
+) -> dict:
+    """Pixel-localization AUPRC over the injection windows.
+
+    Positives are the injected pixels, negatives the remaining in-field
+    pixels, both restricted to the bins the injection actually touches
+    (``[onset, onset + duration)`` per sample) and to pixels the scorer
+    actually scored (finite z²). Scores are pooled over samples and affected
+    bins — one AP number per cell — and the positive prevalence is reported
+    alongside as the chance level an uninformative ranking achieves.
+
+    ``auprc`` is ``None`` when the pooled window has no scored positives
+    (e.g. an unobserved footprint) or no negatives (footprint 1.0): an AP
+    over a single class is undefined and must not be fabricated.
+    """
+    from sklearn.metrics import average_precision_score
+
+    z2 = np.asarray(pixel_z2, dtype=np.float64)
+    fp = np.asarray(footprint_masks, dtype=bool)
+    inf = np.asarray(in_field, dtype=bool)
+    N, T = z2.shape[:2]
+    onset = np.asarray(onset_bins, dtype=np.int64)
+    dur = np.asarray(durations, dtype=np.int64)
+    scores: list[np.ndarray] = []
+    labels: list[np.ndarray] = []
+    for n in range(N):
+        lo = int(max(0, onset[n]))
+        hi = int(min(T, onset[n] + max(1, dur[n])))
+        if hi <= lo:
+            continue
+        window = z2[n, lo:hi]
+        scored = np.isfinite(window)
+        pos = fp[n][None, :] & scored
+        neg = inf[n][None, :] & ~fp[n][None, :] & scored
+        if pos.any():
+            scores.append(window[pos])
+            labels.append(np.ones(int(pos.sum()), dtype=bool))
+        if neg.any():
+            scores.append(window[neg])
+            labels.append(np.zeros(int(neg.sum()), dtype=bool))
+    y = np.concatenate(labels) if labels else np.zeros(0, dtype=bool)
+    s = np.concatenate(scores) if scores else np.zeros(0)
+    n_pos = int(y.sum())
+    n_neg = int(y.size - n_pos)
+    if n_pos == 0 or n_neg == 0:
+        return {"auprc": None, "n_pos": n_pos, "n_neg": n_neg, "prevalence": None}
+    prevalence = n_pos / y.size
+    return {"auprc": float(average_precision_score(y, s)),
+            "n_pos": n_pos, "n_neg": n_neg, "prevalence": float(prevalence)}
+
+
+def patch_localization_scores(
+    scorer, batch: dict, *, level_id: str, family: str, index: str,
+    round_idx: int = 0, footprint: float = LOCALIZATION_FOOTPRINT,
+) -> dict:
+    """One G4 cell: inject at a partial footprint, keep the per-pixel maps.
+
+    Like ``patch_arm_scores`` but (a) the footprint is parameterised (the
+    pre-registered localization probe runs the default 0.3 — a contiguous
+    in-field blob — while the severity gates run 1.0), and (b) the return
+    carries the scorer's per-pixel z² maps plus the injection footprint /
+    onset / duration that ``localization_auprc`` needs. No empirical-p
+    calibration is involved: the localization ranking uses the frozen σ-table
+    z² directly, exactly as trained.
+    """
+    from ssl_anomaly.monitor import patch_perturbations as ppert
+    from ssl_anomaly.monitor import severity_table as sev
+
+    levels = {lv.level_id: lv for lv in sev.load_table()}
+    if level_id not in levels:
+        raise ValueError(f"unknown severity level {level_id!r}")
+    delta = float(levels[level_id].delta_ndvi)
+    duration = (sev.PERSISTENT_DURATION_BINS if family == sev.PERSISTENT_FAMILY
+                else levels[level_id].duration_bins)
+
+    rng = np.random.default_rng(round_idx)
+    Xinj = np.empty_like(batch["X"])
+    N, T = batch["X"].shape[:2]
+    S = batch["in_field"].shape[1]
+    footprints = np.zeros((N, S, batch["in_field"].shape[2]), dtype=bool)
+    onsets = np.zeros(N, dtype=np.int64)
+    for n in range(N):
+        onset = ppert.onset_for_shape(family, T, 3, int(duration))
+        inj = ppert.inject_patch_drop(
+            batch["raw"][n].astype(np.float32), batch["obs"][n],
+            index=index, delta=delta, onset_bin=onset, shape=family,
+            duration=int(duration), in_field=batch["in_field"][n],
+            footprint=float(footprint), level_id=level_id, rng=rng,
+        )
+        Xinj[n], _ = P.normalize_patch(
+            inj.x, batch["obs"][n], batch["sensor_id"][n], batch["norm_stats"]
+        )
+        footprints[n] = inj.footprint_mask
+        onsets[n] = inj.onset_bin
+    out = scorer.predict_pixels(Xinj, batch["pixel_valid"], **_scoring_inputs(batch))
+    metrics = localization_auprc(
+        out["pixel_z2"], footprints, batch["in_field"], onsets,
+        np.full(N, int(duration), dtype=np.int64),
+    )
+    return {
+        "metrics": metrics, "level_id": level_id, "family": family,
+        "index": index, "onset_bins": onsets, "duration_bins": int(duration),
+        "footprint_requested": float(footprint),
+        "footprint_realized": float(footprints.sum()
+                                    / max(1, int(np.asarray(batch["in_field"], dtype=bool).sum()))),
+        "n_pixels": int(footprints.sum()),
+        "pixel_z2": out["pixel_z2"], "footprints": footprints,
+    }
