@@ -59,14 +59,40 @@ finding-18 protocol):**
   detects the *smallest, literature-realistic* drop (−0.02 NDVI/SAVI) at
   80 % cell detection, median delay 30 d. Both CNN and pixelwise reach S1,
   so the gain comes from the per-pixel spatial representation, not the CNN.
-- **G4: INDETERMINATE** — MDM80 ties at S1; the footprint-0.3 localization
-  AUPRC probe is not implemented yet (task 2.4 records this honestly).
+- **G4: RESOLVED — verdict AGAINST the CNN** (2026-11-19 probe, commit
+  0092349). The footprint-0.3 localization AUPRC probe
+  (`scripts/probe_patch_localization.py`, `monitor/patch_eval.py::
+  localization_auprc`) ran the finding-18 ladder (S1–S6 × {acute,
+  persistent} × {ndvi, savi}, 24 cells) on the SAME hash-partitioned eval
+  subset (6186edf8) for all 6 PoC checkpoints (2 arms × 3 seeds, frozen
+  σ/norm, CPU, 185–245 s per checkpoint). Pooled cell AUPRC:
+  **patch_cnn_gru 0.4504 ± 0.0137 vs patch_pixelwise 0.4507 ± 0.0053**
+  (gap −0.0003 — below seed spread and the pre-registered 0.01 marginal
+  band). By the pre-registered rule (tasks.md: "CNN kept only if it beats
+  patch_pixelwise on MDM80 or localization AUPRC") the CNN is **not**
+  kept; with MDM80 tied, **patch_pixelwise is the scale-up candidate**
+  (the simpler, CNN-off arm; ~half the compute). Cell-level pattern for
+  the record: both arms sit AT CHANCE for S1–S3 (0.29–0.37 vs prevalence
+  ≈ 0.30) and for persistent/ndvi at every level; localization emerges
+  from S4 and reaches 0.95–0.97 on SAVI at S6. Pixelwise wins the
+  weak-signal cells (S1–S3, +0.01–0.02), the CNN wins the strong-signal
+  cells (S5–S6, +0.02–0.03) — the pooled means cancel. Reading: the S1
+  *detection* result is a cycle-level aggregate effect (top-20 %
+  in-field aggregation + empirical-p alarm), not per-pixel localization;
+  spatial WHERE-information exists only from S4 upward. Reports:
+  `reports/dev/patch_localization_probe/localization_{arm}_s{seed}.json`.
 - **G5: estimate before run PASS; "≤2× gru_ae_main compute" FAILS by
   letter** (~10–20×: patch inputs are 48×48×8 grids vs 18-dim field tokens).
   Recorded verbatim; the ≤15 min/seed laptop budget is the operative
   constraint the estimate was reconciled against.
-- **Scale-up decision: NOT YET** — G4 must resolve (localization probe) and
-  the S1 result must survive the full-run gates before any production claim.
+- **Scale-up decision: rule satisfied for patch_pixelwise pending the
+  full-archive gate** — G4 now resolves to the CNN-off arm; the S1 result
+  must still survive the full-archive training + dev severity evaluation
+  (finding-23 protocol, both arms re-run on the full store) before any
+  production claim or platform wiring. The platform-wiring change
+  (`platform-patch-scorer-wiring`, proposed 2026-11-19) names the
+  selection rule and stays BLOCKED until the winner is frozen and the
+  owner approves.
 
 ## gru_pred trial (predictive-ssl-controlled-trial) — honest negative
 
@@ -107,4 +133,9 @@ Trained 3 seeds (~48 s/seed), severity sweep (same hash), frozen
 git sha at run time 023ccf6/5f2c085→; splits 9aa5eb11…; holdout 39284712…;
 norm d9fe7438…; eval subset 6186edf8…; severity table unchanged (finding 18).
 All reports carry params, wall time, device, seeds, hashes.
-**Persian write-up of this finding (task 4.2, persian-writing skill): pending.**
+G4 probe provenance (2026-11-19): eval subset 6186edf8… (identical), frozen
+PoC checkpoints/σ/norm per seed, footprint 0.3 contiguous, rounds=1
+(deterministic blob), git sha 0092349, device cpu — per-report hashes inside
+`reports/dev/patch_localization_probe/`.
+**Persian write-up of this finding (task 4.2, persian-writing skill):
+`23_patch_level_poc.fa.md` (2026-11-19).**
