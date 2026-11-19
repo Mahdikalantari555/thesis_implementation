@@ -68,6 +68,7 @@ def config_hash(cfg: dict) -> str:
         "trim_top_frac", "trim_after_epoch", "grad_clip", "max_fields",
         "data_source", "holdout_sha256", "norm_sha256", "covariates", "input_protocol",
         "splits_sha256", "admitted_cycles_sha256", "max_cycles", "contaminate_seed", "smoke",
+        "cpu_threads",
         # patch-contamination-absorption task 1.2: a resumed run whose
         # contamination configuration changed is a different experiment.
         "contaminate_fraction", "trimmed_loss", "curation",
@@ -81,6 +82,29 @@ def pick_device(requested: str = "auto") -> str:
     if requested != "auto":
         return requested
     return "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def apply_cpu_threads(n) -> None:
+    """Cap the torch CPU thread pools (owner's heat/noise throttle).
+
+    ``None`` leaves the pool at the torch default (all cores). A number caps
+    intra-op threads to ``n`` and, when the pools are still fresh, interop
+    threads to 1: fewer threads means proportionally less CPU usage and less
+    heat at the cost of wall time. Purely a performance knob — the recorded
+    thread budget travels in the config hash, so a resumed run cannot
+    silently change it.
+    """
+    if n is None:
+        return
+    n = int(n)
+    if n < 1:
+        raise SystemExit("--cpu-threads must be >= 1")
+    torch.set_num_threads(n)
+    try:
+        torch.set_num_interop_threads(1)   # must precede the first parallel op
+    except RuntimeError as exc:
+        print(f"[patch] note: interop threads stay at their default ({exc})",
+              file=sys.stderr)
 
 
 def _rng_state(state: dict) -> dict:
@@ -369,7 +393,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--grad-clip", type=float, default=1.0)
     p.add_argument("--max-fields", type=int, default=None)
     p.add_argument("--max-cycles", type=int, default=None)
-    p.add_argument("--device", default="auto")
+    p.add_argument("--device", default="auto", help="auto | cpu | cuda")
+    p.add_argument("--cpu-threads", type=int, default=None, metavar="N",
+                   help="cap torch CPU thread pools (less heat + less fan, "
+                        "slower); default = all cores. Recorded in the config "
+                        "hash so a resumed run cannot change it silently.")
     p.add_argument("--smoke", action="store_true", help="one epoch, tiny subset, no full run")
     p.add_argument("--estimate-runtime", action="store_true",
                    help="print wall-time/disk estimates and exit WITHOUT training")
@@ -411,6 +439,7 @@ def cfg_from_args(args) -> dict:
         "grad_clip": float(args.grad_clip),
         "max_fields": args.max_fields,
         "max_cycles": args.max_cycles,
+        "cpu_threads": args.cpu_threads,
         "contaminate_seed": int(args.contaminate_seed),
         "input_protocol": PD.PATCH_INPUT_PROTOCOL,
         "smoke": args.smoke,
@@ -431,6 +460,11 @@ def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     cfg = cfg_from_args(args)
     device = pick_device(args.device)
+    if device == "cpu":
+        apply_cpu_threads(cfg["cpu_threads"])
+        if cfg["cpu_threads"] is not None:
+            print(f"[patch] cpu thread cap: {torch.get_num_threads()} threads "
+                  f"(was all cores)")
 
     store_path = Path(args.store)
     if not store_path.exists():
@@ -543,6 +577,9 @@ def main(argv=None) -> int:
         "splits_sha256": cfg["splits_sha256"],
         "unnormalized_channels": sorted(ds.unnormalized_channels),
         "arch": args.arch,
+        # top-level seed: §7 requires seeds as first-class provenance (the
+        # config copy alone fails validate_manifest's completeness check)
+        "seed": int(cfg["seed"]),
         "scorer_id": scorer_id(args.arch == "patch_cnn_gru"),
         "config": {k: v for k, v in cfg.items() if k != "horizon_weights"} | {
             "horizon_weights": cfg["horizon_weights"],

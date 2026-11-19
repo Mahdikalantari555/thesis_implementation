@@ -171,6 +171,35 @@ def test_holdout_is_required(env, tmp_path, monkeypatch):
         tp.main(["--store", str(store), "--out", str(tmp / "x"), "--smoke"])
 
 
+def test_cpu_threads_caps_the_torch_pool_and_enters_the_config_hash():
+    import torch
+
+    tp = _load_train_patch()
+    before = torch.get_num_threads()
+    try:
+        tp.apply_cpu_threads(3)
+        assert torch.get_num_threads() == 3
+    finally:
+        torch.set_num_threads(before)
+    # None (the default) must leave the pool untouched
+    tp.apply_cpu_threads(None)
+    assert torch.get_num_threads() == before
+
+    def _cfg(n):
+        return tp.cfg_from_args(tp.build_parser().parse_args(
+            ["--store", "x", "--out", "y", "--cpu-threads", n] if n is not None
+            else ["--store", "x", "--out", "y"]))
+
+    assert _cfg("3")["cpu_threads"] == 3
+    assert _cfg(None)["cpu_threads"] is None
+    # a different thread cap is a different compute configuration, and the
+    # key is frozen inside the hash so a resumed run cannot silently switch
+    assert tp.config_hash(_cfg("3")) != tp.config_hash(_cfg("2"))
+    import inspect
+
+    assert "cpu_threads" in inspect.getsource(tp.config_hash)
+
+
 def test_trim_schedule_only_activates_after_warmup():
     tp = _load_train_patch()
     cfg = {"trim_top_frac": 0.05, "trim_after_epoch": 10}
