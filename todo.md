@@ -33,7 +33,31 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
   - ✅ Persian finding 23 (`docs/findings/23_patch_level_poc.fa.md`, persian-writing audit clean).
   - ✅ `--cpu-threads` heat throttle added to `train_patch.py` (owner request): caps torch CPU pools, rides the config hash, recorded in the manifest; smoke verified identical loss at 4 threads.
   - ✅ Full-store plumbing smoke chain: train `--smoke` → `calibrate_patch_sigma` → `eval_dev --smoke` all green (§7 seed manifest gap fixed; smoke artifacts removed so the real `--out` is free).
-  - ⏳ **HANDOVER (owner runs tomorrow, PowerShell)**: 6 trainings — `patch_pixelwise` then `patch_cnn_gru`, seeds {13, 42, 2026}, 10 epochs, `--store data/processed/patches.zarr --norm data/processed/norm_stats_full.json --out checkpoints/patch/patch_full_ep10 --cpu-threads 6`; idempotent loop (completed seeds skip, partial resume); estimated 50–65 min/seed at 6 threads (≈5–6.5 h total). After the owner reports back: agent reads run manifests + progress, runs sigma ×6 + the finding-23-pattern dev severity eval (both arms vs frozen field-level references), evaluates the pre-registered gates, updates findings + dev_log.
+  - ✅ **HANDOVER EXECUTED + FULL-ARCHIVE VERDICT (2026-11-20, finding 24)**: owner trained all 6 runs on Colab T4 (cuda, ~247 s/seed, git 36b6161, results zip verified 84 files, bindings green: norm 3cb1ca60 / holdout 39284712 / splits 9aa5eb11 / 37 holdout-excluded); agent ran σ ×6 + severity eval ×6 on the same panel (eval hash 6186edf8) → **MDM80 = S1, all four families × both patch arms × 3 seeds, detection 1.000 (CI [0.947,1.0], n=68), delay 30 d** — field-level refs all stay >S6. Full-archive gate PASS; scale-up rule satisfied → **frozen winner = patch_pixelwise**; freeze + platform wiring stay BLOCKED on owner approval of `platform-patch-scorer-wiring`. Record: `docs/findings/24_patch_full_archive.md` (+ .fa).
+- ▶ **`cycle-recovery-diagnosis` (user-requested phase 0, 2026-11-19)** — quantify how many of the
+  ~5,600 lost field-years (missed winter harvests → censored/skipped spans in `cycles_490.parquet`)
+  a multi-index detector could recover, vs the frozen NDVI-only v1 (`segment_cycles`, prom 0.15 /
+  180–540 d, `plateau_frac` 0.7 vs field-global ymax). Advisor hypothesis: SAVI (soil-adjusted
+  winter floor) + LST (opposite-polarity harvest jump) + SWIR1 corroboration.
+  **Read-only phase 0**: reproduces v1 verbatim, classifies every lost span (obs-hole /
+  fusion-recoverable / unresolved), counts v2-candidate valid cycles from inserted harvests,
+  reports a threshold-sensitivity grid. NOTHING frozen is touched; outputs only under
+  `reports/cycle_detection_diagnosis/`. The v1↔v2 comparison is itself a keepable scientific
+  deliverable (owner decision); any real detector-v3 (splits/store/holdout rebuild) stays a
+  separate openspec change gated on these numbers.
+  - ✅ **Phase 0 DONE (2026-11-19, `scripts/diagnose_cycle_recovery.py`, wall 288 s)**: v1
+    reproduced verbatim (799/799 clean, 1755/1755 windows, 0 mismatches; harvest list captured
+    via a `detect_harvests` shim — cycle objects alone lose silently-skipped harvests).
+    1,819 lost spans = 5,625.7 field-years (all 478 cycle-bearing fields affected;
+    lead 1,401 + gap 2,987 + trail 1,238). **Class breakdown kills the obs-hole hypothesis:
+    only 2 spans / 1.1 field-years are observation holes** — winter obs exist almost everywhere;
+    the binding constraint is v1's NDVI-only criteria (global-ymax 0.7 plateau, rise-within-180 d).
+    Fusion (SAVI drop ∨ NDVI drop + LST rise ∨ SWIR rise, ≥180 d dedup) yields
+    **3,416 candidate clean cycles at the primary point (+2,617 over v1 ≈ 4.3×)**, stable across
+    the full 18-combo threshold grid (v2 ∈ [3,059, 3,927], strictest corner +2,260). CANDIDATES
+    are an upper bound — precision unvalidated until a reviewed subsample + (ideally) company
+    harvest records. Unresolved 374 spans / 539 fy mix "no harvest truth" with "criteria miss".
+    Next: reviewed-precision subsample → owner gate → separate v3 openspec change.
 - ▶ **`decomposition-aware-ssl-study`** — isolated runner and [runbook](docs/decomposition_aware_ssl_study.md). Real benchmark/ablation and the architecture-gate decision require the canonical polygon zonal store, locked splits and existing frozen holdout manifest. Smoke is not empirical evidence.
 - ▶ **`rerun-rq-suite-on-real-490`** (proposed 2026-11-10) — RQ1–RQ8 + data-scarcity results in findings 11–12 came from `simulate_490_field_archive`, not the real 490-field archive; re-run on real data, fail closed, provenance in every report.
   - ✅ Task 1: real_archive.py loader + hash check + provenance + --source arg (tests/unit/test_real_archive.py 4/6 pass)
