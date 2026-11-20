@@ -24,6 +24,56 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
 
 ## In progress
 
+- ▶ **compute-placement policy: local → Colab escalation (owner directive, 2026-11-20)** —
+  From now on, **every long job runs on Colab, not just training**: training, full
+  evaluation, σ calibration, and any export expected to exceed the local ~2 min budget.
+  The rule is *validate locally first, then escalate*:
+  1. **Local gate (mandatory, before any Colab run):** unit tests covering the touched
+     code green; the script's `--smoke` mode run end to end; smoke output read (metrics
+     present, no NaN, shapes/counts as expected); the exact command recorded. A pipeline
+     that has not passed this gate is NOT handed to Colab.
+  2. **Colab run:** the owner executes the handed-over command/notebook.
+  3. **Return path:** Colab → Google Drive (dated, well-named bundle), owner downloads,
+     hands it to the Arena agent → the Arena agent continues the work → **the Arena agent
+     bundles its own outputs back to Drive** and names the exact file for the owner to
+     download → owner carries it to the **local agent (Zcode) on their own machine**.
+  - **Bundles must be complete, not just checkpoints.** Finding-24 lesson: the 6
+    `patch_sigma.npz` files were written into the Colab run dirs and therefore never
+    reached Drive/GitHub → the six committed `reports/dev/patch_full_ep10/metrics_*.json`
+    quote `patch_sigma_sha256` values whose artifact no longer exists, so those results
+    cannot be re-derived. Any bundle SHALL include every artifact its reports hash-bind:
+    checkpoints (`last.pt` + epoch files), `run_manifest.json`, `progress.jsonl`,
+    `norm_stats.json`, **`patch_sigma.npz`**, and the metrics JSON.
+  - **Naming:** Drive bundles are dated and self-describing, e.g.
+    `patch_ep10_colab_2026-11-19.zip`, `sigma_eval_colab_2026-11-20.zip` — never a bare
+    `results.zip`. Both directions use the same convention so the owner always knows
+    which file to download and where it belongs when unpacked.
+  - **GitHub stays text-only.** `.gitignore` already blocks `/data/` (line 80),
+    `checkpoints/` (33) and `reports/figures/*.png|html` (56–58); no `.pt`/`.ckpt` has
+    ever been tracked and the repo is 55.5 MB (largest blob 4.14 MB) vs GitHub's 50 MB
+    warn / 100 MB hard limit. **Nothing needs changing there** — weights never go to
+    GitHub; only metrics JSON/CSV + findings go, and the binaries go to Drive.
+  - Deferred, owner-optional: a `scripts/bundle_run_artifacts.py` that packs a run plus a
+    SHA-256 manifest so a missing sidecar (the σ case) fails at bundle time instead of at
+    eval time. Not written yet — the manual naming convention above covers the need for now.
+- ▶ **`phenology-method-v2` (owner-stated current focus, 2026-11-20)** — the new phenology
+  method is the thing being finished now; the immediate downstream consequence is a
+  **second heavy GRU training run on Colab** once it is implemented. Status today: the
+  phenology `PhaseAxis` contract exists (`config.py:18` → `doy`/`dsh`/`gdd`/`landmark`,
+  default `DSH`) and the alternative axes have working implementations
+  (`phenology/align.py`: `compute_dsh`, `compute_gdd`, `phase_bin`;
+  `baseline/b2_phenology_axes.py`: `progress_axis`, `bin_by_progress`, `gdd_progress`,
+  `landmark_progress`), but **only `DSH` is wired into the training path** — `PhaseAxis`
+  is referenced nowhere outside `config.py`, so choosing GDD/landmark currently changes
+  nothing in `train_ssl.py` / `patch_data.py`. Remaining work to call the method
+  "implemented": (a) make the axis selection actually reach tokenization/bin assignment in
+  the training path, (b) tests for the non-DSH axes in the train path (today only
+  `test_align.py` + `test_baseline_comparators.py` cover the math), (c) smoke run +
+  inspected output, (d) **then** the Colab GRU retrain per the compute-placement policy
+  above, (e) σ + eval on the same eval-subset hash so the result stays comparable with
+  findings 18–24. Blocking question for the owner: does "new phenology method" mean
+  wiring an existing axis (GDD/landmark), or a new axis/alignment not in the repo yet?
+  Do not start the Colab retrain before that is answered.
 - ▶ **2026-11-19 full-archive patch run + G4 probe (owner run mandate)** —
   - ✅ Pre-flight: patch unit battery 285 tests → 2 failures fixed (`test_holdout_is_required` was not hermetic once the real `data/processed/holdout_manifest.json` existed — `load_holdout_manifest` default now resolves at call time; `test_patch_severity_cli...` still expected the pre-`_s{seed}` metrics filename from before the 08c969f collision fix).
   - ✅ Extraction default-size correction: `P.DEFAULT_PATCH_SIZE` is 32 (locked schema default), NOT 48 as assumed — the first full-extraction attempt failed the fail-closed geometry gate at field 6 (bbox 33×12 > 32). Relaunched with explicit `--patch-size 48` (the PoC protocol; store attrs prove the PoC used it) + `--mask` + `--splits`. **Full store DONE 2026-11-19: `data/processed/patches.zarr`, 370 fields × 799 recorded cycles, S=48, 36 bins × 8 ch, provenance bound to splits 9aa5eb11, wall ≈ 3.6 h** (370 fields: 120 fields have only censored cycles and are absent by design; 37 test-block fields present but read-gated).
