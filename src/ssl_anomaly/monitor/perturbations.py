@@ -75,6 +75,14 @@ TYPE_CHANNELS: dict[str, tuple[int, ...]] = {
 }
 
 
+def ndvi_from_red_nir(red: float, nir: float) -> float:
+    """NDVI = (nir − red) / (nir + red)."""
+    s = red + nir
+    if s == 0:
+        raise ValueError("ndvi is undefined for red + nir == 0")
+    return (nir - red) / s
+
+
 def savi_from_red_nir(red: float, nir: float, L: float = SAVI_L) -> float:
     """SAVI = (1 + L) · (nir − red) / (nir + red + L)."""
     return (1.0 + L) * (nir - red) / (nir + red + L)

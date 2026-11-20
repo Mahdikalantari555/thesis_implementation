@@ -43,8 +43,18 @@ from ssl_anomaly.monitor.perturbations import (
     NDVI_PHYSICAL_RANGE,
     REFLECTANCE_PHYSICAL_RANGE,
     _solve_savi_drop,
+    ndvi_from_red_nir,
     savi_from_red_nir,
 )
+
+# Injection basis (change consistent-spectral-injection). ``index_only`` is the
+# historical channel-level behavior (findings 18/22/23/24 comparability row);
+# ``bands_consistent`` realizes every requested index drop through the raw
+# Red/NIR bands and recomputes the stored NDVI channel from the final bands —
+# the derived channel can never contradict the bands it came from.
+BASIS_INDEX_ONLY = "index_only"
+BASIS_BANDS_CONSISTENT = "bands_consistent"
+INJECTION_BASES: tuple[str, ...] = (BASIS_INDEX_ONLY, BASIS_BANDS_CONSISTENT)
 
 # Temporal shapes. ``acute``/``persistent`` are the frozen protocol; ``gradual``
 # is the third primary shape; the last two are SECONDARY diagnostics that must
@@ -174,6 +184,7 @@ class PatchInjection:
             "spatial": self.meta.get("spatial"),
             "ramp_duration": self.meta.get("ramp_duration"),
             "level_id": self.meta.get("level_id"),
+            "injection_basis": self.meta.get("injection_basis"),
         }
 
     def to_hash_record(self) -> dict:
@@ -207,6 +218,74 @@ def _profile(shape: str, n_bins: int, onset: int, duration: int, *, ramp: int | 
     raise ValueError(f"unsupported shape {shape!r}")
 
 
+def _solve_ndvi_drop(red: float, nir: float, delta: float) -> tuple[float, float] | None:
+    """Sum-preserving red/nir solve realizing an NDVI drop of ``delta``.
+
+    Keeps ``nir + red`` constant and moves mass from nir to red, so brightness
+    is not smuggled into the injection (the same discipline as the SAVI
+    solver). Returns ``None`` when unrealizable: a degenerate sum or a target
+    NDVI outside (−1, 1), where no positive band split exists.
+    """
+    s = red + nir
+    if s <= 0:
+        return None
+    ndvi_new = (nir - red) / s - delta
+    if ndvi_new <= -1.0 or ndvi_new >= 1.0:
+        return None
+    nir_new = s * (1.0 + ndvi_new) / 2.0
+    return s - nir_new, nir_new
+
+
+def _solve_index_drop_on_bands(
+    values: np.ndarray,   # (T, C, S, S) float64 working copy (mutated)
+    b: int,
+    ys: np.ndarray,
+    xs: np.ndarray,
+    *,
+    index: str,
+    delta_bin: float,
+    x: np.ndarray,        # (T, C, S, S) ORIGINAL values (pre-injection)
+) -> tuple[list[float], list[float], int]:
+    """One pixel set of a ``bands_consistent`` injection at bin ``b``.
+
+    Solves the requested index drop on (red, nir), writes the bands, then
+    RECOMPUTES the stored NDVI channel from the final bands — the derived
+    channel always stays consistent with the bands it came from, whichever arm
+    runs. Returns ``(realized_requested, realized_side, n_floored)``: the
+    side effect is the other vegetation index's realized drop (SAVI under an
+    ndvi-arm solve, NDVI under a savi-arm solve), recorded but never gated
+    (the severity gate stays defined on the requested index only).
+    """
+    lo_r, hi_r = REFLECTANCE_PHYSICAL_RANGE
+    n_floored = 0
+    got: list[float] = []
+    side: list[float] = []
+    solve = _solve_ndvi_drop if index == "ndvi" else _solve_savi_drop
+    for yy, xx in zip(ys, xs):
+        solved = solve(
+            float(values[b, CH_RED, yy, xx]), float(values[b, CH_NIR, yy, xx]),
+            float(delta_bin),
+        )
+        if solved is None:
+            continue
+        red_new, nir_new = solved
+        for ch, val in ((CH_RED, red_new), (CH_NIR, nir_new)):
+            f = min(max(val, lo_r), hi_r)
+            if f != val:
+                n_floored += 1
+            values[b, ch, yy, xx] = f
+        red_o, nir_o = float(x[b, CH_RED, yy, xx]), float(x[b, CH_NIR, yy, xx])
+        red_n, nir_n = float(values[b, CH_RED, yy, xx]), float(values[b, CH_NIR, yy, xx])
+        values[b, CH_NDVI, yy, xx] = ndvi_from_red_nir(red_n, nir_n)
+        if index == "ndvi":
+            got.append(ndvi_from_red_nir(red_o, nir_o) - ndvi_from_red_nir(red_n, nir_n))
+            side.append(savi_from_red_nir(red_o, nir_o) - savi_from_red_nir(red_n, nir_n))
+        else:
+            got.append(savi_from_red_nir(red_o, nir_o) - savi_from_red_nir(red_n, nir_n))
+            side.append(ndvi_from_red_nir(red_o, nir_o) - ndvi_from_red_nir(red_n, nir_n))
+    return got, side, n_floored
+
+
 def inject_patch_drop(
     x: np.ndarray,               # (T, C, S, S) values
     m: np.ndarray,               # (T, C, S, S) bool observation mask
@@ -222,20 +301,37 @@ def inject_patch_drop(
     rng: np.random.Generator | None = None,
     ramp_duration: int | None = None,
     level_id: str | None = None,
+    injection_basis: str = BASIS_INDEX_ONLY,
 ) -> PatchInjection:
     """Inject one index drop into a patch tensor, per pixel, per bin.
 
-    ``index``: ``"ndvi"`` (channel 0 shifted by −δ·profile(b)) or ``"savi"``
-    (the sum-preserving red/nir solver at the bin's partial δ, per pixel —
-    never fabricated as a channel). Only observed entries are modified and the
-    mask is never changed, exactly like the field-level applier.
+    ``index``: ``"ndvi"`` or ``"savi"``. ``injection_basis`` selects how the
+    drop is realized:
 
-    ``in_field`` defaults to "every pixel with any observation", so a caller
-    that has already masked the tensor cannot inject outside the field by
-    accident; passing the stored ``in_field`` explicitly is preferred.
+    * ``bands_consistent`` (the primary gate basis, change
+      consistent-spectral-injection): the drop is solved on the raw Red/NIR
+      bands (sum-preserving, per pixel) and the stored NDVI channel is
+      RECOMPUTED from the final bands — the derived channel can never
+      contradict the bands it came from. The other vegetation index moves as a
+      recorded side effect and is never gated.
+    * ``index_only`` (the historical behavior, kept verbatim for the findings
+      18/22/23/24 comparability row): ``"ndvi"`` shifts channel 0 only
+      (Red/NIR untouched); ``"savi"`` solves Red/NIR without recomputing the
+      stored NDVI channel — i.e. the derived channel is left stale by design.
+      This basis is a labeled sensitivity row, never a primary gate.
+
+    Only observed entries are modified and the mask is never changed, exactly
+    like the field-level applier. ``in_field`` defaults to "every pixel with
+    any observation", so a caller that has already masked the tensor cannot
+    inject outside the field by accident; passing the stored ``in_field``
+    explicitly is preferred. The function-level default stays ``index_only``
+    so historical call paths are unchanged until a caller (the eval sweep)
+    explicitly selects the primary basis.
     """
     if index not in ("ndvi", "savi"):
         raise ValueError(f"unknown index {index!r}")
+    if injection_basis not in INJECTION_BASES:
+        raise ValueError(f"unknown injection basis {injection_basis!r}")
     T, C, S, _ = x.shape
     if m.shape != x.shape:
         raise ValueError(f"mask shape {m.shape} != values shape {x.shape}")
@@ -248,11 +344,33 @@ def inject_patch_drop(
     prof = _profile(shape, T, onset, duration, ramp=ramp_duration)
 
     realized: list[float] = []
+    side_realized: list[float] = []
     n_floored = 0
     n_skipped = 0
     n_touched = 0
+    band_consistent = injection_basis == BASIS_BANDS_CONSISTENT
 
-    if index == "ndvi":
+    if band_consistent:
+        # Both arms: band-level solve + recompute of the derived channel.
+        for b in range(T):
+            mult = prof[b]
+            if mult <= 0:
+                continue
+            sel = mask[b, CH_RED] & mask[b, CH_NIR] & fm
+            if not sel.any():
+                n_skipped += 1
+                continue
+            ys, xs = np.nonzero(sel)
+            got, side, fl = _solve_index_drop_on_bands(
+                values, b, ys, xs, index=index, delta_bin=delta * mult, x=x,
+            )
+            n_floored += fl
+            n_touched += len(got)
+            if got:
+                realized.append(float(np.mean(got)))
+                side_realized.append(float(np.mean(side)))
+    elif index == "ndvi":
+        # index_only legacy: channel 0 shifts, Red/NIR stay untouched.
         ch = CH_NDVI
         lo, hi = NDVI_PHYSICAL_RANGE
         for b in range(T):
@@ -270,6 +388,8 @@ def inject_patch_drop(
             values[b, ch][sel] = floored
             realized.append(float(delta * mult))
     else:
+        # index_only legacy savi: the solver writes Red/NIR and the stored
+        # NDVI channel is intentionally left stale (the audited inconsistency).
         lo_r, hi_r = REFLECTANCE_PHYSICAL_RANGE
         for b in range(T):
             mult = prof[b]
@@ -311,8 +431,14 @@ def inject_patch_drop(
             "footprint_realized": float(fm.sum() / max(1, np.asarray(in_field, bool).sum())),
             "ramp_duration": (int(ramp_duration or duration) if shape == SHAPE_GRADUAL else None),
             "level_id": level_id,
+            "injection_basis": injection_basis,
             "profile": [round(float(v), 6) for v in prof],
             "delta_realized_per_active_bin": [round(v, 6) for v in realized],
+            "side_effect_index": (("savi" if index == "ndvi" else "ndvi")
+                                  if band_consistent else None),
+            "side_effect_drop_per_active_bin": (
+                [round(v, 6) for v in side_realized] if band_consistent else None
+            ),
             "n_bins_touched": int(np.sum(prof > 0)),
             "n_skipped_bins": n_skipped,
             "n_floored_values": n_floored,
@@ -336,6 +462,7 @@ def inject_patch_recovery(
     in_field: np.ndarray | None = None,
     footprint: float = FOOTPRINT_PROTOCOL,
     level_id: str | None = None,
+    injection_basis: str = BASIS_INDEX_ONLY,
 ) -> PatchInjection:
     """SECONDARY diagnostic: failure-to-recover or slow-recovery after a drop.
 
@@ -343,10 +470,16 @@ def inject_patch_recovery(
     ``mode="slow"``: the series ramps back at half the natural slope (i.e. over
     2× ``drop_bins``, capped at cycle end).
 
+    ``injection_basis`` follows :func:`inject_patch_drop` — under
+    ``bands_consistent`` the drop is solved on the raw bands and the stored
+    NDVI channel is recomputed from the final bands.
+
     This never enters a primary gate (spec "Secondary shapes stay secondary").
     """
     if mode not in ("fail", "slow"):
         raise ValueError(f"unknown recovery mode {mode!r}")
+    if injection_basis not in INJECTION_BASES:
+        raise ValueError(f"unknown injection basis {injection_basis!r}")
     T = x.shape[0]
     values = x.astype(np.float64, copy=True)
     mask = np.asarray(m, dtype=bool)
@@ -364,7 +497,18 @@ def inject_patch_recovery(
         for t in range(T - s):
             prof[s + t] = max(0.0, 1.0 - (t + 1) / span)
 
-    if index == "ndvi":
+    if injection_basis == BASIS_BANDS_CONSISTENT:
+        for b in range(T):
+            if prof[b] <= 0:
+                continue
+            sel = mask[b, CH_RED] & mask[b, CH_NIR] & fm
+            if not sel.any():
+                continue
+            ys, xs = np.nonzero(sel)
+            _solve_index_drop_on_bands(
+                values, b, ys, xs, index=index, delta_bin=delta * prof[b], x=x,
+            )
+    elif index == "ndvi":
         lo, hi = NDVI_PHYSICAL_RANGE
         for b in range(T):
             if prof[b] <= 0:
@@ -400,6 +544,7 @@ def inject_patch_recovery(
             "spatial": SPATIAL_CONTIGUOUS, "recovery_mode": mode,
             "hold_bins": int(hold_bins) if mode == "fail" else None,
             "level_id": level_id, "secondary": True,
+            "injection_basis": injection_basis,
             "profile": [round(float(v), 6) for v in prof],
         },
     )
@@ -417,10 +562,13 @@ def injection_set_sha256(injections: list[PatchInjection]) -> str:
 
 
 __all__ = [
+    "BASIS_BANDS_CONSISTENT",
+    "BASIS_INDEX_ONLY",
     "EXTENT_SWEEP",
     "FOOTPRINT_LOCALIZATION",
     "FOOTPRINT_PROTOCOL",
     "GRADUAL_DURATIONS",
+    "INJECTION_BASES",
     "PRIMARY_SHAPES",
     "RECOVERY_HOLD_BINS",
     "SECONDARY_SHAPES",

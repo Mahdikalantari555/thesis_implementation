@@ -31,6 +31,7 @@ from __future__ import annotations
 import numpy as np
 
 from ssl_anomaly.io import patches as P
+from ssl_anomaly.monitor.patch_perturbations import BASIS_INDEX_ONLY
 from ssl_anomaly.train.patch_data import read_cycle_inputs
 
 SENTINEL_ABSENT = "absent"
@@ -120,12 +121,15 @@ def patch_arm_scores(
     round_idx: int,
     rng=None,
     field_row: np.ndarray | None = None,
+    injection_basis: str = BASIS_INDEX_ONLY,
 ) -> dict:
     """Score one severity cell: inject in the PATCH tensor, then score.
 
     Returns ``{"z2": (N,T,1), "paths": (N,T), "injections": [...]}``. The
     injections carry their hash payload, so the cell's identity in the report
-    is verifiable against the field-level ladder's.
+    is verifiable against the field-level ladder's. ``injection_basis``
+    selects the injector semantics (change consistent-spectral-injection); the
+    caller — the eval sweep — decides which basis is the primary gate.
     """
     from ssl_anomaly.monitor import patch_perturbations as ppert
     from ssl_anomaly.monitor import severity_table as sev
@@ -147,7 +151,7 @@ def patch_arm_scores(
             batch["raw"][n].astype(np.float32), batch["obs"][n],
             index=index, delta=delta, onset_bin=onset, shape=family,
             duration=int(duration), in_field=batch["in_field"][n],
-            level_id=level_id, rng=rng,
+            level_id=level_id, rng=rng, injection_basis=injection_basis,
         )
         Xinj[n], _ = P.normalize_patch(
             inj.x, batch["obs"][n], batch["sensor_id"][n], batch["norm_stats"]
@@ -157,6 +161,7 @@ def patch_arm_scores(
     out = arm.score_cycles(Xinj, Minj, None, None, **extra, **_scoring_inputs(batch))
     return {"z2": out["z2"], "paths": out["score"], "p_value": out["p_value"],
             "observed": Minj.any(axis=(2, 3)),   # (N, T): any in-field pixel seen
+            "injection_basis": injection_basis,
             "injections": injections}
 
 
@@ -229,6 +234,7 @@ def localization_auprc(
 def patch_localization_scores(
     scorer, batch: dict, *, level_id: str, family: str, index: str,
     round_idx: int = 0, footprint: float = LOCALIZATION_FOOTPRINT,
+    injection_basis: str = BASIS_INDEX_ONLY,
 ) -> dict:
     """One G4 cell: inject at a partial footprint, keep the per-pixel maps.
 
@@ -263,6 +269,7 @@ def patch_localization_scores(
             index=index, delta=delta, onset_bin=onset, shape=family,
             duration=int(duration), in_field=batch["in_field"][n],
             footprint=float(footprint), level_id=level_id, rng=rng,
+            injection_basis=injection_basis,
         )
         Xinj[n], _ = P.normalize_patch(
             inj.x, batch["obs"][n], batch["sensor_id"][n], batch["norm_stats"]
@@ -277,6 +284,7 @@ def patch_localization_scores(
     return {
         "metrics": metrics, "level_id": level_id, "family": family,
         "index": index, "onset_bins": onsets, "duration_bins": int(duration),
+        "injection_basis": injection_basis,
         "footprint_requested": float(footprint),
         "footprint_realized": float(footprints.sum()
                                     / max(1, int(np.asarray(batch["in_field"], dtype=bool).sum()))),

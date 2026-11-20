@@ -223,7 +223,7 @@ def test_secondary_shapes_are_registered_separately():
 
 @pytest.mark.parametrize("mode", ["fail", "slow"])
 def test_recovery_shapes_apply_and_are_flagged_secondary(mode):
-    x, m, inf = _patch()
+    x, m, inf = _patch_c()
     inj = PP.inject_patch_recovery(
         x, m, index="ndvi", delta=0.16, onset_bin=10, drop_bins=2,
         mode=mode, hold_bins=3, in_field=inf,
@@ -269,3 +269,136 @@ def test_injection_set_hash_changes_with_the_set():
     h2 = PP.injection_set_sha256([a, b])
     assert h1 != h2
     assert h1 == PP.injection_set_sha256([a])
+
+
+# --- injection basis (change consistent-spectral-injection) ----------------
+def _patch_c(red=0.15, nir=0.55, infield_slice=(4, 28)):
+    """``_patch`` with a SELF-CONSISTENT NDVI channel: the real store derives
+    channel 0 from the same bands; the plain fixture's 0.70 is arbitrary and
+    would make even the clean data violate the invariant."""
+    x, m, inf = _patch(ndvi=0.0, red=red, nir=nir, infield_slice=infield_slice)
+    x[:, 0] = (nir - red) / (nir + red)
+    return x, m, inf
+
+
+def _ndvi_channel_consistent(inj_x, m):
+    """stored NDVI ≡ ndvi_from(red, nir) on every observed pixel-bin."""
+    obs = m[:, 3] & m[:, 4]
+    red, nir = inj_x[:, 3], inj_x[:, 4]
+    np.testing.assert_allclose(
+        inj_x[:, 0][obs], ((nir - red) / (red + nir))[obs], atol=1e-9)
+
+
+@pytest.mark.parametrize("index", ["ndvi", "savi"])
+def test_bands_consistent_keeps_the_ndvi_channel_consistent_with_bands(index):
+    x, m, inf = _patch_c()
+    inj = PP.inject_patch_drop(
+        x, m, index=index, delta=_delta("S3"), onset_bin=10, duration=2,
+        in_field=inf, injection_basis=PP.BASIS_BANDS_CONSISTENT)
+    _ndvi_channel_consistent(inj.x, m)
+
+
+def test_bands_consistent_ndvi_realizes_the_requested_drop():
+    x, m, inf = _patch_c()
+    delta = _delta("S2")
+    inj = PP.inject_patch_drop(
+        x, m, index="ndvi", delta=delta, onset_bin=10, duration=2,
+        in_field=inf, injection_basis=PP.BASIS_BANDS_CONSISTENT)
+    assert inj.meta["injection_basis"] == "bands_consistent"
+    assert len(inj.meta["delta_realized_per_active_bin"]) == 2
+    for v in inj.meta["delta_realized_per_active_bin"]:
+        assert v == pytest.approx(delta, abs=1e-9)
+    got = x[10:12, 0, 16, 16] - inj.x[10:12, 0, 16, 16]
+    assert np.allclose(got, delta, atol=1e-9)
+    # the side effect is recorded, never gated
+    assert inj.meta["side_effect_index"] == "savi"
+    assert inj.meta["side_effect_drop_per_active_bin"] is not None
+    assert len(inj.meta["side_effect_drop_per_active_bin"]) == 2
+
+
+def test_bands_consistent_savi_recomputes_the_stale_ndvi_channel():
+    x, m, inf = _patch_c()
+    delta = _delta("S2")
+    inj = PP.inject_patch_drop(
+        x, m, index="savi", delta=delta, onset_bin=10, duration=2,
+        in_field=inf, injection_basis=PP.BASIS_BANDS_CONSISTENT)
+    # unlike index_only, the stored NDVI channel MOVED with the bands
+    assert not np.allclose(x[10, 0, 16, 16], inj.x[10, 0, 16, 16])
+    assert inj.meta["side_effect_index"] == "ndvi"
+    for v in inj.meta["delta_realized_per_active_bin"]:
+        assert v == pytest.approx(delta, abs=1e-6)
+    _ndvi_channel_consistent(inj.x, m)
+
+
+def test_index_only_ndvi_is_unchanged_channel_shift():
+    """The historical basis (findings 18/22/23/24 comparability row) is
+    preserved verbatim: bands untouched, channel shifted, NDVI left stale."""
+    x, m, inf = _patch_c()
+    delta = _delta("S3")
+    inj = PP.inject_patch_drop(
+        x, m, index="ndvi", delta=delta, onset_bin=10, duration=2,
+        in_field=inf, injection_basis=PP.BASIS_INDEX_ONLY)
+    np.testing.assert_array_equal(inj.x[:, 3], x[:, 3])
+    np.testing.assert_array_equal(inj.x[:, 4], x[:, 4])
+    np.testing.assert_allclose(
+        inj.x[10:12, 0, 16, 16], x[10:12, 0, 16, 16] - delta, atol=1e-9)
+    assert inj.meta["injection_basis"] == "index_only"
+    assert inj.meta["side_effect_index"] is None
+    # the documented inconsistency: the channel no longer matches the bands
+    moved = inj.x[10, 0, 16, 16]
+    stale = FP.ndvi_from_red_nir(inj.x[10, 3, 16, 16], inj.x[10, 4, 16, 16])
+    assert abs(moved - stale) == pytest.approx(delta, abs=1e-9)
+
+
+def test_injection_basis_enters_the_set_identity():
+    kw = dict(index="savi", delta=0.10, onset_bin=10, duration=2)
+    xa, ma, ia = _patch_c()
+    a = PP.inject_patch_drop(xa, ma, in_field=ia, **kw,
+                             injection_basis=PP.BASIS_INDEX_ONLY)
+    xb, mb, ib = _patch_c()
+    b = PP.inject_patch_drop(xb, mb, in_field=ib, **kw,
+                             injection_basis=PP.BASIS_BANDS_CONSISTENT)
+    assert PP.injection_set_sha256([a]) != PP.injection_set_sha256([b])
+    xc, mc, ic = _patch_c()
+    c = PP.inject_patch_drop(xc, mc, in_field=ic, **kw,
+                             injection_basis=PP.BASIS_BANDS_CONSISTENT)
+    assert PP.injection_set_sha256([b]) == PP.injection_set_sha256([c])
+
+
+def test_unknown_basis_is_loud():
+    x, m, inf = _patch_c()
+    with pytest.raises(ValueError, match="injection basis"):
+        PP.inject_patch_drop(x, m, index="ndvi", delta=0.1, onset_bin=10,
+                             duration=2, in_field=inf, injection_basis="both")
+
+
+def test_bands_consistent_gradual_ramp_stays_consistent():
+    x, m, inf = _patch_c()
+    delta = _delta("S4")
+    inj = PP.inject_patch_drop(
+        x, m, index="ndvi", delta=delta, onset_bin=8,
+        shape=PP.SHAPE_GRADUAL, ramp_duration=3, in_field=inf,
+        injection_basis=PP.BASIS_BANDS_CONSISTENT)
+    for t, mult in zip([8, 9, 10], [1 / 3, 2 / 3, 1.0]):
+        got = x[t, 0, 16, 16] - inj.x[t, 0, 16, 16]
+        assert got == pytest.approx(delta * mult, abs=1e-9)
+    _ndvi_channel_consistent(inj.x, m)
+
+
+def test_bands_consistent_white_null_stays_consistent():
+    x, m, inf = _patch_c()
+    inj = PP.inject_patch_drop(
+        x, m, index="savi", delta=0.10, onset_bin=10, duration=2,
+        in_field=inf, spatial=PP.SPATIAL_WHITE, rng=np.random.default_rng(7),
+        injection_basis=PP.BASIS_BANDS_CONSISTENT)
+    _ndvi_channel_consistent(inj.x, m)
+
+
+@pytest.mark.parametrize("mode", ["fail", "slow"])
+def test_bands_consistent_recovery_keeps_the_channel_consistent(mode):
+    x, m, inf = _patch_c()
+    inj = PP.inject_patch_recovery(
+        x, m, index="ndvi", delta=0.10, onset_bin=8, drop_bins=3, mode=mode,
+        in_field=inf, injection_basis=PP.BASIS_BANDS_CONSISTENT)
+    _ndvi_channel_consistent(inj.x, m)
+    assert inj.meta["injection_basis"] == "bands_consistent"
