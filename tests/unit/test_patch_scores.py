@@ -247,14 +247,18 @@ def test_adapter_returns_the_pipeline_pair():
     scores, pred = scorer.loo_batch(X, M)
     assert scores.shape == (4, 4)
     assert pred.shape == (4, 4, C)
-    assert np.isfinite(scores).all()
-    assert np.isfinite(pred).all()
+    # one-step-ahead: bin 0 has no earlier state to forecast from (change
+    # score-semantics-realignment); every scored bin is finite.
+    assert np.isnan(scores[:, 0]).all()
+    assert np.isfinite(scores[:, 1:]).all()
+    assert np.isnan(pred[:, 0]).all()
+    assert np.isfinite(pred[:, 1:]).all()
 
 
 def test_adapter_scores_are_non_negative_squared_residuals():
     scorer, X, M = _adapter()
     scores, _ = scorer.loo_batch(X, M)
-    assert (scores >= 0).all()
+    assert (scores[:, 1:] >= 0).all()
 
 
 def test_adapter_ignores_out_of_field_pixels_entirely():
@@ -301,7 +305,8 @@ def test_adapter_accepts_a_shared_in_field_mask():
     X = g.normal(0, 1, size=(2, 4, C, 32, 32)).astype(np.float32)
     M = np.ones((2, 4, 32, 32), bool)
     scores, _ = scorer.loo_batch(X, M)
-    assert np.isfinite(scores).all()
+    assert np.isnan(scores[:, 0]).all()
+    assert np.isfinite(scores[:, 1:]).all()
 
 
 def test_adapter_mask_is_independent_of_other_samples():
@@ -326,7 +331,7 @@ def test_adapter_handles_a_bin_with_no_observed_pixel():
     M2[:, 2] = False                        # whole bins unobserved
     scores, _ = scorer.loo_batch(X, M2)
     assert np.isnan(scores[:, 2]).all()
-    assert np.isfinite(scores[:, 0]).all()
+    assert np.isfinite(scores[:, 1]).all()
 
 
 def test_adapter_sensor_ids_are_validated():
@@ -365,7 +370,8 @@ def test_adapter_declined_doy_is_not_reinterpreted_as_covariates():
         scorer.loo_batch(X, M, g.random((2, 4, 2)))
     # ...but explicit covariates are routed through
     scores, _ = scorer.loo_batch(X, M, covariates=g.random((2, 4, 2)))
-    assert np.isfinite(scores).all()
+    assert np.isnan(scores[:, 0]).all()
+    assert np.isfinite(scores[:, 1:]).all()
 
 
 def test_adapter_pixelwise_control_runs_the_same_interface():
@@ -373,7 +379,8 @@ def test_adapter_pixelwise_control_runs_the_same_interface():
     scores, pred = scorer.loo_batch(X, M)
     assert scores.shape == (4, 4)
     assert pred.shape == (4, 4, C)
-    assert np.isfinite(scores).all()
+    assert np.isnan(scores[:, 0]).all()
+    assert np.isfinite(scores[:, 1:]).all()
 
 
 # --- PatchArmScorer (task 2.4) --------------------------------------------
@@ -436,9 +443,10 @@ def test_arm_score_cycles_returns_a_single_channel_z2():
     out = arm.score_cycles(X[:, :4], M[:, :4], None, None, idx=np.array([0, 1, 2, 3]))
     assert out["z2"].shape == (4, 4, 1)
     assert out["p_value"].shape == (4, 4)
-    assert np.isfinite(out["z2"]).all()
+    assert np.isnan(out["z2"][:, 0]).all()      # bin 0 unscored
+    assert np.isfinite(out["z2"][:, 1:]).all()
     # the alarm direction is preserved: larger raw path -> larger -log(p)
-    assert out["z2"][0, 0, 0] >= 0
+    assert out["z2"][0, 1, 0] >= 0
 
 
 def test_tail_max_is_nan_tolerant_and_looks_backwards_only():
@@ -450,3 +458,83 @@ def test_tail_max_is_nan_tolerant_and_looks_backwards_only():
     # a NaN bin still sees the 0.5 two bins back; only a fully-NaN window is NaN
     np.testing.assert_allclose(got[4], 0.5)
     assert np.isnan(got[5])
+
+
+# --- scoring alignment (change score-semantics-realignment) ----------------
+def _tiny_scorer(alignment=PS.ALIGNMENT_ONE_STEP_AHEAD, *, T=8, seed=3):
+    """A real (tiny) model behind the adapter, for alignment-level tests."""
+    torch.manual_seed(seed)
+    model = build_patch_model(use_cnn=False, d_model=8, n_horizons=3)
+    N, C, S = 2, 8, 6
+    G = int(np.ceil(T / PS.PHASE_BIN))
+    sigma = PS.PatchSigmaTable(
+        sigma=np.full((G, C, 3), 1.0), fallback=np.ones(C),
+        n=np.full((G, C, 3), 100, dtype=np.int64), sha256="tiny")
+    x = np.random.default_rng(0).normal(size=(N, T, C, S, S)).astype(np.float32)
+    pv = np.ones((N, T, S, S), dtype=bool)
+    in_field = np.ones((N, S, S), dtype=bool)
+    scorer = PS.PatchDeepScorer(
+        "tiny", model, sigma, in_field=in_field, n_channels=C,
+        bins=np.arange(T), device="cpu", alignment=alignment)
+    return scorer, x, pv, np.zeros((N, T), dtype=np.int64)
+
+
+def test_prediction_of_bin_t_does_not_read_bin_t():
+    """THE target-leak invariant (spec scenario): the FORECAST of bin t is
+    formed without bin t's values, so perturbing bin t leaves the prediction
+    byte-identical and every score at bins < t byte-identical. Bin t's own
+    residual changes ONLY through the observed-vs-forecast comparison — that
+    difference is the detection signal, not a leak. The v2 readout fails the
+    prediction half by construction (its forecast of bin t consumed bin t)."""
+    scorer, x, pv, sids = _tiny_scorer()
+    base = scorer.predict_pixels(x, pv, sensor_ids=sids)
+    x2 = x.copy()
+    x2[:, 3] += 5.0                                   # perturb bin 3's values
+    pert = scorer.predict_pixels(x2, pv, sensor_ids=sids)
+    # the prediction of bins 0..3 is untouched by bin 3's values
+    assert np.array_equal(base["pred"][:, :4], pert["pred"][:, :4], equal_nan=True)
+    # scores at bins < 3 (residuals against unchanged targets) identical
+    assert np.array_equal(base["paths"][:, :3], pert["paths"][:, :3], equal_nan=True)
+    # bin 3's residual moves through the target side only (the signal)
+    assert not np.array_equal(base["paths"][:, 3], pert["paths"][:, 3])
+    # bin 4's forecast legitimately consumes bin 3 (it is now the past)
+    assert not np.array_equal(base["pred"][:, 4], pert["pred"][:, 4])
+
+
+def test_bin0_is_unscored_under_one_step_ahead():
+    scorer, x, pv, sids = _tiny_scorer()
+    out = scorer.predict_pixels(x, pv, sensor_ids=sids)
+    assert np.isnan(out["paths"][:, 0]).all()
+    assert np.isfinite(out["paths"][:, 1:]).all()
+    assert np.isnan(out["pred"][:, 0]).all()
+
+
+def test_input_inclusive_alignment_reproduces_the_v2_readout():
+    """The historical readout (findings 23/24) stays available verbatim: bin 0
+    is scored from its own input, and perturbing bin t DOES move its own
+    score — the audited input-inclusive semantics, never a forecast claim."""
+    scorer, x, pv, sids = _tiny_scorer(alignment=PS.ALIGNMENT_INPUT_INCLUSIVE)
+    base = scorer.predict_pixels(x, pv, sensor_ids=sids)
+    assert np.isfinite(base["paths"]).all()
+    x2 = x.copy()
+    x2[:, 3] += 5.0
+    pert = scorer.predict_pixels(x2, pv, sensor_ids=sids)
+    assert not np.array_equal(base["paths"][:, 3], pert["paths"][:, 3])
+
+
+def test_alignment_for_protocol_maps_known_and_rejects_unknown():
+    assert PS.alignment_for_protocol("patch_train_v3") == PS.ALIGNMENT_ONE_STEP_AHEAD
+    assert PS.alignment_for_protocol("patch_train_v2") == PS.ALIGNMENT_INPUT_INCLUSIVE
+    # pre-v3 checkpoints carry no protocol field in their config: the absence
+    # is the v2 era by definition (documented mapping, not a guess)
+    assert PS.alignment_for_protocol(None) == PS.ALIGNMENT_INPUT_INCLUSIVE
+    with pytest.raises(ValueError, match="no scoring alignment"):
+        PS.alignment_for_protocol("patch_train_v1")
+
+
+def test_unknown_alignment_is_loud():
+    scorer, x, pv, sids = _tiny_scorer()
+    with pytest.raises(ValueError, match="unknown scoring alignment"):
+        PS.PatchDeepScorer(
+            "tiny", scorer.model, scorer.sigma, in_field=scorer.in_field,
+            n_channels=8, bins=np.arange(8), device="cpu", alignment="magic")

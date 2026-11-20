@@ -46,6 +46,12 @@ from ssl_anomaly.train import run_plan as RP
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUT = REPO_ROOT / "checkpoints" / "patch"
 
+# Training alignment protocol (change score-semantics-realignment): horizon k
+# at anchor t forecasts bin t+k+1 (true one-step-ahead). Recorded in every run
+# manifest; eval_dev maps it to the matching scoring alignment and refuses any
+# unknown protocol instead of guessing the readout semantics.
+TRAIN_PROTOCOL = "patch_train_v3"
+
 
 # ---------------------------------------------------------------------------
 # helpers
@@ -69,6 +75,9 @@ def config_hash(cfg: dict) -> str:
         "data_source", "holdout_sha256", "norm_sha256", "covariates", "input_protocol",
         "splits_sha256", "admitted_cycles_sha256", "max_cycles", "contaminate_seed", "smoke",
         "cpu_threads",
+        # score-semantics-realignment: the alignment protocol changes what the
+        # training produces, so a resumed run across the v2/v3 boundary fails.
+        "protocol",
         # patch-contamination-absorption task 1.2: a resumed run whose
         # contamination configuration changed is a different experiment.
         "contaminate_fraction", "trimmed_loss", "curation",
@@ -441,6 +450,11 @@ def cfg_from_args(args) -> dict:
         "max_cycles": args.max_cycles,
         "cpu_threads": args.cpu_threads,
         "contaminate_seed": int(args.contaminate_seed),
+        # True one-step-ahead alignment (change score-semantics-realignment):
+        # horizon k at anchor t forecasts bin t+k+1. The protocol id is part of
+        # the hashed config, so a v2-aligned checkpoint can never resume or be
+        # re-scored under the v3 semantics without an explicit error.
+        "protocol": TRAIN_PROTOCOL,
         "input_protocol": PD.PATCH_INPUT_PROTOCOL,
         "smoke": args.smoke,
         "n_channels": P.N_CHANNELS,
@@ -572,7 +586,7 @@ def main(argv=None) -> int:
     trained_model = run.pop("model")
     example = run.pop("example")
     report = {
-        "protocol": "patch_train_v2",
+        "protocol": TRAIN_PROTOCOL,
         "input_protocol": cfg["input_protocol"],
         "splits_sha256": cfg["splits_sha256"],
         "unnormalized_channels": sorted(ds.unnormalized_channels),

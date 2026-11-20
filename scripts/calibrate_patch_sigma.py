@@ -104,6 +104,10 @@ def main(argv: list[str] | None = None) -> int:
     scorer = PS.PatchDeepScorer(
         "sigma_calibration", model, unit,
         in_field=batch["in_field"], n_channels=P.N_CHANNELS, device="cpu",
+        # The sigma table fits the checkpoint's OWN residuals, so the readout
+        # must match the checkpoint's training alignment (change
+        # score-semantics-realignment); an unknown protocol is a hard error.
+        alignment=PS.alignment_for_protocol(cfg.get("protocol")),
     )
 
     n = batch["X"].shape[0]

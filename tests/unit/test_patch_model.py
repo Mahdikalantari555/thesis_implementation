@@ -37,19 +37,22 @@ def _batch(b: int = 2, seed: int = 0):
 
 # --- 1.1 causality ---------------------------------------------------------
 def test_future_bins_cannot_change_past_predictions():
-    """x̂ at bin t+k−1 depends only on bins ≤ t (spec scenario)."""
+    """x̂ of bin τ comes from bins < τ (spec scenario, one-step-ahead): the
+    anchor for bin τ is τ−1, so perturbing bins ≥ 20 leaves every forecast OF
+    bins < 20 — i.e. horizon-1 anchors ≤ 18 — byte-identical."""
     m = _model()
     x, pv = _batch()
     out = m(x, pv)
     x2 = x.clone()
     x2[:, 20:] = torch.randn_like(x2[:, 20:])
     out2 = m(x2, pv)
-    # horizon 1 at bins < 20 must be byte-identical
-    assert torch.equal(out["pred"][:, :20, 0], out2["pred"][:, :20, 0])
+    # horizon 1 at anchor t forecasts bin t+1: anchors < 19 are unchanged
+    assert torch.equal(out["pred"][:, :19, 0], out2["pred"][:, :19, 0])
 
 
 def test_horizon_k_reads_only_up_to_its_anchor_bin():
-    """Horizon 3 at bin t predicts t+2, so bins > t must not move it either."""
+    """Horizon k at anchor t forecasts bin t+k+1, so perturbed bins beyond the
+    target bin must not move it either (k is the 1-indexed horizon here)."""
     m = _model()
     x, pv = _batch()
     out = m(x, pv)
@@ -57,8 +60,9 @@ def test_horizon_k_reads_only_up_to_its_anchor_bin():
     x2[:, 15:] = 0.0
     out2 = m(x2, pv)
     for k in HORIZONS:
-        assert torch.equal(out["pred"][:, : 15 - k + 1, k - 1],
-                           out2["pred"][:, : 15 - k + 1, k - 1]), f"horizon {k} leaked"
+        # unchanged while the forecast target bin t+k+1 stays < 15
+        assert torch.equal(out["pred"][:, : 14 - k, k - 1],
+                           out2["pred"][:, : 14 - k, k - 1]), f"horizon {k} leaked"
 
 
 def test_out_of_range_horizon_slots_are_zero():
@@ -66,8 +70,9 @@ def test_out_of_range_horizon_slots_are_zero():
     m = _model()
     x, pv = _batch(b=1)
     out = m(x, pv)
-    assert torch.all(out["pred"][:, T - 1, 1:] == 0)
-    assert torch.all(out["pred"][:, T - 2, 2:] == 0)
+    assert torch.all(out["pred"][:, T - 1, :] == 0)    # forecasts bin T: absent
+    assert torch.all(out["pred"][:, T - 2, 1:] == 0)
+    assert torch.all(out["pred"][:, T - 3, 2:] == 0)
 
 
 # --- 1.1b farm-boundary isolation -----------------------------------------
@@ -264,3 +269,43 @@ def test_shape_errors_are_loud():
         m(x[:, :, :5], pv)
     with pytest.raises(ValueError, match="channels, model expects"):
         m.stem_input(torch.zeros(1, T, 3, S, S), pv)
+
+
+# --- one-step-ahead loss alignment (change score-semantics-realignment) ----
+def test_horizon_targets_are_shifted_one_step_ahead():
+    """hybrid_loss horizon 1 compares the prediction formed at anchor t with
+    bin t+1's values: a same-bin copy does NOT minimize it, the shifted copy
+    does — the loss cannot be minimized by reading the target it is scored
+    against."""
+    m = _model()
+    b = 1
+    x, _ = _batch(b=b)
+    obs = torch.ones(b, T, C, S, S, dtype=torch.bool)
+    zeros = {"pred": torch.zeros(b, T, m.n_horizons, C, S, S),
+             "aux": torch.zeros(b, T, C, S, S)}
+
+    same_bin = {k: (v.clone() if isinstance(v, torch.Tensor) else v) for k, v in zeros.items()}
+    same_bin["pred"][:, :, 0] = x                       # read the target itself
+    loss_same, _ = m.hybrid_loss(same_bin, x, obs)
+
+    shifted = {k: (v.clone() if isinstance(v, torch.Tensor) else v) for k, v in zeros.items()}
+    shifted["pred"][:, :-1, 0] = x[:, 1:]               # the forecaster's optimum
+    loss_shift, _ = m.hybrid_loss(shifted, x, obs)
+
+    assert float(loss_shift) < float(loss_same)
+
+
+def test_horizon0_anchor_tail_drops_out_of_the_loss():
+    """The last anchor has no target bin under the shifted alignment: feeding
+    it a wild value must not change the horizon-1 loss."""
+    m = _model()
+    b = 1
+    x, _ = _batch(b=b)
+    obs = torch.ones(b, T, C, S, S, dtype=torch.bool)
+    base = {"pred": torch.randn(b, T, m.n_horizons, C, S, S, generator=torch.Generator().manual_seed(1)),
+            "aux": torch.zeros(b, T, C, S, S)}
+    tail = {k: (v.clone() if isinstance(v, torch.Tensor) else v) for k, v in base.items()}
+    tail["pred"][:, T - 1, 0] = 1e6                     # would poison a same-bin loss
+    a, _ = m.hybrid_loss(base, x, obs)
+    b_loss, _ = m.hybrid_loss(tail, x, obs)
+    assert float(a) == pytest.approx(float(b_loss), rel=1e-6)

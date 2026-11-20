@@ -6,12 +6,17 @@ PoC" and "Farm-boundary isolation of patch inputs and scores".
 Shape contract (frozen by ``io/patches.py``): a field-cycle patch tensor is
 ``(T=36 bins, C=8 channels, S=32, S=32)`` fp16 values plus a boolean validity
 mask of the same shape. The model consumes ONE field-cycle at a time and
-predicts each bin from earlier bins only:
+predicts each bin from EARLIER bins only (true one-step-ahead, change
+score-semantics-realignment): the GRU state after bin ``t`` has consumed bins
+``0..t``, and horizon ``k`` at anchor ``t`` targets bin ``t + k + 1`` — so the
+horizon-1 readout used for scoring, ``pred[:, t-1, 0]``, is a prediction of bin
+``t`` from bins ``< t`` (bin 0 is never scored: nothing precedes it):
 
     x  (B, T, C, S, S)  raw or normalized values (NaN-free; caller zero-fills)
     m  (B, T, C, S, S)  bool observation mask  (pixel_valid ∧ in_field, per
                         channel — a channel can be unobserved at a pixel)
-       -->  y_hat (B, T, n_out, S, S)   prediction of bin t from bins < t
+       -->  y_hat (B, T, n_horizons, C, S, S)
+                   y_hat[:, t, k] forecasts bin t + k + 1 from bins ≤ t
 
 The **farm boundary is the mask** (spec "Farm-boundary isolation"): the stem
 input is ``concat[X·M_in, M_in]`` with ``M_in = pixel_valid ∧ in_field`` — the
@@ -37,10 +42,12 @@ Design choices and why (they are load-bearing, not stylistic):
   the S·S locations. This is the "no pooled latent" requirement: every pixel
   keeps its own hidden state, which is what makes per-pixel score maps and
   pixel-localization metrics possible at all.
-* **Causal multi-horizon head (k = 1..3).** The head sees only h_{t-1}, so
-  horizons 1..3 predict bins t, t+1, t+2 — the training objective is the
-  hybrid of the proposal and the inference-time score still uses horizon 1
-  (leave-one-bin-out, matching ``DeepCausalScorer.loo_batch``).
+* **Causal multi-horizon head (k = 1..3).** The head reads the GRU state after
+  bin ``t``, so horizons 1..3 forecast bins ``t+1``, ``t+2``, ``t+3`` — the
+  training objective and the inference-time score agree on the same shifted
+  alignment (the score reads horizon 1 at anchor ``t-1`` as its prediction of
+  bin ``t``, the exact analogue of the field-level
+  ``DeepCausalScorer.loo_batch`` current-bin withholding).
 * **CNN-off control ``patch_pixelwise``** is the same class with
   ``use_cnn=False``: the stem collapses to a 1×1 conv (per-pixel channel
   mixing only), so the comparison isolates *spatial context* at identical
@@ -144,12 +151,15 @@ class PatchStem(nn.Module):
 
 
 class PatchCausalGRU(nn.Module):
-    """Causal patch-level multi-horizon predictor (``patch_cnn_gru``).
+    """Causal patch-level multi-horizon FORECASTER (``patch_cnn_gru``).
 
-    One forward pass returns, for every bin ``t`` and horizon ``k``, a
-    prediction of bin ``t + k - 1`` made from bins ``≤ t`` — i.e. strictly
-    causal in the sense of the spec scenario "x̂_{t+k} depends only on bins
-    ≤ t": the GRU state after bin ``t`` has consumed only bins ``0..t``.
+    One forward pass returns, for every anchor bin ``t`` and horizon ``k``, a
+    prediction of bin ``t + k + 1`` made from bins ``≤ t`` — strictly
+    one-step-ahead in the sense of the spec scenario "x̂ at bin τ depends only
+    on bins < τ": the state that predicts bin ``τ`` has consumed only bins
+    ``0..τ-1``. Per-bin covariates enter the recurrence only up to the anchor
+    bin, so the target bin's observational covariates (its acquisition count,
+    its observation gap) are never available to its own forecaster.
     """
 
     def __init__(
@@ -257,6 +267,15 @@ class PatchCausalGRU(nn.Module):
             ``aux``    (B, T, C, S, S)              — horizon-1 reconstruction
             ``mask``   (B, T, S, S)                 — the effective in-field mask
         """
+        """Causal predictions for one batch of field-cycles.
+
+        Returns a dict with
+            ``pred``   (B, T, n_horizons, C, S, S)  — pred[t, k] forecasts bin
+                                                      t + k + 1 (zero where
+                                                      that bin does not exist)
+            ``aux``    (B, T, C, S, S)              — horizon-1 reconstruction
+            ``mask``   (B, T, S, S)                 — the effective in-field mask
+        """
         B, T = x.shape[0], x.shape[1]
         stem_in, m = self.stem_input(x, pixel_valid)              # (B,T,C+1,S,S)
         h = self.stem(stem_in.reshape(B * T, self.n_channels + 1, *x.shape[-2:]))
@@ -283,13 +302,14 @@ class PatchCausalGRU(nn.Module):
         pred = self.head_pred(seq).reshape(B, T, self.n_horizons, self.n_channels, S, S)
         aux = self.head_aux(seq).reshape(B, T, self.n_channels, S, S)
 
-        # Horizon k at bin t predicts bin t+k-1: zero out-of-range slots so a
-        # caller flattening (T, k) never mistakes padding for prediction.
-        if self.n_horizons > 1:
-            keep = torch.zeros(T, self.n_horizons, dtype=pred.dtype, device=pred.device)
-            for k in range(self.n_horizons):
-                keep[: max(0, T - k), k] = 1.0
-            pred = pred * keep[None, :, :, None, None, None]
+        # Horizon k at anchor t forecasts bin t+k+1: zero out-of-range slots so
+        # a caller flattening (T, k) never mistakes padding for prediction.
+        # Even horizon 1 has one (anchor T-1 forecasts bin T, which does not
+        # exist), so the keep mask is applied unconditionally.
+        keep = torch.zeros(T, self.n_horizons, dtype=pred.dtype, device=pred.device)
+        for k in range(self.n_horizons):
+            keep[: max(0, T - k - 1), k] = 1.0
+        pred = pred * keep[None, :, :, None, None, None]
         return {"pred": pred, "aux": aux, "mask": m}
 
     # -- losses ---------------------------------------------------------
@@ -321,13 +341,12 @@ class PatchCausalGRU(nn.Module):
 
         total = target.new_zeros(())
         for k in range(self.n_horizons):
-            # Prediction at bin t targets bin t+k-1: shift the target forward.
-            if k == 0:
-                pred_k, tgt_k, obs_k = out["pred"][:, :, 0], target, obs_f
-            else:
-                pred_k = out["pred"][:, : max(0, T - k), k]
-                tgt_k = target[:, k:]
-                obs_k = obs_f[:, k:]
+            # Horizon k at anchor t forecasts bin t+k+1 (true one-step-ahead,
+            # change score-semantics-realignment): shift the target by k+1.
+            # Anchor T-1-k has no target bin and drops out of every horizon.
+            pred_k = out["pred"][:, : max(0, T - k - 1), k]
+            tgt_k = target[:, k + 1:]
+            obs_k = obs_f[:, k + 1:]
             if pred_k.shape[1] == 0:
                 continue
             tok = F.smooth_l1_loss(pred_k, tgt_k, reduction="none").mean(dim=2)  # (B,T,S,S)

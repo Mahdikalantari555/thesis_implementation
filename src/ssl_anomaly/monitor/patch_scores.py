@@ -44,6 +44,43 @@ from ..io import patches as P
 # Aggregation: mean of the largest TOP_FRAC share of in-field per-pixel z².
 TOP_FRAC = 0.20
 
+# Scoring alignment (change score-semantics-realignment). The readout MUST
+# match the checkpoint's training alignment: a ``patch_train_v3`` checkpoint
+# is scored one-step-ahead (the prediction of bin t is formed WITHOUT bin t's
+# values), a historical ``patch_train_v2`` checkpoint keeps its own
+# input-inclusive readout so findings 23/24 stay reproducible under their
+# original semantics. Mixing the two is a hard error, never a silent default.
+ALIGNMENT_ONE_STEP_AHEAD = "one_step_ahead_v3"
+ALIGNMENT_INPUT_INCLUSIVE = "input_inclusive_v2"
+SCORING_ALIGNMENTS: tuple[str, ...] = (
+    ALIGNMENT_ONE_STEP_AHEAD, ALIGNMENT_INPUT_INCLUSIVE,
+)
+TRAIN_PROTOCOL_TO_ALIGNMENT: dict[str, str] = {
+    "patch_train_v3": ALIGNMENT_ONE_STEP_AHEAD,
+    "patch_train_v2": ALIGNMENT_INPUT_INCLUSIVE,
+}
+
+
+def alignment_for_protocol(protocol: str | None) -> str:
+    """Map a checkpoint's training protocol to its scoring alignment.
+
+    ``None`` means the checkpoint predates the protocol field in the training
+    config — every such checkpoint is ``patch_train_v2`` by definition (the
+    field first shipped with the v3 realignment), so it maps to the historical
+    input-inclusive readout explicitly rather than by guessing. A NON-null
+    unknown protocol stays a hard error.
+    """
+    if protocol is None:
+        return ALIGNMENT_INPUT_INCLUSIVE
+    if protocol in TRAIN_PROTOCOL_TO_ALIGNMENT:
+        return TRAIN_PROTOCOL_TO_ALIGNMENT[protocol]
+    raise ValueError(
+        f"checkpoint training protocol {protocol!r} has no scoring alignment — "
+        f"expected one of {sorted(TRAIN_PROTOCOL_TO_ALIGNMENT)}; refusing to "
+        "guess the readout semantics"
+    )
+
+
 # Phenophase grouping of the sigma tables: 36 bins → 18 groups of 2 bins.
 PHASE_BIN = 2
 
@@ -434,11 +471,19 @@ class PatchDeepScorer:
 
     Mapping, and why each choice is the conservative one:
 
-    * The patch model is already causal by construction (its horizon-1 output
-      at bin t reads bins ≤ t-1), so no leave-one-out withholding is needed —
-      withholding is what ``DeepCausalScorer`` must do to make an
-      *bidirectional* encoder causal. ``score_cycle``/``loo_batch`` keep the
-      names for interface compatibility and document this.
+    * The score is a TRUE one-step-ahead forecasting residual under
+      ``patch_train_v3`` (change score-semantics-realignment): the prediction
+      of bin ``t`` is ``out["pred"][:, t-1, 0]``, formed from the GRU state
+      after bin ``t-1`` — bin ``t``'s values never enter the forecast (a unit
+      test pins that perturbing bin ``t`` leaves the prediction of bin ``t``
+      and every score at bins < ``t`` byte-identical; bin ``t``'s residual
+      moves only through the observed-vs-forecast comparison, which is the
+      detection signal), and bin 0 is unscored. This is the exact analogue of
+      the field-level ``DeepCausalScorer`` current-bin withholding.
+      ``score_cycle``/``loo_batch`` keep the names for interface compatibility
+      and document this. Historical ``patch_train_v2`` checkpoints keep their
+      original input-inclusive readout via ``alignment=`` (never a forecast
+      claim).
     * ``scores`` is :func:`field_paths` of :func:`pixel_scores` — per-pixel z²
       against the FROZEN sigma table, aggregated by top-20 % over in-field pixels
       only. No cross-farm quantity is read (locally anchored).
@@ -468,7 +513,14 @@ class PatchDeepScorer:
         device=None,          # torch.device | str; resolved lazily
         top_frac: float = TOP_FRAC,
         min_pixels: int = 4,
+        alignment: str = ALIGNMENT_ONE_STEP_AHEAD,
     ) -> None:
+        if alignment not in SCORING_ALIGNMENTS:
+            raise ValueError(
+                f"unknown scoring alignment {alignment!r} — expected one of "
+                f"{list(SCORING_ALIGNMENTS)}"
+            )
+        self.alignment = alignment
         self.model_id = str(model_id)
         self.model = model.to(device) if hasattr(model, "to") else model
         self.sigma = sigma
@@ -548,7 +600,20 @@ class PatchDeepScorer:
 
     # -- scoring --------------------------------------------------------
     def _forward(self, X: np.ndarray, M: np.ndarray, covariates=None):
-        """Run the patch model; returns (resid (N,T,C,S,S) signed, pred)."""
+        """Run the patch model; returns (resid (N,T,C,S,S) signed, pred).
+
+        The readout follows the checkpoint's training alignment:
+
+        * ``one_step_ahead_v3`` (default; ``patch_train_v3``): the prediction
+          of bin ``t`` is ``out["pred"][:, t-1, 0]`` — formed WITHOUT bin
+          ``t``'s values; bin 0 is unscored (NaN), which the observation mask
+          machinery below propagates as a NaN alarm-path entry.
+        * ``input_inclusive_v2`` (historical; ``patch_train_v2``): horizon 1 at
+          bin ``t`` consumed bins ≤ ``t``, so the residual was an
+          input-inclusive filtered residual — kept verbatim so v2-era
+          checkpoints stay scoreable under their own semantics (findings
+          23/24), never presented as a forecast.
+        """
         import torch
         self.model.eval()
         x = self._to_tensor(X).to(self.device)
@@ -556,10 +621,16 @@ class PatchDeepScorer:
         cov = None if covariates is None else self._to_tensor(covariates).to(self.device)
         with torch.no_grad():
             out = self.model(x, m, cov)
-        # horizon 0 predicts bin t (its own bin), matching the leave-one-bin-out
-        # target of the field-level arms; NaN discipline is re-imposed by mask.
-        pred = out["pred"][:, :, 0] if out["pred"].ndim == 6 else out["pred"]
-        return (pred - x).cpu().numpy(), pred.cpu().numpy()
+        pred_anchor = out["pred"][:, :, 0] if out["pred"].ndim == 6 else out["pred"]
+        pred_anchor_np = pred_anchor.detach().cpu().numpy()
+        if self.alignment == ALIGNMENT_ONE_STEP_AHEAD:
+            # pred_anchor[:, b] forecasts bin b+1 from bins ≤ b: realign to
+            # "prediction OF bin t" and leave bin 0 unscored.
+            pred = np.full_like(pred_anchor_np, np.nan)
+            pred[:, 1:] = pred_anchor_np[:, :-1]
+            return pred - x.detach().cpu().numpy(), pred
+        # input_inclusive_v2: horizon 1 at bin t consumed bins ≤ t (historical).
+        return pred_anchor_np - x.detach().cpu().numpy(), pred_anchor_np
 
     def predict_pixels(
         self,
@@ -700,14 +771,19 @@ def require_basis(components: list[str], declared: dict[str, str] | None = None)
 
 
 __all__ = [
+    "ALIGNMENT_INPUT_INCLUSIVE",
+    "ALIGNMENT_ONE_STEP_AHEAD",
     "BASIS_LOCAL",
     "BASIS_POPULATION",
     "PHASE_BIN",
+    "SCORING_ALIGNMENTS",
     "TAIL",
     "TOP_FRAC",
+    "TRAIN_PROTOCOL_TO_ALIGNMENT",
     "PatchArmScorer",
     "PatchDeepScorer",
     "PatchSigmaTable",
+    "alignment_for_protocol",
     "calibrate_cusum_h",
     "component_basis",
     "cusum_path",

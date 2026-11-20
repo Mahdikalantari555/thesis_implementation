@@ -88,3 +88,19 @@
   - `python scripts/run_rq7_rq8.py --source real490` → `reports/rq7_rq8.json`
   - `python scripts/run_data_scarcity.py --source real490 --arms anomaly_degradation --seeds 42 --epochs 2` → `reports/data_scarcity.json`
   - برای خروجی شبیه‌ساز: `--source simulated` → فایل‌ها زیر `reports/simulated/` نوشته می‌شوند و `data_source="simulated"` ثبت می‌شود.
+
+## ۸. یادداشت اصلاح برچسب (ثبت‌شده در ۲۰۲۶-۱۱-۲۰)
+
+عدد‌های «Gate G2» در بخش‌های ۱ و ۳ و ۷ این سند باید با دقت خوانده شوند:
+مقایسهٔ `anomaly_degradation` (AUC-PR = 0.7641) با `masked_recon` (AUC-PR = 0.6013)
+مقایسهٔ **دو pretext مختلفِ خودِ SSL** است، نه مقایسهٔ SSL با بیس‌لاین B1.
+برچسب «SSL beats B1» که در متن آمده نادرست است و هرگز نباید به‌عنوان شاهد
+برتری SSL بر B1 استناد شود. سنجش واقعی SSL در برابر B1 در گزارش RQ1
+(۱۳ fold روی real490) انجام شده است: SSL 0.298 در برابر B1 PhaseZScore 0.298
+(بدون برتری؛ CI شامل صفر) و CWSI Threshold 0.579 به‌طور معنادار بهتر است —
+آن هم علیه برچسب proxy مبتنی بر CWSI، نه برچسب واقعی تنش. متن اصلی بالا
+عمداً دست‌نخورده مانده تا سابقهٔ تصمیم‌گیری حفظ شود؛ این یادداشت تفسیر رسمی
+سند است.
+
+*این یادداشت بخشی از تغییر `score-semantics-realignment` (تسک 2.1) است؛
+جمع‌بندی به‌روز برای استاد: یافته‌های ۱۸ تا ۲۴، به‌ویژه جدول یافتهٔ ۲۴.*
