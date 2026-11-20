@@ -155,15 +155,22 @@ def build_splits_locked(
     *,
     farms_path: Path = FARMS_GEOJSON_PATH,
     cycles_parquet_path: Path = CYCLES_PARQUET_PATH,
+    cycles_npz_path: Path = CYCLES_NPZ_PATH,
     n_blocks: int = N_BLOCKS,
     seed: int = KMEANS_SEED,
     exclusion_path: Path = CYCLE_AUDIT_EXCLUSION_PATH,
+    derived_from_sha: str | None = None,
 ) -> dict:
     """Build the locked split manifest (design D2 + finding-14 D2 exclusions).
 
     The cycle-audit exclusion list (segmentation-error cycles: merged/split/
     out-of-range sanity flags) is applied per the finding-14 outcome: excluded
     cycles go to monitoring_only (never metrics; display-only).
+
+    ``cycles_parquet_path``/``cycles_npz_path`` let a superseding detector
+    version (change cycle-detection-v3-multindex) build a v2 manifest from
+    the v2 cycle files; ``derived_from_sha`` records the v1 manifest SHA it
+    supersedes (preservation requirement: v1 manifests stay untouched).
     """
     df = pd.read_parquet(cycles_parquet_path)
     blocks_info = compute_contiguous_blocks(farms_path=farms_path, n_blocks=n_blocks, seed=seed)
@@ -263,8 +270,17 @@ def build_splits_locked(
         },
         "counts": {},
         "cycles": {},
-        "cycle_file_hashes": cycle_file_hashes(cycles_parquet_path=cycles_parquet_path),
+        "cycle_file_hashes": cycle_file_hashes(
+            cycles_parquet_path=cycles_parquet_path,
+            cycles_npz_path=cycles_npz_path,
+        ),
     }
+    if derived_from_sha:
+        manifest["derived_from"] = {
+            "superseded_manifest_sha256_prefix": derived_from_sha,
+            "note": "v1 splits stay frozen in place; models trained on either "
+                    "manifest remain reproducible from their own artifacts",
+        }
 
     for name in SPLIT_NAMES:
         sub = df[df["split"] == name]

@@ -48,6 +48,7 @@ def run(
     bin_days: int = 15,
     max_days: int = 540,
     detector: str = "v1",
+    limit: int | None = None,
 ) -> tuple[pd.DataFrame, dict]:
     if detector not in ("v1", "fused"):
         raise ValueError(f"unknown detector {detector!r}; use 'v1' or 'fused'")
@@ -80,11 +81,17 @@ def run(
     swir1 = median_cube[:, :, b_idx["swir1"]]
 
     fusion = FusionParams()
-    log.info("Running harvest segmentation on all %d fields...", len(fields))
+    selected = list(fields) if limit is None else list(fields)[:limit]
+    log.info("Running harvest segmentation on %d of %d fields...",
+             len(selected), len(fields))
     all_cycles = []
     v1_rows: list[dict] = []
+    n_censored_replaced = 0
     t_seg0 = time.time()
-    for fi, fid in enumerate(fields):
+    idx_of = {int(f): k for k, f in enumerate(fields)}
+    for fid in selected:
+        fi = idx_of[int(fid)]
+        fid = int(fid)
         if detector == "v1":
             field_cycles = segment_cycles(
                 field_id=int(fid),
@@ -124,15 +131,23 @@ def run(
                 plateau_frac=0.7,
                 rise_frac=0.15,
             )
-            # v1 ⊆ v2 per field (window keys), the D1 subset property.
-            v1_keys = {(c.t_start, c.t_end) for c in v1_field}
-            v2_keys = {(c.t_start, c.t_end) for c in field_cycles}
-            missing = v1_keys - v2_keys
+            # D1 subset property: v1's CLEAN cycles must survive in the fused
+            # output. Candidates may legitimately split v1's censored LEADING/
+            # TRAILING edge windows (that is the recovery), so only clean
+            # window keys are hard-checked; the replaced censored count is
+            # recorded for the comparison block.
+            v1_clean_keys = {(c.t_start, c.t_end) for c in v1_field if not c.censored}
+            v2_clean_keys = {(c.t_start, c.t_end) for c in field_cycles if not c.censored}
+            missing = v1_clean_keys - v2_clean_keys
             if missing:
                 raise RuntimeError(
-                    f"field {fid}: v1 windows missing from fused output "
+                    f"field {fid}: v1 clean cycles missing from fused output "
                     f"{sorted(missing)[:3]} — v1⊆v2 violated"
                 )
+            n_censored_replaced += len(
+                {(c.t_start, c.t_end) for c in v1_field if c.censored}
+                - {(c.t_start, c.t_end) for c in field_cycles if c.censored}
+            )
             for c in v1_field:
                 v1_rows.append(c.to_dict())
         for c in field_cycles:
@@ -166,6 +181,7 @@ def run(
             "v2_clean_len_median": float(v2_len.median()),
             "v2_fields_with_cycles": int(cycles_df["field"].nunique()),
             "v1_fields_with_cycles": int(v1_df["field"].nunique()),
+            "v1_censored_windows_replaced_by_candidates": int(n_censored_replaced),
         }
         log.info("v1<->v2 comparison: %s", json.dumps(comparison))
         provenance = {
@@ -317,6 +333,9 @@ if __name__ == "__main__":
     p.add_argument("--detector", choices=["v1", "fused"], default="v1")
     p.add_argument("--bin-days", type=int, default=15)
     p.add_argument("--max-days", type=int, default=540)
+    p.add_argument("--limit", type=int, default=None,
+                   help="segment only the first N fields (smoke/validation)")
     args = p.parse_args()
     run(zarr_path=args.zarr, cycles_out=args.cycles_out, npz_out=args.npz_out,
-        bin_days=args.bin_days, max_days=args.max_days, detector=args.detector)
+        bin_days=args.bin_days, max_days=args.max_days, detector=args.detector,
+        limit=args.limit)

@@ -26,15 +26,41 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--force", default=None,
                    help="rebuild an existing manifest; value is recorded as the rebuild reason")
+    p.add_argument("--cycles", default=None,
+                   help="cycle parquet to build from (default: the locked v1 "
+                        "data/processed/cycles_490.parquet); a non-default value "
+                        "REQUIRES --out (superseding manifests never overwrite v1)")
+    p.add_argument("--cycles-npz", default=None, dest="cycles_npz",
+                   help="cycle NPZ for the hash binding (default: the locked v1 "
+                        "data/interim/growth_cycles_490.npz)")
+    p.add_argument("--out", default=None,
+                   help="output manifest path (default: data/processed/splits_locked.json)")
     args = p.parse_args()
 
-    if SPLITS_LOCKED_PATH.exists() and not args.force:
-        print(f"REFUSING: {SPLITS_LOCKED_PATH} already exists (built once, never regenerated). "
+    out_path = Path(args.out) if args.out else SPLITS_LOCKED_PATH
+    superseding = bool(args.cycles or args.cycles_npz or args.out)
+    if superseding and out_path == SPLITS_LOCKED_PATH:
+        print("REFUSING: a superseding build (--cycles/--cycles-npz/--out partial) "
+              "must target a NEW --out path; the v1 manifest stays frozen in place "
+              "(change cycle-detection-v3-multindex, design D5).")
+        return 1
+    if out_path.exists() and not args.force:
+        print(f"REFUSING: {out_path} already exists (built once, never regenerated). "
               "Use --force <reason> for a protocol-corrected rebuild (the old file is kept as "
               "splits_locked_superseded_<sha>.json).")
         return 1
 
-    manifest = build_splits_locked()
+    derived_from_sha = None
+    if superseding and SPLITS_LOCKED_PATH.exists():
+        v1 = json.loads(SPLITS_LOCKED_PATH.read_text(encoding="utf-8"))
+        derived_from_sha = str(v1.get("manifest_sha256", "unknown"))[:16]
+
+    build_kwargs = {"derived_from_sha": derived_from_sha}
+    if args.cycles:
+        build_kwargs["cycles_parquet_path"] = Path(args.cycles)
+    if args.cycles_npz:
+        build_kwargs["cycles_npz_path"] = Path(args.cycles_npz)
+    manifest = build_splits_locked(**build_kwargs)
     n_uncensored = sum(
         manifest["counts"][s] for s in ("train", "dev", "test")
     )
@@ -43,10 +69,10 @@ def main() -> int:
 
     if args.force:
         import shutil
-        old = json.loads(SPLITS_LOCKED_PATH.read_text(encoding="utf-8"))
+        old = json.loads(out_path.read_text(encoding="utf-8"))
         old_sha = old.get("manifest_sha256", "unknown")[:12]
-        superseded = SPLITS_LOCKED_PATH.parent / f"splits_locked_superseded_{old_sha}.json"
-        shutil.copyfile(SPLITS_LOCKED_PATH, superseded)
+        superseded = out_path.parent / f"splits_locked_superseded_{old_sha}.json"
+        shutil.copyfile(out_path, superseded)
         print(f"Superseded manifest archived: {superseded}")
         manifest["rebuild_of"] = {
             "superseded_manifest_sha256_prefix": old_sha,
@@ -60,10 +86,10 @@ def main() -> int:
             "ssl_anomaly.monitor.splits", fromlist=["manifest_hash"]
         ).manifest_hash(manifest)
 
-    SPLITS_LOCKED_PATH.parent.mkdir(parents=True, exist_ok=True)
-    SPLITS_LOCKED_PATH.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
-    print(f"Wrote {SPLITS_LOCKED_PATH}")
+    print(f"Wrote {out_path}")
     print(f"manifest_sha256: {manifest['manifest_sha256'][:16]}…")
     print(f"git_sha: {manifest['git_sha']}")
     print(f"kmeans: seed={manifest['kmeans']['seed']}, k={manifest['kmeans']['n_blocks']}, "
