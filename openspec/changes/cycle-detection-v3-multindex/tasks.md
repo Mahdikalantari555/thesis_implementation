@@ -78,10 +78,19 @@
 - [x] Optional `--tile-cache-mib` caches native aligned windows across fields;
   zero (default) retains the original reader. Compare raw patch and validity
   bytes for three synthetic field windows, including both raster edges.
-- [ ] Owner gate: separate fresh store, `--fields 1,2 --tile-cache-mib 1024`,
-  identical v2 inputs and all dates (not `--smoke`, which truncates scenes).
-  Compare full per-field manifest SHA and scene counts to the live run, and
-  compare elapsed times. Only switch the full run if parity and speed pass.
+- [x] Owner gate PASSED 2026-11-20, parity confirmed TWICE independently
+  (agent gate + owner gate, both `--fields 1,2 --tile-cache-mib 1024
+  --field-batch-size 4 --workers 2` on identical v2 inputs, all dates,
+  no `--smoke`): field 1 sha `8a5e1166…` (455 scene-reads) and field 2 sha
+  `13bdd036…` (326 scene-reads) byte-identical to the live old-reader run's
+  manifest entries. Speed: synthetic 2.3×; agent gate field 1 = 37.3 s vs
+  live 91.1 s (2.4×, measured UNDER disk contention from the concurrent
+  live run); owner's concurrent gate field 1 = 140.5 s is contention-
+  contaminated (both readers competed) — a clean number comes from the
+  restarted full run's `--profile-io`. Switch approved; profile shows
+  aggregation/write = 45–62 % of batch wall and tile hit-rate only 11 %
+  (781/7,029) → further I/O+CPU headroom tracked in the follow-up
+  acceleration research (owner-requested prompt 2026-11-20).
 - [x] Optional `--field-batch-size 4` stages consecutive pending fields by
   scene (one open per needed band per scene); default 1. `--profile-io` prints
   batch wall, scene reads, remaining time and tile hits/misses/evictions to
