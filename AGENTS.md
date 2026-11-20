@@ -100,10 +100,17 @@ machine. The rules below are binding.
 
 ## 6. Long-running jobs (training, full evaluation, exports)
 
+- **Compute placement: Colab, after local validation (owner directive
+  2026-11-20).** Heavy work runs on **Colab, not on the owner's laptop** — and
+  that now covers **evaluation, σ (sigma) calibration and long exports**, not
+  only training. The escalation is always **validate-locally-first, then
+  escalate**; a pipeline that has not passed the local gate is never handed
+  over. See §6.1 for the gate and §6.2 for the return path.
 - **The agent never launches a long job itself.** Anything expected to run
   longer than ~2 minutes (full training, multi-seed sweeps, full RQ suite,
-  full exporter runs) is handed to the user as an **exact terminal command**
-  (conda env, working directory, arguments, expected wall time, output paths).
+  full evaluation, σ calibration, full exporter runs) is handed to the user as
+  an **exact terminal command or notebook cell** (conda env, working
+  directory, arguments, expected wall time, output paths).
 - Before handing over a command the agent MUST: run the unit tests that cover
   the touched code, run the script's `--smoke` mode end to end, and read the
   smoke output (metrics present, no NaN, shapes and counts as expected). If
@@ -114,7 +121,8 @@ machine. The rules below are binding.
   output paths. Long jobs MUST support `--resume`.
 - Scripts auto-select the device (`cuda` when available, else `cpu`) so the
   same command runs on the laptop, the lab GPU, or Colab. Laptop budget for
-  development runs: ≤ 15 min per seed, ≤ 500 k parameters.
+  development runs: ≤ 15 min per seed, ≤ 500 k parameters; anything above that
+  budget is a Colab job, not a longer laptop wait.
 - **Save model weights** (state_dict + optimizer/scheduler/rng) per seed so
   `--resume` works; never ship a run without its checkpoint and sidecar.
 - When the user reports results, the agent reads the produced files (not only
@@ -124,6 +132,60 @@ machine. The rules below are binding.
   seeds, n, date range, seeds, device, wall time, git SHA, data_source, split
   hashes) and never emit placeholder/NaN-filled numbers; reports missing any of
   these fields are defects, not "done".
+
+### 6.1 The local gate (before every Colab handover)
+
+All of the following must hold, and the agent must say so explicitly in the
+handover message:
+
+1. Unit tests covering the touched code pass (state the count).
+2. The script's `--smoke` mode has been run end to end **on the local machine**
+   and its output read — not just the exit code.
+3. Smoke output inspected: metrics present, no NaN/Inf, shapes and counts as
+   expected, run manifest complete against the §7 checklist.
+4. The exact command/notebook cell is written out with working directory,
+   arguments, expected wall time and output paths.
+5. The pipeline is deterministic enough to resume: `--resume` verified, seeds
+   recorded.
+
+Only then does the job go to Colab. Training is never the first place new code
+runs.
+
+### 6.2 Return path: Colab → Drive → Arena agent → Drive → local agent
+
+The owner's workflow, and the agent's obligation inside it:
+
+1. **Colab writes to Google Drive** as a **dated, self-describing bundle** —
+   e.g. `patch_ep10_colab_2026-11-19.zip`, `sigma_eval_colab_2026-11-20.zip`.
+   Never a bare `results.zip`; the name alone must say what it is and when it
+   was made.
+2. **Owner downloads the bundle** and brings it to the Arena agent, saying
+   "continue from this".
+3. **The Arena agent continues the work**, then **exports its own outputs back
+   to Drive as a bundle** and tells the owner **the exact filename** to
+   download. The agent never assumes the owner knows which of several files
+   matters.
+4. **Owner hands that bundle to the local agent (Zcode)** on their own machine.
+
+**A bundle is complete or it is a defect.** It SHALL contain every artifact the
+accompanying reports hash-bind — not only weights. The standing counter-example
+is the finding-24 σ gap: the six `patch_sigma.npz` tables were written into the
+Colab run directories, never reached Drive or GitHub, and the committed
+`reports/dev/patch_full_ep10/metrics_*.json` now quote `patch_sigma_sha256`
+values whose artifacts no longer exist, so those results cannot be re-derived
+without re-running calibration. Minimum bundle for any patch/model run:
+`last.pt` (+ epoch files if the run records them), `run_manifest.json`,
+`progress.jsonl`, `norm_stats.json`, **`patch_sigma.npz`**, and the metrics
+JSON. A missing sidecar found at eval time is the agent's failure, not the
+owner's.
+
+**GitHub stays text-only.** Weights, stores and stores' provenance never go to
+GitHub: `.gitignore` blocks `/data/` (line 80), `checkpoints/` (line 33) and
+`reports/figures/*.png|html` (lines 56–58), no `.pt`/`.ckpt` has ever been
+tracked, and the repo is 55.5 MB with a 4.14 MB largest blob — far under
+GitHub's 50 MB warn / 100 MB hard limit. Only metrics JSON/CSV, findings and
+docs are committed; binaries travel by Drive.
+
 
 ## 7. Critical ML/AI review checklist (apply to every method, script and result)
 
