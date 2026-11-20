@@ -103,3 +103,65 @@
   Synthetic 8-field/8-scene median (3 trials, batch 4/cache 32 MiB): 1.597 s
   old writer, 0.752/0.635/0.701 s new writer with 1/2/4 readers. Real-data
   SHA and wall-time gate above still applies.
+
+#### 4.2 further reader acceleration — gated experiment, not approved for production
+
+- [x] Instrument the §4.1 reader (`io_profile` stdout only): batch wall,
+  scene phase, aggregation, four cycle writes + readback, LRU occupancy and
+  evictions. The remainder includes geometry, metadata and field hashing.
+  Parallel per-field read-seconds overlap; do **not** add them as wall time.
+- [x] Opt-in `--short-bin-median`: for 1–2 acquisitions, use the same finite,
+  QA and polygon tests and float64 pair mean, without a masked-array sort.
+  Negative zero and larger bins retain the reference median. Opt-in
+  `--native-block-cache`: cache the sparse union of touched GeoTIFF blocks,
+  not a dense union bbox spanning unrelated fields. Private per-worker LRU
+  budgets, original scene order, single writer, chunking and codec unchanged.
+- [x] Three fresh stores per configuration, synthetic 8 fields × 8 dates,
+  one acquisition per occupied bin. Local Linux, warm filesystem, no concurrent
+  extraction. Old = §4.1 flags without either candidate flag (not pre-d8c705d).
+  Median seconds; columns are independent medians. End-to-end times `main`,
+  including provenance and validation but not imports, fixture or proof scan.
+
+  | method | end-to-end | batch wall | scene_read | aggregation | write+readback |
+  |---|---:|---:|---:|---:|---:|
+  | §4.1 baseline | .6489 | .6036 | .1596 | .3417 | .0363 |
+  | both flags | .3235 | .2757 | .1630 | .0151 | .0316 |
+  | short bins only | .3361 | .2838 | .1666 | .0154 | .0309 |
+  | native blocks only | .6865 | .6393 | .1657 | .3520 | .0377 |
+  | both, 4 workers | .3517 | .2977 | .1875 | .0154 | .0320 |
+  | both, GDAL cache 512 MiB | .3428 | .2942 | .1687 | .0154 | .0332 |
+  | both, GDAL decode 2 | .3212 | .2751 | .1567 | .0155 | .0336 |
+
+  Synthetic speed ratio 2.006×; most gain is **aggregation**, not block reads.
+  Same raw-array digest in all 21 stores: `852bb963f2528183bd03c867dc30c2c97c45e842bc534a608705118396eb10de`.
+  Baseline synthetic resident cache 12 MiB vs native 64 MiB, 0 evictions;
+  wider reuse is not free. In the real gate 781 hits equals exactly one per
+  scene-read (auto reads red twice); consistent with compulsory misses and no
+  cross-field tile reuse, not evidence of budget exhaustion. At uint16, a single
+  512² block per band × 8 bands × 607 scenes needs ~2.37 GiB. Examine actual
+  hits/misses/evictions/bytes in each batch before increasing memory. Four
+  readers increased scene wall here; this alone is not proof of a GIL bottleneck.
+  No process pool. Codec probe on one cycle (encode+decode only): default
+  full 36 bins Blosc LZ4/5 1.07 ms, LZ4/1 1.05 ms, Zstd/1 3.32 ms;
+  two half chunks LZ4/5 1.14 ms. Codec and chunk changes are NOT enabled.
+- [ ] **Owner real gate pending**. On the Windows archive host, stop extraction
+  yourself and ensure no other reader/writer is running. Run from repo root
+  with this PR code, `geo`, enough free space and the same inputs as §4.1:
+
+  ```powershell
+  $geo = 'D:\Dev\Miniforge3\envs\geo'
+  $env:PATH = "$geo\Library\bin;$env:PATH"
+  $env:KMP_DUPLICATE_LIB_OK = 'TRUE'
+  & "$geo\python.exe" -X utf8 scripts/profile_patch_gate.py --quiet-machine --temp-parent data/patch_runs
+  ```
+
+  The harness runs 3 trials each, no `--smoke`, fresh temporary stores, both
+  fields, all dates, patch 48, 1024 MiB / batch 4 / workers 2, with profiles.
+  It fails on mismatched anchors/counts or differing raw arrays, prints full
+  proof lines and fails if the end-to-end median ratio is below 2. Attach the
+  console results to the PR. Prior §4.1 real SHA lines do **not** certify §4.2.
+- [ ] **Switch only after real gate passes and owner approves**: same original
+  full-run command (no `--fields`, production `--out`, all original inputs,
+  `--resume --tile-cache-mib 1024 --field-batch-size 4 --workers 2 --profile-io`)
+  plus `--short-bin-median --native-block-cache`. Otherwise resume §4.1 without
+  these flags. No need to migrate, rebuild or change normalization.

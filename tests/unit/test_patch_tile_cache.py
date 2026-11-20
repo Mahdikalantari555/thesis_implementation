@@ -74,3 +74,36 @@ def test_shared_handles_closed_at_scene_boundary(tmp_path, monkeypatch):
     E.prefetch_batch(jobs, {0: [path]}, E.TileCache(0), 'auto')
     assert len(opened) == 8
     assert all(src.closed for src in opened)
+
+
+def test_native_blocks_cross_boundaries_and_raster_edges(tmp_path):
+    path = tmp_path / 'band.tif'
+    data = np.arange(75 * 83, dtype=np.uint16).reshape(75, 83)
+    with rasterio.open(path, 'w', driver='GTiff', width=83, height=75, count=1,
+                       dtype='uint16', tiled=True, blockxsize=32, blockysize=32) as dst:
+        dst.write(data, 1)
+    cache = E.TileCache(0.004, native_blocks=True)  # force evictions
+    with rasterio.open(path) as src:
+        for y, x in [(-5, -7), (16, 17), (72, 68), (75, 83), (100, 105)]:
+            window = E.P.FieldWindow(y, x, 35, 33, 48, 4, 6)
+            expected = E.read_window(src, window)
+            assert cache.load(path, window, np.nan, np.float32).tobytes() == expected.tobytes()
+    assert cache.stats['evictions'] and cache.used <= cache.limit
+
+
+def test_short_bin_raw_parity():
+    rng = np.random.default_rng(42)
+    for n in (1, 2):
+        for negative_zero in (False, True):
+            scenes = [rng.normal(size=(8, 7, 7)).astype('float32') for _ in range(n)]
+            masks = [rng.random((7, 7)) > .35 for _ in scenes]
+            inside = rng.random((7, 7)) > .25
+            scenes[0][:2] = np.nan
+            scenes[-1][2] = np.inf
+            scenes[0][3] = -0.0 if negative_zero else 0.0
+            for dtype in (np.float16, np.float32):
+                expected = E.P.aggregate_bin(scenes, masks, in_field=inside, dtype=dtype)
+                actual = E.short_bin(scenes, masks, in_field=inside, dtype=dtype)
+                assert actual.values.tobytes() == expected.values.tobytes()
+                assert actual.pixel_valid.tobytes() == expected.pixel_valid.tobytes()
+                assert actual.n_obs == expected.n_obs

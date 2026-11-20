@@ -283,7 +283,9 @@ class TileCache:
     The archive is immutable for the duration of the export.
     """
 
-    def __init__(self, mib):
+    def __init__(self, mib, *, native_blocks=False):
+        self.native_blocks = native_blocks
+        self.geometry = {}
         self.limit = mib * 1024**2
         self.used = 0
         self.stats = Counter()
@@ -309,6 +311,44 @@ class TileCache:
             finally:
                 self._shared_open = None
 
+    def _load_blocks(self, path, window, fill, dtype, opener):
+        """Gather only intersecting native blocks (sparse union across fields)."""
+        from rasterio.windows import Window
+
+        if path not in self.geometry:
+            with opener(path) as src:
+                self.geometry[path] = (*src.block_shapes[0], src.height, src.width,
+                                       np.dtype(src.dtypes[0]).itemsize)
+        bh, bw, height, width, itemsize = self.geometry[path]
+        if bh * bw * itemsize > min(self.limit, 4 * 1024**2) or min(bh, bw) < 16:
+            # Oversized blocks or strip-organized rasters: avoid read amplification.
+            with opener(path) as src:
+                return read_window(src, window, fill=fill, dtype=dtype)
+        y, x = window.row0, window.col0
+        end_y, end_x = min(height, y + window.height), min(width, x + window.width)
+        out = np.full((window.size, window.size), fill, dtype=dtype)
+        for r in range(max(0, y) // bh * bh, end_y, bh):
+            for c in range(max(0, x) // bw * bw, end_x, bw):
+                key = path, r, c
+                tile = self.tiles.get(key)
+                if tile is None:
+                    self.stats['misses'] += 1
+                    with opener(path) as src:
+                        tile = src.read(1, window=Window(c, r, min(bw, width-c), min(bh, height-r)))
+                    while self.tiles and self.used + tile.nbytes > self.limit:
+                        self.stats['evictions'] += 1
+                        self.used -= self.tiles.popitem(last=False)[1].nbytes
+                    self.tiles[key] = tile
+                    self.used += tile.nbytes
+                else:
+                    self.stats['hits'] += 1
+                    self.tiles.move_to_end(key)
+                a, b = max(r, y), max(c, x)
+                crop = tile[a-r:min(end_y-r, bh), b-c:min(end_x-c, bw)]
+                oy, ox = window.pad_top+a-y, window.pad_left+b-x
+                out[oy:oy+crop.shape[0], ox:ox+crop.shape[1]] = crop
+        return out
+
     def load(self, path, window, fill, dtype):
         import rasterio
         from rasterio.windows import Window
@@ -317,6 +357,9 @@ class TileCache:
         if not self.limit:
             with opener(path) as src:
                 return read_window(src, window, fill=fill, dtype=dtype)
+
+        if self.native_blocks:
+            return self._load_blocks(path, window, fill, dtype, opener)
 
         # Round outwards so nearby fields share the same native pixel buffer.
         # Unusual large windows use the ordinary path to bound allocations.
@@ -579,6 +622,25 @@ def prefetch_batch(jobs, scenes_by_day, cache, band_scale):
     return staged, read_seconds
 
 
+def short_bin(scenes, masks, *, in_field, dtype):
+    """Median of one or two float32 acquisitions, with the reference float64 mean."""
+    observed = [np.isfinite(sc) & (vm & in_field.astype(bool))[None] for sc, vm in zip(scenes, masks)]
+    # Use the generic numpy path for negative zero: median sign conventions
+    # differ between numpy versions and raw bytes (not just SHA) matter.
+    if any(np.any((sc == 0) & np.signbit(sc)) for sc in scenes):
+        return P.aggregate_bin(scenes, masks, in_field=in_field, dtype=dtype)
+    values = np.where(observed[0], scenes[0], np.nan).astype(np.float64)
+    ok = observed[0]
+    if len(scenes) == 2:
+        both = ok & observed[1]
+        np.copyto(values, scenes[1], where=observed[1] & ~ok)
+        np.add(values, scenes[1], out=values, where=both)
+        np.multiply(values, 0.5, out=values, where=both)
+        ok = ok | observed[1]
+    return P.BinAggregate(values.astype(dtype), ok.any(axis=0).astype(np.uint8),
+                          sum(bool(v.any()) for v in observed), P.SENSOR_IDS["unknown"])
+
+
 def export_field(
     root,
     fi: int,
@@ -591,7 +653,7 @@ def export_field(
     window: P.FieldWindow,
     in_field: np.ndarray,
     band_scale: str = "auto",
-    cache=None, staged=None, profile=None,
+    cache=None, staged=None, profile=None, fast=False,
 ) -> dict:
     """Extract and write one field's patches. Returns a summary record."""
     t0 = time.time()
@@ -617,6 +679,7 @@ def export_field(
                     profile["scene_read_s"] += time.perf_counter() - tick
                 per_bin[b].append((values, valid, sensor_of(scene_dir)))
                 n_scenes_used += 1
+        tick = time.perf_counter() if profile is not None else 0
         # The store chunks all 36 bins together. Replace whole chunks,
         # including empty bins in a partially written field on resume.
         values = np.full((P.N_BINS, P.N_CHANNELS, size, size), np.nan, np.float16)
@@ -626,7 +689,8 @@ def export_field(
         for b, entries in per_bin.items():
             if not entries:
                 continue
-            agg = P.aggregate_bin(
+            reduce_bin = short_bin if fast and len(entries) <= 2 else P.aggregate_bin
+            agg = reduce_bin(
                 [e[0] for e in entries], [e[1] for e in entries],
                 in_field=in_field, dtype=np.float16,
             )
@@ -637,11 +701,16 @@ def export_field(
             valid_bins[b, 0] = agg.pixel_valid
             counts[b] = min(int(agg.n_obs), 255)
             sensors[b] = agg.sensor_id
+        if profile is not None:
+            profile["aggregation_s"] += time.perf_counter() - tick
+            tick = time.perf_counter()
         root["values"][fi, ci] = values
         root["pixel_valid"][fi, ci] = valid_bins
         root["n_obs"][fi, ci] = counts
         root["sensor_id"][fi, ci] = sensors
         field_values[ci] = root["values"][fi, ci]
+        if profile is not None:
+            profile["write_readback_s"] += time.perf_counter() - tick
     return {
         "field_id": int(field_id),
         "n_cycles": len(cycles_of_field),
@@ -723,6 +792,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--profile-io", action="store_true", help="print per-batch I/O diagnostics")
     ap.add_argument("--workers", type=int, choices=range(1, 9), default=1,
                     help="parallel scene readers; tile cache budget is shared across readers")
+    ap.add_argument("--short-bin-median", action="store_true", help="specialize bins with 1-2 scenes")
+    ap.add_argument("--native-block-cache", action="store_true", help="cache by source block instead of 128px tiles")
     args = ap.parse_args(argv)
     if args.tile_cache_mib < 0:
         ap.error("--tile-cache-mib must be nonnegative")
@@ -836,13 +907,13 @@ def main(argv: list[str] | None = None) -> int:
         **binding,
     }
 
-    cache = TileCache(args.tile_cache_mib) if args.tile_cache_mib or args.field_batch_size > 1 else None
+    cache = TileCache(args.tile_cache_mib, native_blocks=args.native_block_cache) if args.tile_cache_mib or args.field_batch_size > 1 else None
     # Stable scene partitions preserve cross-field tile reuse. Each task owns
     # its cache and GDAL handles; only the coordinator writes to Zarr.
     partitions = [{} for _ in range(args.workers)]
     caches = [cache]
     if args.workers > 1:
-        caches = [TileCache(args.tile_cache_mib / args.workers) for _ in partitions]
+        caches = [TileCache(args.tile_cache_mib / args.workers, native_blocks=args.native_block_cache) for _ in partitions]
         for i, (day, paths) in enumerate(scenes_by_day.items()):
             partitions[i % args.workers][day] = paths
     pending = [(fi, fid) for fi, fid in enumerate(field_ids) if fid not in already]
@@ -890,7 +961,7 @@ def main(argv: list[str] | None = None) -> int:
                 root, fi, fid, mask=mask, cycles_of_field=cycles_of_field,
                 scenes_by_day=scenes_by_day, size=args.patch_size, window=window,
                 in_field=root["in_field"][fi, 0], band_scale=args.band_scale, cache=cache,
-                staged=staged.pop(fi, None), profile=profile,
+                staged=staged.pop(fi, None), profile=profile, fast=args.short_bin_median,
             )
             if fi in read_seconds:
                 summary["seconds"] = round(summary["seconds"] + read_seconds[fi], 2)
@@ -902,6 +973,8 @@ def main(argv: list[str] | None = None) -> int:
         elapsed = time.perf_counter() - batch_start
         if profile is not None:
             delta = sum((c.stats for c in caches if c), Counter()) - before
+            print("io_profile " + json.dumps(dict(batch_wall_s=elapsed, **profile,
+                  cache_bytes=sum(c.used for c in caches if c), **delta)))
             print(f"batch wall={elapsed:.2f}s scene_read={profile['scene_read_s']:.2f}s "
                   f"aggregation/write/other={elapsed - profile['scene_read_s']:.2f}s "
                   f"tile_hits={delta['hits']} misses={delta['misses']} evictions={delta['evictions']}")
