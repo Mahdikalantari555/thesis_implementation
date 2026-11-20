@@ -144,23 +144,28 @@
   No process pool. Codec probe on one cycle (encode+decode only): default
   full 36 bins Blosc LZ4/5 1.07 ms, LZ4/1 1.05 ms, Zstd/1 3.32 ms;
   two half chunks LZ4/5 1.14 ms. Codec and chunk changes are NOT enabled.
-- [ ] **Owner real gate pending**. On the Windows archive host, stop extraction
-  yourself and ensure no other reader/writer is running. Run from repo root
-  with this PR code, `geo`, enough free space and the same inputs as §4.1:
-
-  ```powershell
-  $geo = 'D:\Dev\Miniforge3\envs\geo'
-  $env:PATH = "$geo\Library\bin;$env:PATH"
-  $env:KMP_DUPLICATE_LIB_OK = 'TRUE'
-  & "$geo\python.exe" -X utf8 scripts/profile_patch_gate.py --quiet-machine --temp-parent data/patch_runs
-  ```
-
-  The harness runs 3 trials each, no `--smoke`, fresh temporary stores, both
-  fields, all dates, patch 48, 1024 MiB / batch 4 / workers 2, with profiles.
-  It fails on mismatched anchors/counts or differing raw arrays, prints full
-  proof lines and fails if the end-to-end median ratio is below 2. Attach the
-  console results to the PR. Prior §4.1 real SHA lines do **not** certify §4.2.
-- [ ] **Switch only after real gate passes and owner approves**: same original
+- [x] **Owner real gate RUN 2026-11-20 — FAILED (1.959× < 2×): do not switch.**
+  Quiet Windows archive host, fields 1+2, all dates, patch 48, 1024 MiB /
+  batch 4 / workers 2, 3 interleaved trials. Byte-identity PASS in all 6
+  stores (raw-array fingerprint `19542d9e…` everywhere; anchors exact:
+  field 1 = 455 reads / `8a5e1166…`, field 2 = 326 reads / `13bdd036…`).
+  Median end-to-end baseline 26.474 s vs candidate 13.512 s = **1.959×**;
+  per-trial ratios 2.19 / 1.85 / 1.98 straddle the bar — medians decide,
+  fail-closed stands. Gain source: aggregation 13.996 → 3.545 s (−75 %,
+  `--short-bin-median` working on real data); scene_read ~unchanged
+  (9.382 → 8.608 s). `--native-block-cache` = **no-op on the real archive**:
+  scene GeoTIFFs are strip-organized (block 2×496, float64, LZW) so the
+  `min(bh, bw) < 16` guardrail in `TileCache._load_blocks` always takes the
+  ordinary path — candidate profiles show `cache_bytes 0` and no hit/miss
+  counters. The 2.006× synthetic claim came from a tiled fixture. Both flags
+  stay OFF; production command unchanged; store, normalization and resume
+  untouched.
+- [ ] **Switch only after real gate passes and owner approves** — gate
+  FAILED, so no switch; the resumed full run continues on §4.1 flags alone.
+  Optional follow-up (not this run): re-gate with `--sweep` after the store
+  completes if the aggregation share (62–85 % of live batch wall) is worth
+  chasing; `--native-block-cache` can be dropped from any future candidate
+  (guardrail makes it a structural no-op here). Same original
   full-run command (no `--fields`, production `--out`, all original inputs,
   `--resume --tile-cache-mib 1024 --field-batch-size 4 --workers 2 --profile-io`)
   plus `--short-bin-median --native-block-cache`. Otherwise resume §4.1 without
