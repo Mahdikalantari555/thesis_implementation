@@ -49,6 +49,7 @@ from ssl_anomaly.io import patches as P  # noqa: E402
 from ssl_anomaly.monitor import holdout as mholdout  # noqa: E402
 from ssl_anomaly.monitor import inputs as minputs  # noqa: E402
 from ssl_anomaly.monitor import patch_eval as pE  # noqa: E402
+from ssl_anomaly.monitor import patch_scores as mpscores  # noqa: E402
 from ssl_anomaly.monitor import protocol as mproto  # noqa: E402
 from ssl_anomaly.monitor import severity_table as sev  # noqa: E402
 from ssl_anomaly.monitor import splits as msplits  # noqa: E402
@@ -80,6 +81,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--scorer", required=True, choices=["patch_cnn_gru", "patch_pixelwise"])
     ap.add_argument("--checkpoint", required=True, type=Path, help="path to last.pt")
     ap.add_argument("--footprint", type=float, default=pE.LOCALIZATION_FOOTPRINT)
+    ap.add_argument("--injection-basis", default="bands_consistent",
+                    choices=["index_only", "bands_consistent"],
+                    help="injector semantics (change consistent-spectral-injection); "
+                         "the primary localization probe runs bands_consistent")
     ap.add_argument("--shapes", default="acute,persistent")
     ap.add_argument("--device", default="cpu")
     ap.add_argument("--out-dir", default=str(REPO_ROOT / "reports" / "dev" / "patch_localization_probe"))
@@ -144,6 +149,7 @@ def main(argv: list[str] | None = None) -> int:
                 cell = pE.patch_localization_scores(
                     scorer, eval_batch, level_id=lv.level_id, family=fam,
                     index=index_name, round_idx=0, footprint=float(args.footprint),
+                    injection_basis=args.injection_basis,
                 )
                 m = cell["metrics"]
                 if m["auprc"] is None:
@@ -167,6 +173,8 @@ def main(argv: list[str] | None = None) -> int:
     report = {
         "protocol": "patch_localization_probe_v1",
         "scorer": args.scorer,
+        "injection_basis": args.injection_basis,
+        "scoring_alignment": mpscores.alignment_for_protocol(cfg.get("protocol")),
         "ladder_rung": "L2",
         "claim_noun": "synthetic anomaly",
         "seed": int(cfg["seed"]),

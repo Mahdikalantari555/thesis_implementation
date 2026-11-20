@@ -375,7 +375,9 @@ def test_patch_severity_cli_consumes_the_new_trainer_checkpoint(tmp_path, monkey
     metrics = json.loads(path.read_text())
     assert metrics["ladder_rung"] == "engineering_smoke_only"
     assert metrics["input_protocol"] == PD.PATCH_INPUT_PROTOCOL
-    assert metrics["protocol"] == "severity_sweep_patch_v1"
+    # change consistent-spectral-injection: the primary sweep is bands_consistent
+    assert metrics["protocol"] == "severity_sweep_patch_v2"
+    assert metrics["injection_basis"] == "bands_consistent"
     assert metrics["n_calib_cycles"] + metrics["n_eval_cycles"] == 20
     assert metrics["n_calib_cycles"] >= 8
     result = metrics["per_seed"][0]

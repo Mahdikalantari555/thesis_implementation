@@ -88,6 +88,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="explicit patch trainer checkpoint (e.g. <out>/<arch>_seed<seed>/last.pt)")
     p.add_argument("--patch-norm", type=Path, help="same-run frozen patch normalization")
     p.add_argument("--patch-sigma", type=Path, help="same-run frozen sigma from clean dev calibration")
+    p.add_argument("--injection-basis", default="bands_consistent",
+                   choices=["index_only", "bands_consistent"],
+                   help="injector semantics for the patch severity sweep (change "
+                        "consistent-spectral-injection): bands_consistent solves the drop "
+                        "on the raw bands and recomputes the derived NDVI channel (primary "
+                        "gate, protocol id v2); index_only is the historical channel-level "
+                        "behavior kept verbatim for the findings 18/22/23/24 sensitivity row "
+                        "(protocol id v1)")
     p.add_argument("--holdout-manifest", type=Path, default=mholdout.HOLDOUT_MANIFEST_PATH,
                    help="frozen holdout for patch scoring provenance")
     p.add_argument("--bank-k", type=int, choices=[1, 5], default=5)
@@ -173,15 +181,19 @@ def load_patch_artifacts(run_id: str, *, checkpoint_path: Path | None = None,
 
 def build_patch_arm(arm: str, model, cfg: dict, device: str, *, sigma,
                     in_field: np.ndarray) -> mpscores.PatchDeepScorer:
-    """Keep the scorer label tied to the checkpoint's architecture."""
+    """Keep the scorer label AND the readout alignment tied to the checkpoint."""
     from ssl_anomaly.models.patch_cnn_gru import scorer_id
 
     want_cnn = arm == "patch_cnn_gru"
     if bool(cfg["use_cnn"]) is not want_cnn:
         raise ValueError(f"checkpoint use_cnn={cfg['use_cnn']} does not match scorer {arm}")
+    # The scoring readout MUST match the checkpoint's training alignment
+    # (change score-semantics-realignment): an unknown protocol is a hard
+    # error, never a guessed default.
     return mpscores.PatchDeepScorer(
         scorer_id(want_cnn), model, sigma,
         in_field=in_field, n_channels=int(cfg["n_channels"]), device=device,
+        alignment=mpscores.alignment_for_protocol(cfg.get("protocol")),
     )
 
 
@@ -755,6 +767,7 @@ def run_patch_severity_protocol(args: argparse.Namespace, manifest: dict, sel: d
                         arm, eval_batch,
                         level_id=lv.level_id, family=fam, index=index, round_idx=rnd,
                         field_row=row_of_sample[eval_idx],
+                        injection_basis=args.injection_basis,
                     )
                     # -log10(p) is already the standardized path (p is uniform on
                     # clean data, so q95(=-log10 0.05) normalizes it exactly);
@@ -813,10 +826,17 @@ def run_patch_severity_protocol(args: argparse.Namespace, manifest: dict, sel: d
         "axis": "patch-level representation (per-pixel, in-field aggregation)",
         "n_calib_cycles": len(calib_idx), "n_eval_cycles": len(eval_idx),
         "n_injected_total": int(sum(c["n"] for c in cells.values())),
+        "scoring_alignment": mpscores.alignment_for_protocol(cfg.get("protocol")),
     }]
     return {
-        "protocol": "severity_sweep_patch_v1",
+        # severity_sweep_patch_v2 = bands_consistent (primary gate);
+        # severity_sweep_patch_v1 = index_only (findings 18/22/23/24 row).
+        "protocol": ("severity_sweep_patch_v2" if args.injection_basis == "bands_consistent"
+                     else "severity_sweep_patch_v1"),
+        "injection_basis": args.injection_basis,
         "input_protocol": cfg["input_protocol"],
+        "training_protocol": cfg.get("protocol"),
+        "scoring_alignment": mpscores.alignment_for_protocol(cfg.get("protocol")),
         "n_channels": cfg["n_channels"],
         "shapes": families, "scorer": args.scorer,
         "eval_subset_sha256": eval_hash,
@@ -888,6 +908,8 @@ def main(argv: list[str] | None = None) -> int:
             "eval_subset_sha256": sev_metrics["eval_subset_sha256"],
             "ladder_rung": "engineering_smoke_only" if patch and args.smoke else "L2",
             **({"input_protocol": sev_metrics["input_protocol"]} if patch else {}),
+            **({"injection_basis": sev_metrics["injection_basis"],
+                "scoring_alignment": sev_metrics["scoring_alignment"]} if patch else {}),
             "patch_run": (per_seed[0].get("patch_run") if per_seed else None),
             "patch_sigma_sha256": (per_seed[0].get("patch_sigma_sha256")
                                    if per_seed else None),
@@ -981,8 +1003,10 @@ def main(argv: list[str] | None = None) -> int:
                 "patch_run": (per_seed[0].get("patch_run") if per_seed else None),
                 "patch_sigma_sha256": (per_seed[0].get("patch_sigma_sha256")
                                        if per_seed else None),
-                "protocol": "severity_sweep_patch_v1" if args.scorer in PATCH_SCORERS
-                            else "severity_sweep_v1",
+                "protocol": (("severity_sweep_patch_v2"
+                              if args.injection_basis == "bands_consistent"
+                              else "severity_sweep_patch_v1")
+                             if args.scorer in PATCH_SCORERS else "severity_sweep_v1"),
                 "shapes": sev_metrics["shapes"],
                 "scorer": args.scorer,
                 "severity_table_sha256": sev_metrics["severity_table_sha256"],
