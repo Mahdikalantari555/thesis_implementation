@@ -108,6 +108,24 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
     are an upper bound — precision unvalidated until a reviewed subsample + (ideally) company
     harvest records. Unresolved 374 spans / 539 fy mix "no harvest truth" with "criteria miss".
     Next: reviewed-precision subsample → owner gate → separate v3 openspec change.
+  - ✅ **UPDATE 2026-11-20: owner SKIPPED the precision subsample (cannot label manually) and
+    directed straight to v3** — openspec change `cycle-detection-v3-multindex` (validated);
+    fused detector implemented + 12 tests (`segment_cycles_fused`, FusionParams frozen at the
+    measured point, `map_exclusions_by_window` for the finding-14 verdicts — v1 cycle_id
+    numbering does not carry over). **Local gate §6.1 passed** (smoke 8 fields inspected);
+    full fused export run locally (~7 min, owner refined compute-placement: only >1 h AND
+    CPU-heavy → Colab): **`cycles_490_v2.parquet` = 4,458 windows / 3,478 non-censored /
+    ALL 490 fields, median length 366 d** (v1 799/478 fields untouched — 4.4× recovery).
+    D6 gates 4/4 PASS (`reports/cycle_detection_diagnosis/v2_table_gates.md`).
+    **`splits_locked_v2.json` sha 30ecbe10** (same k-means blocks; train 2,105 / dev 340 /
+    test 773 / monitoring 1,240; exclusions transferred by overlap 38→38) +
+    **`holdout_manifest_v2.json` sha d501bf81** (audit green). Extraction smoke green
+    (store↔splits↔cycle bindings verified). **NEXT: owner runs the local extraction
+    handover (~overnight; estimator 83 min is optimistic — v1 scaled ≈ 12–15 h) + norm v2;
+    then agent verifies store → `thesis_data_full_v2.zip` + notebook v2 → Colab training
+    of the SAME 6-trainings protocol on the v2 store.** The v1↔v2 comparison remains a
+    standing thesis deliverable; candidate precision stays unvalidated (company harvest
+    records remain the L4 validator).
 - ▶ **`decomposition-aware-ssl-study`** — isolated runner and [runbook](docs/decomposition_aware_ssl_study.md). Real benchmark/ablation and the architecture-gate decision require the canonical polygon zonal store, locked splits and existing frozen holdout manifest. Smoke is not empirical evidence.
 - ▶ **`rerun-rq-suite-on-real-490`** (proposed 2026-11-10) — RQ1–RQ8 + data-scarcity results in findings 11–12 came from `simulate_490_field_archive`, not the real 490-field archive; re-run on real data, fail closed, provenance in every report.
   - ✅ Task 1: real_archive.py loader + hash check + provenance + --source arg (tests/unit/test_real_archive.py 4/6 pass)
