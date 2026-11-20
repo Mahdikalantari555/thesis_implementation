@@ -35,10 +35,19 @@ def main() -> int:
                         "data/interim/growth_cycles_490.npz)")
     p.add_argument("--out", default=None,
                    help="output manifest path (default: data/processed/splits_locked.json)")
+    p.add_argument("--map-exclusions-from-v1", default=None, dest="map_exclusions_from_v1",
+                   help="v1 cycle parquet used to transfer finding-14 audit "
+                        "exclusions by window overlap (required for superseding "
+                        "tables: v1 cycle_id numbering does not carry over)")
     args = p.parse_args()
 
     out_path = Path(args.out) if args.out else SPLITS_LOCKED_PATH
     superseding = bool(args.cycles or args.cycles_npz or args.out)
+    if superseding and not args.map_exclusions_from_v1:
+        print("REFUSING: a superseding build needs --map-exclusions-from-v1 <v1 "
+              "cycles parquet> — the finding-14 audit verdicts attach to v1 "
+              "window identities and must transfer by overlap, not by key.")
+        return 1
     if superseding and out_path == SPLITS_LOCKED_PATH:
         print("REFUSING: a superseding build (--cycles/--cycles-npz/--out partial) "
               "must target a NEW --out path; the v1 manifest stays frozen in place "
@@ -60,6 +69,8 @@ def main() -> int:
         build_kwargs["cycles_parquet_path"] = Path(args.cycles)
     if args.cycles_npz:
         build_kwargs["cycles_npz_path"] = Path(args.cycles_npz)
+    if args.map_exclusions_from_v1:
+        build_kwargs["map_exclusions_from_v1"] = Path(args.map_exclusions_from_v1)
     manifest = build_splits_locked(**build_kwargs)
     n_uncensored = sum(
         manifest["counts"][s] for s in ("train", "dev", "test")

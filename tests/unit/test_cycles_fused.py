@@ -188,3 +188,29 @@ def test_fusion_params_hash_stable():
     b = fusion_params_hash(FusionParams())
     assert a == b and len(a) == 16
     assert fusion_params_hash(FusionParams(veg_drop=0.25)) != a
+
+
+def test_exclusion_transfer_by_window_overlap():
+    """finding-14 verdicts attach to v1 WINDOW identities; a superseding
+    table renumbers cycles, so exclusions transfer by interval overlap."""
+    import pandas as pd
+
+    from ssl_anomaly.monitor.splits import map_exclusions_by_window
+
+    v1 = pd.DataFrame({
+        "field": [10, 10, 20],
+        "cycle_id": [1, 2, 1],
+        "t_start": [100, 460, 100],
+        "t_end": [460, 820, 500],
+    })
+    v2 = pd.DataFrame({
+        "field": [10, 10, 10, 20, 30],
+        "cycle_id": [0, 1, 2, 0, 0],
+        "t_start": [105, 462, 830, 100, 100],   # overlap, overlap, no, overlap, other field
+        "t_end": [465, 830, 1190, 500, 400],
+    })
+    keys, stats = map_exclusions_by_window(
+        ["10:1", "20:1", "99:9"], v1, v2)  # 99:9 does not resolve in v1
+    assert keys == {"10:0", "20:0"}
+    assert stats == {"mode": "overlap_transfer_from_v1", "v1_excluded_keys": 3,
+                     "v1_keys_unresolved": 1, "v2_windows_excluded": 2}

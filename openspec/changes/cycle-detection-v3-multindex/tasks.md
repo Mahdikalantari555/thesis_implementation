@@ -23,26 +23,37 @@
 
 ## 2. Export chain
 
-- [ ] 2.1 `segment_and_export_cycles_490.py`: `--detector {v1,fused}` +
-      `--cycles-out/--npz-out` (defaults = v1 paths, unchanged; fused mode
-      REFUSES v1 paths — preservation guard); fused mode emits the v1↔v2
-      comparison block. *(code landed 2026-11-19 — smoke run pending)*
-- [ ] 2.2 Provenance in the v2 export: git sha, FusionParams hash, wall time,
-      v1 reference + sidecar `cycles_490_v2.provenance.json`. *(code landed —
-      smoke run pending)*
-- [ ] 2.3 `build_locked_splits.py`: `--cycles`/`--cycles-npz`/`--out` args
-      (defaults unchanged); `build_splits_locked` needs a `cycles_npz_path`
-      param; v2 manifest carries `derived_from` + v2 cycle-file hashes.
+- [x] 2.1 `segment_and_export_cycles_490.py`: `--detector {v1,fused}` +
+      `--cycles-out/--npz-out` + `--limit` (smoke); fused mode REFUSES v1
+      paths — preservation guard; v1⊆v2 guard checks CLEAN keys (candidates
+      legitimately split v1's censored edge windows); replaced-count recorded.
+- [x] 2.2 Provenance sidecar `cycles_490_v2.provenance.json` (git sha,
+      FusionParams hash, params, v1↔v2 comparison, wall time).
+- [x] 2.3 `build_locked_splits.py`: `--cycles/--cycles-npz/--out/
+      --map-exclusions-from-v1`; `build_splits_locked` gained
+      `cycles_npz_path`/`derived_from_sha`/`map_exclusions_from_v1`;
+      manifests record `cycle_files` paths; superseding builds REQUIRE a new
+      `--out` + the overlap transfer.
 
-## 3. Run + gates (agent, local, read-only inputs)
+## 3. Run + gates
 
-- [ ] 3.1 Run fused export → `cycles_490_v2.parquet` + `growth_cycles_490_v2.npz`.
-- [ ] 3.2 D6 gates on the v2 table (length distribution, season clustering,
-      per-field counts, v1⊆v2) — report emitted under
-      `reports/cycle_detection_diagnosis/v2_table_gates.md`.
-- [ ] 3.3 Build `splits_locked_v2.json` (same k-means seed/blocks; D2
-      exclusions by key) + `holdout_manifest_v2.json`
-      (`--archive-end 2026-09-10`, fail-closed audit).
+- [x] 3.1 Fused export DONE locally (owner directive 2026-11-20 refined the
+      compute-placement rule: only >1 h AND CPU-heavy jobs go to Colab;
+      the export ran in ~7 min): `cycles_490_v2.parquet` (4,458 windows /
+      **3,478 non-censored** / 490 fields; median length 366 d) +
+      `growth_cycles_490_v2.npz` (3,478, 36, 8) + provenance sidecar.
+      v1 baseline untouched (799 clean, hash 930a6cde…).
+- [x] 3.2 D6 gates 4/4 PASS (`reports/cycle_detection_diagnosis/v2_table_gates.md`):
+      length median 366 d / 94.4 % in [200,500]; NEW starts 87.5 % Nov–Mar
+      (n=2,679); per-field max 12 ≤ 13 (mean 7.1); v1-clean ⊆ v2-clean
+      (0 missing). DATA-quality gates only — no model claims.
+- [x] 3.3 `splits_locked_v2.json` (sha 30ecbe10…; same k-means seed/blocks;
+      train 2,105 / dev 340 / test 773 / monitoring 1,240; cutoff drops
+      6.5 %; exclusions transferred by window overlap: 38 v1 keys → 38 v2
+      windows, 0 unresolved) + `holdout_manifest_v2.json` (sha d501bf81…,
+      archive-end 2026-09-10, audit green). Extraction smoke on 3 fields:
+      bindings green (store→splits 30ecbe10, cycle_source 99a5253f =
+      v2 manifest record).
 
 ## 4. Owner handover (local chain, ~3–4 h)
 

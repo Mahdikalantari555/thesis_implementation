@@ -61,6 +61,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--skip-cycle-file-check", action="store_true",
                    help="do not hash-verify the cycle files (inspection on a "
                         "machine without the data archive; NEVER for a real freeze)")
+    p.add_argument("--cycles", default=None,
+                   help="cycle parquet for the drift check when the locked "
+                        "manifest predates recorded cycle_files (default: the "
+                        "manifest's recorded paths, then the v1 layout)")
+    p.add_argument("--cycles-npz", default=None, dest="cycles_npz",
+                   help="cycle NPZ for the drift check (same precedence)")
     return p.parse_args(argv)
 
 
@@ -78,6 +84,10 @@ def main(argv: list[str] | None = None) -> int:
     kwargs = {"verify_cycle_files": not args.skip_cycle_file_check}
     if args.splits_path is not None:
         kwargs["path"] = args.splits_path
+    if args.cycles:
+        kwargs["cycles_parquet_path"] = Path(args.cycles)
+    if args.cycles_npz:
+        kwargs["cycles_npz_path"] = Path(args.cycles_npz)
     try:
         splits_manifest = msplits.load_splits_locked(**kwargs)
     except (RuntimeError, FileNotFoundError) as exc:

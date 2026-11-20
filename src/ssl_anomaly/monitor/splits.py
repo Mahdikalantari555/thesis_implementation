@@ -68,6 +68,49 @@ def load_audit_exclusions(path: Path = CYCLE_AUDIT_EXCLUSION_PATH) -> dict:
     }
 
 
+def map_exclusions_by_window(
+    exclusion_keys: list[str],
+    v1_df: pd.DataFrame,
+    v2_df: pd.DataFrame,
+) -> tuple[set[str], dict]:
+    """Transfer v1-keyed audit exclusions onto a superseding cycle table.
+
+    The finding-14 audit verdicts attach to V1 WINDOW identities
+    (``field:cycle_id`` on v1 numbering). A superseding table renumbers
+    cycles, so the verdicts are transferred by GEOMETRY: each excluded v1
+    key resolves to its v1 half-open interval, and every superseding window
+    of the same field whose interval overlaps it inherits the exclusion (a
+    re-detected fragment of the same audited-bad season is also audit-bad).
+
+    Returns ``(v2_excluded_keys, stats)``.
+    """
+    need = {"field", "cycle_id", "t_start", "t_end"}
+    missing = need - set(v1_df.columns)
+    if missing:
+        raise ValueError(f"v1 parquet missing columns {sorted(missing)}")
+    v1_win: dict[tuple[int, int], tuple[int, int]] = {}
+    for r in v1_df.itertuples():
+        key = f"{int(r.field)}:{int(r.cycle_id)}"
+        if key in set(exclusion_keys):
+            v1_win[key] = (int(r.field), int(r.t_start), int(r.t_end))
+
+    excluded: set[str] = set()
+    unmatched = [k for k in exclusion_keys if k not in v1_win]
+    for r in v2_df.itertuples():
+        f, s, e = int(r.field), int(r.t_start), int(r.t_end)
+        for key, (vf, vs, ve) in v1_win.items():
+            if f == vf and max(s, vs) < min(e, ve):  # half-open overlap
+                excluded.add(f"{f}:{int(r.cycle_id)}")
+                break
+    stats = {
+        "mode": "overlap_transfer_from_v1",
+        "v1_excluded_keys": len(exclusion_keys),
+        "v1_keys_unresolved": len(unmatched),
+        "v2_windows_excluded": len(excluded),
+    }
+    return excluded, stats
+
+
 # ---------------------------------------------------------------------------
 # Manifest hashing
 # ---------------------------------------------------------------------------
@@ -160,6 +203,7 @@ def build_splits_locked(
     seed: int = KMEANS_SEED,
     exclusion_path: Path = CYCLE_AUDIT_EXCLUSION_PATH,
     derived_from_sha: str | None = None,
+    map_exclusions_from_v1: Path | None = None,
 ) -> dict:
     """Build the locked split manifest (design D2 + finding-14 D2 exclusions).
 
@@ -179,7 +223,14 @@ def build_splits_locked(
     dev_fields = set(blocks_info["blocks"][f"block_{picked['dev']}"])
 
     exclusions = load_audit_exclusions(exclusion_path)
-    excluded_keys = set(exclusions["keys"])
+    exclusion_transfer: dict | None = None
+    if map_exclusions_from_v1 is not None:
+        v1_cycles = pd.read_parquet(map_exclusions_from_v1)
+        excluded_keys, exclusion_transfer = map_exclusions_by_window(
+            exclusions["keys"], v1_cycles, df
+        )
+    else:
+        excluded_keys = set(exclusions["keys"])
 
     start = BASE_DATE + pd.to_timedelta(df["t_start"].astype("int64"), unit="D")
     end = BASE_DATE + pd.to_timedelta(df["t_end"].astype("int64"), unit="D")
@@ -267,9 +318,14 @@ def build_splits_locked(
             "n_excluded_from_metrics": int(n_excluded),
             "source": "finding 14 D2 outcome (cycle audit); segmentation-error cycles "
                       "-> monitoring_only (display-only, never metrics)",
+            "transfer": exclusion_transfer,
         },
         "counts": {},
         "cycles": {},
+        "cycle_files": {
+            "parquet": str(Path(cycles_parquet_path)),
+            "npz": str(Path(cycles_npz_path)),
+        },
         "cycle_file_hashes": cycle_file_hashes(
             cycles_parquet_path=cycles_parquet_path,
             cycles_npz_path=cycles_npz_path,
@@ -323,12 +379,17 @@ def load_splits_locked(
     *,
     path: Path = SPLITS_LOCKED_PATH,
     verify_cycle_files: bool = True,
-    cycles_parquet_path: Path = CYCLES_PARQUET_PATH,
-    cycles_npz_path: Path = CYCLES_NPZ_PATH,
+    cycles_parquet_path: Path | None = None,
+    cycles_npz_path: Path | None = None,
 ) -> dict:
     """Load the locked manifest, verifying its self-hash (and file hashes).
 
     Raises RuntimeError on any drift — the manifest-drift requirement.
+
+    The cycle files are located, in order: explicit overrides, then the
+    paths RECORDED in the manifest (``cycle_files``, v2+ manifests), then
+    the module defaults (v1 layout). A superseding manifest therefore
+    verifies against its own cycle files without losing the drift check.
     """
     if not Path(path).exists():
         raise RuntimeError(
@@ -343,8 +404,11 @@ def load_splits_locked(
             "corrupted. Refusing to run (manifest-drift requirement)."
         )
     if verify_cycle_files:
+        recorded = manifest.get("cycle_files", {})
+        pq_path = Path(cycles_parquet_path or recorded.get("parquet", CYCLES_PARQUET_PATH))
+        npz_path = Path(cycles_npz_path or recorded.get("npz", CYCLES_NPZ_PATH))
         current = cycle_file_hashes(
-            cycles_parquet_path=cycles_parquet_path, cycles_npz_path=cycles_npz_path,
+            cycles_parquet_path=pq_path, cycles_npz_path=npz_path,
         )
         for key, cur in current.items():
             rec = manifest.get("cycle_file_hashes", {}).get(key)
