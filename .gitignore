@@ -81,3 +81,6 @@ data/.tmp*
 
 # Large generated platform data (regenerate via scripts/export_platform_data.py)
 platform/src/data/series_khuzestan.json
+
+# Downloaded Google Drive archives (contents live under data/processed/, gitignored)
+/google_drive/
