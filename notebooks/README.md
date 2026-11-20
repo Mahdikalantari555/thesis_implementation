@@ -15,10 +15,20 @@ uploaded to the Colab runtime.
 
 ## Data
 
-Training data lives in `../colab/thesis_data_full.zip` (gitignored). The raw
-METRIC archive (≈44 GB under `Data/Metric/`) stays local and only feeds the
-extraction pipeline that produces the bundle. Checkpoints are gitignored; only
-reports and findings are committed.
+Training data is hosted on Google Drive under the `thesis_colab/` folder
+(`thesis_data_full.zip`, ≈68 MB). Mount Drive in the notebook and read from
+`/content/drive/MyDrive/thesis_colab/`. The raw METRIC archive (≈44 GB under
+`Data/Metric/`) stays local and only feeds the extraction pipeline that
+produces the bundle. Checkpoints are gitignored; only reports and findings are
+committed.
+
+## Output naming
+
+Every notebook run must write its outputs with a date suffix so it is
+unambiguous which run produced them, e.g.
+`report_2026-11-20.json`, `checkpoint_2026-11-20.pt`,
+`findings_2026-11-20.md`. Include the git SHA and data-bundle hash alongside
+the date in the final cell.
 
 ## Conventions
 
