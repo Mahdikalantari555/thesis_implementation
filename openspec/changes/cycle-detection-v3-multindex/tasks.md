@@ -72,3 +72,25 @@
       binding); same 6-trainings protocol on the v2 store.
 - [ ] 5.3 Findings/dev_log update: v1↔v2 comparison deliverable recorded
       (advisor SAVI hypothesis quantified); validation-ladder rung stated.
+
+#### 4.1 extraction I/O acceptance (no store or resume format change)
+
+- [x] Optional `--tile-cache-mib` caches native aligned windows across fields;
+  zero (default) retains the original reader. Compare raw patch and validity
+  bytes for three synthetic field windows, including both raster edges.
+- [ ] Owner gate: separate fresh store, `--fields 1,2 --tile-cache-mib 1024`,
+  identical v2 inputs and all dates (not `--smoke`, which truncates scenes).
+  Compare full per-field manifest SHA and scene counts to the live run, and
+  compare elapsed times. Only switch the full run if parity and speed pass.
+- [x] Optional `--field-batch-size 4` stages consecutive pending fields by
+  scene (one open per needed band per scene); default 1. `--profile-io` prints
+  batch wall, scene reads, remaining time and tile hits/misses/evictions to
+  stdout only. Staged float32 patches and validity masks are additional to
+  the tile budget (~74 KiB per field-scene at size 48). Compare batch wall
+  time and hashes on the same two full fields before any production switch.
+- [x] Flush four whole cycle chunks (including empty bins); preserve SHA
+  readback. Optional `--workers` partitions scene dates among private threaded
+  readers, splitting the tile budget and keeping a single ordered store writer.
+  Synthetic 8-field/8-scene median (3 trials, batch 4/cache 32 MiB): 1.597 s
+  old writer, 0.752/0.635/0.701 s new writer with 1/2/4 readers. Real-data
+  SHA and wall-time gate above still applies.

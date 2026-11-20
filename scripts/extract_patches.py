@@ -41,6 +41,10 @@ import json
 import subprocess
 import sys
 import time
+from collections import OrderedDict, Counter
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack, contextmanager, nullcontext
+from functools import lru_cache
 from datetime import date as _date
 from pathlib import Path
 
@@ -56,7 +60,6 @@ from ssl_anomaly.io.landsat import (  # noqa: E402
     apply_scale_st,
     quality_mask,
 )
-from ssl_anomaly.monitor import splits as msplits  # noqa: E402
 
 # ONE_DEGREE default source-resolution (m) for the runtime estimate.
 PIXEL_SIZE_M = 30.0
@@ -274,10 +277,88 @@ def read_window(
     return out
 
 
+class TileCache:
+    """Run-local LRU of native pixels. A field can visit hundreds of scenes
+    before the next field: keep small aligned tiles, not thousands of handles.
+    The archive is immutable for the duration of the export.
+    """
+
+    def __init__(self, mib):
+        self.limit = mib * 1024**2
+        self.used = 0
+        self.stats = Counter()
+        self._shared_open = None
+        self.tiles = OrderedDict()
+        self.find = lru_cache(maxsize=16384)(find_band_file)
+
+    @contextmanager
+    def one_scene(self):
+        """Keep at most this scene's band handles alive across field windows."""
+        import rasterio
+        with ExitStack() as stack:
+            handles = {}
+
+            def shared(path):
+                if path not in handles:
+                    handles[path] = stack.enter_context(rasterio.open(path))
+                return nullcontext(handles[path])
+
+            self._shared_open = shared
+            try:
+                yield
+            finally:
+                self._shared_open = None
+
+    def load(self, path, window, fill, dtype):
+        import rasterio
+        from rasterio.windows import Window
+
+        opener = self._shared_open or rasterio.open
+        if not self.limit:
+            with opener(path) as src:
+                return read_window(src, window, fill=fill, dtype=dtype)
+
+        # Round outwards so nearby fields share the same native pixel buffer.
+        # Unusual large windows use the ordinary path to bound allocations.
+        step = 128
+        r = max(0, window.row0) // step * step
+        c = max(0, window.col0) // step * step
+        h = ((window.row0 + window.height - r + step - 1) // step) * step
+        w = ((window.col0 + window.width - c + step - 1) // step) * step
+        key = path, r, c, h, w
+        tile = self.tiles.get(key)
+        if tile is None:
+            self.stats["misses"] += 1
+            with opener(path) as src:
+                if (min(h, w) <= 0 or max(h, w) > 2 * step or
+                        r >= src.height or c >= src.width):
+                    return read_window(src, window, fill=fill, dtype=dtype)
+                tile = src.read(1, window=Window(c, r, w, h))
+            while self.tiles and self.used + tile.nbytes > self.limit:
+                self.stats["evictions"] += 1
+                self.used -= self.tiles.popitem(last=False)[1].nbytes
+            if tile.nbytes <= self.limit:
+                self.tiles[key] = tile
+                self.used += tile.nbytes
+        else:
+            self.stats["hits"] += 1
+            self.tiles.move_to_end(key)
+        # Same intersection and padding as read_window, relative to the tile.
+        top, left = window.row0 - r, window.col0 - c
+        crop = tile[max(0, top):max(0, top + window.height),
+                    max(0, left):max(0, left + window.width)]
+        y = window.pad_top + max(0, -top)
+        x = window.pad_left + max(0, -left)
+        out = np.full((window.size, window.size), fill, dtype=dtype)
+        out[y:y + crop.shape[0], x:x + crop.shape[1]] = crop
+        return out
+
+
 def read_scene_patch(
     scene_dir: Path,
     window: P.FieldWindow,
     *,
+    cache=None,
     qcfg=None,
     sensor: str = "unknown",
     band_scale: str = "native",
@@ -301,32 +382,34 @@ def read_scene_patch(
     from ssl_anomaly.config import QualityCfg
 
     qcfg = qcfg or QualityCfg()
-    qa_path = find_band_file(scene_dir, "qa_pixel")
+    find = cache.find if cache else find_band_file
+    def _load(path: Path, fill: float, dtype) -> np.ndarray:
+        if cache is not None:
+            return cache.load(path, window, fill, dtype)
+        with rasterio.open(path) as src:
+            return read_window(src, window, fill=fill, dtype=dtype)
+
+    qa_path = find(scene_dir, "qa_pixel")
     if qa_path is None:
         cands = sorted(list(scene_dir.glob("*QA_PIXEL*")) + list(scene_dir.glob("*qa_pixel*")))
         qa_path = cands[0] if cands else None
     bands: dict[str, np.ndarray] = {}
     valid = np.zeros((window.size, window.size), dtype=bool)
     if qa_path is not None:
-        with rasterio.open(qa_path) as src:
-            qa = read_window(src, window, fill=1, dtype=np.uint16)
+        qa = _load(qa_path, 1, np.uint16)
         # fill=1 sets the QA "fill" bit, so out-of-raster pixels are invalid.
         valid = quality_mask(qa, qcfg)
     if band_scale not in ("native", "landsat", "auto"):
         raise ValueError(f"unknown band_scale {band_scale!r}")
 
-    def _load(path: Path, fill: float, dtype) -> np.ndarray:
-        with rasterio.open(path) as src:
-            return read_window(src, window, fill=fill, dtype=dtype)
-
-    red_path = find_band_file(scene_dir, "red")
+    red_path = find(scene_dir, "red")
     mode = band_scale
     if mode == "auto":
         mode = ("landsat" if red_path is not None
                 and infer_band_scale(_load(red_path, np.nan, np.float32)) == "dn" else "native")
 
     for band in SR_FILE_MAP:
-        path = find_band_file(scene_dir, band)
+        path = find(scene_dir, band)
         if path is None:
             continue
         if mode == "landsat":
@@ -334,7 +417,7 @@ def read_scene_patch(
         else:
             bands[band] = _load(path, np.nan, np.float32)
     for band in ST_FILE_MAP:
-        path = find_band_file(scene_dir, band)
+        path = find(scene_dir, band)
         if path is None:
             continue
         if mode == "landsat":
@@ -478,6 +561,24 @@ def file_sha256(path: str | Path) -> str:
 # ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
+def prefetch_batch(jobs, scenes_by_day, cache, band_scale):
+    """Stage one bounded group in memory; never reorder acquisitions in a bin."""
+    staged = {fi: {} for fi, _, _, _ in jobs}
+    read_seconds = Counter()
+    for day, paths in scenes_by_day.items():
+        active = [(fi, window) for fi, _, window, rows in jobs
+                  if any(day <= end and bin_of_day(day, start) >= 0 for _, start, end in rows)]
+        if active:
+            for path in paths:
+                with cache.one_scene():
+                    for fi, window in active:
+                        tick = time.perf_counter()
+                        staged[fi][path] = read_scene_patch(
+                            path, window, sensor=sensor_of(path), band_scale=band_scale, cache=cache)
+                        read_seconds[fi] += time.perf_counter() - tick
+    return staged, read_seconds
+
+
 def export_field(
     root,
     fi: int,
@@ -490,6 +591,7 @@ def export_field(
     window: P.FieldWindow,
     in_field: np.ndarray,
     band_scale: str = "auto",
+    cache=None, staged=None, profile=None,
 ) -> dict:
     """Extract and write one field's patches. Returns a summary record."""
     t0 = time.time()
@@ -506,19 +608,23 @@ def export_field(
             if b < 0 or day_idx > end:
                 continue
             for scene_dir in scene_dirs:
-                values, valid = read_scene_patch(
+                tick = time.perf_counter() if profile is not None else 0
+                values, valid = staged[scene_dir] if staged is not None else read_scene_patch(
                     scene_dir, window, sensor=sensor_of(scene_dir), band_scale=band_scale,
+                    cache=cache,
                 )
+                if profile is not None and staged is None:
+                    profile["scene_read_s"] += time.perf_counter() - tick
                 per_bin[b].append((values, valid, sensor_of(scene_dir)))
                 n_scenes_used += 1
-        for b in range(P.N_BINS):
-            entries = per_bin[b]
+        # The store chunks all 36 bins together. Replace whole chunks,
+        # including empty bins in a partially written field on resume.
+        values = np.full((P.N_BINS, P.N_CHANNELS, size, size), np.nan, np.float16)
+        valid_bins = np.zeros((P.N_BINS, 1, size, size), np.uint8)
+        counts = np.zeros(P.N_BINS, np.uint8)
+        sensors = np.full(P.N_BINS, P.SENSOR_IDS["unknown"], np.uint8)
+        for b, entries in per_bin.items():
             if not entries:
-                empty = P.aggregate_bin([], [], in_field=in_field)
-                root["values"][fi, ci, b] = empty.values
-                root["pixel_valid"][fi, ci, b, 0] = empty.pixel_valid
-                root["n_obs"][fi, ci, b] = 0
-                root["sensor_id"][fi, ci, b] = P.SENSOR_IDS["unknown"]
                 continue
             agg = P.aggregate_bin(
                 [e[0] for e in entries], [e[1] for e in entries],
@@ -527,10 +633,14 @@ def export_field(
             agg.sensor_id = P.majority_sensor([{"L8": P.SENSOR_IDS["L8"], "L9": P.SENSOR_IDS["L9"],
                                                 "unknown": P.SENSOR_IDS["unknown"]}[s]
                                                for s in (e[2] for e in entries)])
-            root["values"][fi, ci, b] = agg.values
-            root["pixel_valid"][fi, ci, b, 0] = agg.pixel_valid
-            root["n_obs"][fi, ci, b] = min(int(agg.n_obs), 255)
-            root["sensor_id"][fi, ci, b] = agg.sensor_id
+            values[b] = agg.values
+            valid_bins[b, 0] = agg.pixel_valid
+            counts[b] = min(int(agg.n_obs), 255)
+            sensors[b] = agg.sensor_id
+        root["values"][fi, ci] = values
+        root["pixel_valid"][fi, ci] = valid_bins
+        root["n_obs"][fi, ci] = counts
+        root["sensor_id"][fi, ci] = sensors
         field_values[ci] = root["values"][fi, ci]
     return {
         "field_id": int(field_id),
@@ -606,7 +716,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--estimate-runtime", action="store_true")
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--patch-size", type=int, default=P.DEFAULT_PATCH_SIZE)
+    ap.add_argument("--tile-cache-mib", type=int, default=0,
+                    help="native-pixel cache budget in MiB (0: original window reader)")
+    ap.add_argument("--field-batch-size", type=int, choices=range(1, 5), default=1,
+                    help="stage scene patches for up to four consecutive pending fields")
+    ap.add_argument("--profile-io", action="store_true", help="print per-batch I/O diagnostics")
+    ap.add_argument("--workers", type=int, choices=range(1, 9), default=1,
+                    help="parallel scene readers; tile cache budget is shared across readers")
     args = ap.parse_args(argv)
+    if args.tile_cache_mib < 0:
+        ap.error("--tile-cache-mib must be nonnegative")
 
     store = Path(args.out)
     mask_path = Path(args.mask)
@@ -616,6 +735,8 @@ def main(argv: list[str] | None = None) -> int:
     cycle_source_hash = file_sha256(args.cycles)
     splits = None
     if args.splits is not None:
+        from ssl_anomaly.monitor import splits as msplits
+
         splits = msplits.load_splits_locked(path=args.splits, verify_cycle_files=False)
         if cycle_source_hash != splits.get("cycle_file_hashes", {}).get("cycles_parquet_sha256"):
             raise ValueError("--cycles does not match the verified locked splits parquet hash")
@@ -715,34 +836,75 @@ def main(argv: list[str] | None = None) -> int:
         **binding,
     }
 
+    cache = TileCache(args.tile_cache_mib) if args.tile_cache_mib or args.field_batch_size > 1 else None
+    # Stable scene partitions preserve cross-field tile reuse. Each task owns
+    # its cache and GDAL handles; only the coordinator writes to Zarr.
+    partitions = [{} for _ in range(args.workers)]
+    caches = [cache]
+    if args.workers > 1:
+        caches = [TileCache(args.tile_cache_mib / args.workers) for _ in partitions]
+        for i, (day, paths) in enumerate(scenes_by_day.items()):
+            partitions[i % args.workers][day] = paths
+    pending = [(fi, fid) for fi, fid in enumerate(field_ids) if fid not in already]
     n_done = 0
-    for fi, fid in enumerate(field_ids):
-        if fid in already:
-            continue
-        poly = mask == fid
-        window = P.field_window(poly, size=args.patch_size)
-        if window is None:
-            print(f"[{fi + 1}/{len(field_ids)}] field {fid}: no pixels in the mask, skipped")
-            continue
-        root["in_field"][fi, 0] = P.patch_in_field_mask(poly, window)
-        root["bbox_origin"][fi] = window.to_bbox_origin()
-        rows = cycles[cycles[:, 0] == fid]
-        root["cycle_valid"][fi] = 0  # mark partial work unavailable until all bins are written
-        cycles_of_field = [(int(r[1]), int(r[2]), int(r[3])) for r in rows]
-        for ci, (_cid, start, end) in enumerate(cycles_of_field):
-            root["cycle_ids"][fi, ci] = _cid
-            root["cycle_start_day"][fi, ci] = start
-            root["cycle_end_day"][fi, ci] = end
-        summary = export_field(
-            root, fi, fid, mask=mask, cycles_of_field=cycles_of_field,
-            scenes_by_day=scenes_by_day, size=args.patch_size, window=window,
-            in_field=root["in_field"][fi, 0], band_scale=args.band_scale,
-        )
-        root["cycle_valid"][fi, :len(cycles_of_field)] = 1
-        append_manifest(store, **summary)
-        n_done += 1
-        print(f"[{fi + 1}/{len(field_ids)}] field {fid}: {summary['n_scenes']} scene-reads, "
-              f"{summary['seconds']:.1f}s, sha {summary['sha256'][:12]}")
+    for offset in range(0, len(pending), args.field_batch_size):
+        batch_start = time.perf_counter()
+        profile = Counter() if args.profile_io else None
+        before = sum((c.stats for c in caches if c), Counter()) if args.profile_io else Counter()
+        jobs = []
+        for fi, fid in pending[offset:offset + args.field_batch_size]:
+            poly = mask == fid
+            window = P.field_window(poly, size=args.patch_size)
+            if window is None:
+                print(f"[{fi + 1}/{len(field_ids)}] field {fid}: no pixels in the mask, skipped")
+                continue
+            root["in_field"][fi, 0] = P.patch_in_field_mask(poly, window)
+            root["bbox_origin"][fi] = window.to_bbox_origin()
+            rows = cycles[cycles[:, 0] == fid]
+            root["cycle_valid"][fi] = 0  # mark partial work unavailable until all bins are written
+            cycles_of_field = [(int(r[1]), int(r[2]), int(r[3])) for r in rows]
+            for ci, (_cid, start, end) in enumerate(cycles_of_field):
+                root["cycle_ids"][fi, ci] = _cid
+                root["cycle_start_day"][fi, ci] = start
+                root["cycle_end_day"][fi, ci] = end
+            jobs.append((fi, fid, window, cycles_of_field))
+        read_start = time.perf_counter()
+        staged, read_seconds = ({}, Counter())
+        if jobs and args.workers > 1:
+            staged = {fi: {} for fi, *_ in jobs}
+            with ThreadPoolExecutor(max_workers=args.workers) as pool:
+                futures = [pool.submit(prefetch_batch, jobs, days, c, args.band_scale)
+                           for days, c in zip(partitions, caches) if days]
+                for future in futures:
+                    part, seconds = future.result()
+                    for fi in part:
+                        staged[fi].update(part[fi])
+                    part.clear()  # futures must not retain patches after the field flush
+                    read_seconds.update(seconds)
+        elif len(jobs) > 1:
+            staged, read_seconds = prefetch_batch(jobs, scenes_by_day, cache, args.band_scale)
+        if staged and profile is not None:
+            profile["scene_read_s"] = time.perf_counter() - read_start
+        for fi, fid, window, cycles_of_field in jobs:
+            summary = export_field(
+                root, fi, fid, mask=mask, cycles_of_field=cycles_of_field,
+                scenes_by_day=scenes_by_day, size=args.patch_size, window=window,
+                in_field=root["in_field"][fi, 0], band_scale=args.band_scale, cache=cache,
+                staged=staged.pop(fi, None), profile=profile,
+            )
+            if fi in read_seconds:
+                summary["seconds"] = round(summary["seconds"] + read_seconds[fi], 2)
+            root["cycle_valid"][fi, :len(cycles_of_field)] = 1
+            append_manifest(store, **summary)
+            n_done += 1
+            print(f"[{fi + 1}/{len(field_ids)}] field {fid}: {summary['n_scenes']} scene-reads, "
+                  f"{summary['seconds']:.1f}s, sha {summary['sha256'][:12]}")
+        elapsed = time.perf_counter() - batch_start
+        if profile is not None:
+            delta = sum((c.stats for c in caches if c), Counter()) - before
+            print(f"batch wall={elapsed:.2f}s scene_read={profile['scene_read_s']:.2f}s "
+                  f"aggregation/write/other={elapsed - profile['scene_read_s']:.2f}s "
+                  f"tile_hits={delta['hits']} misses={delta['misses']} evictions={delta['evictions']}")
 
     prov = P.Provenance(
         git_sha=git_sha(),
