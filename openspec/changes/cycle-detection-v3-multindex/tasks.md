@@ -83,9 +83,28 @@
 
 ## 5. Colab bundle v2
 
-- [ ] 5.1 `thesis_data_full_v2.zip` (`patches_v2.zarr` + v2 JSONs, data only).
-- [ ] 5.2 Notebook v2 (clone flow, v2 paths, gates cell asserts v2 provenance
-      binding); same 6-trainings protocol on the v2 store.
+- [x] 5.1 `thesis_data_full_v2.zip` DONE 2026-11-21: 293.5 MB / 12,903
+      entries, ZIP CRC all-OK, 3 JSONs byte-identical to disk. Contents ship
+      the REAL production path `data/patch_runs/v3/patches.zarr` (no rename —
+      arcnames preserve it) + `splits_locked_v2.json` +
+      `holdout_manifest_v2.json` + `norm_stats_full_v2.json`; cycle npz files
+      deliberately excluded (data only; gates run with
+      `verify_cycle_files=False`, same as v1). Size ≈ 4.3× v1's 67.8 MB =
+      the 4.35× valid-cycle growth (3,478 vs 799). Local copy at
+      `google_drive/thesis_data_full_v2.zip` (gitignored).
+- [x] 5.2 Notebook v2 DONE: `notebooks/train_full_archive_colab_v2.ipynb`
+      (8 cells, clone flow, pinned-commit note `67b8f82`). Gates cell asserts
+      the full v2 binding chain (validate_store 490 fields, provenance↔splits
+      manifest, cycle_source↔`cycles_parquet_sha256`, shapes
+      (490,12,36,8,48,48), cycle_valid == 3478, norm self-hash +
+      splits/holdout hash binding + n_train_cycles 2105) — dry-run of the
+      cell PASSED against the real local artifacts (train 2105 / dev 340 /
+      test 773 / monitoring 1240). Training cell passes `--splits` and
+      `--holdout-manifest` v2 EXPLICITLY — `train_patch.py` defaults are the
+      v1 paths, which on a v2 store would bind cycle selection to the wrong
+      locked splits (fail-closed trap avoided at the notebook level).
+      `--out checkpoints/patch/patch_full_v2_ep10`; same 6-trainings
+      protocol, `--resume` preserved.
 - [ ] 5.3 Findings/dev_log update: v1↔v2 comparison deliverable recorded
       (advisor SAVI hypothesis quantified); validation-ladder rung stated.
 
