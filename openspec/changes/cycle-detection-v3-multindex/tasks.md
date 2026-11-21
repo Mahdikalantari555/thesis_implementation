@@ -146,10 +146,24 @@
       chain stays archived for provenance. v1↔v2 deliverable = this
       supersession statement in finding 25 (advisor SAVI hypothesis rides on
       the v2 numbers alone).
-- [ ] 5.3 Findings/dev_log update: v2-only finding 25 (fixed protocol,
-      calibrated τ, σ refit) + finding 24 supersession banner.
-      BLOCKED on the fixed-protocol re-run (σ ×6 done; eval ×6 pending on
-      Colab).
+- [x] 5.3 Findings/dev_log update DONE 2026-11-21: finding 25
+      (`docs/findings/25_patch_full_v2_fixed_protocol.md` + `.fa.md`, index row
+      25, supersession pointer added to index row 24) from the returned
+      fixed-protocol re-run
+      (`patch_full_v2_sigma_eval_colab_v2.zip`, sha256 f4b41ec1…, 6 metrics
+      JSONs, CRC OK). Colab T4, git e46e9a5a, protocol
+      `severity_sweep_patch_v2`, eval subset 852e1ba3, σ ×6 sha-bound to the
+      local refit tables; agent verification fail-closed ALL GREEN (τ 1.42–1.51
+      > 0.05, far_achieved 0.0471 ≤ 0.05, ladder non-flat with S6 ≥ S1 in every
+      family, onset rotation {6,18,30}, MDM80 recomputed == recorded).
+      VERDICT: **MDM80 censored >S6 for both arms × 4 families × 3 seeds**
+      (best detection 0.456 cnn_gru S6/persistent/savi, Wilson [0.404, 0.509],
+      n=340, delay 30 d from onset); the full-archive gate is FAIL and the
+      finding-24 "frozen winner = patch_pixelwise" call is void (nothing was
+      ever wired to the platform). v1 supersession statement included per the
+      owner's 5.3b scope decision. Metrics committed under
+      `reports/dev/patch_full_v2_ep10/`. dev_log rows intentionally absent for
+      patch arms (pre-existing exporter branch).
 
 #### 4.1 extraction I/O acceptance (no store or resume format change)
 
