@@ -322,7 +322,8 @@ def test_patch_severity_cli_consumes_the_new_trainer_checkpoint(tmp_path, monkey
 
     root = _store(tmp_path, field_ids=(33, 11, 22), n_cycles=10)
     cycle_keys = [f"{fid}:{ci}" for fid in (11, 22) for ci in range(10)]
-    splits, holdout = bind_patch_store(root, known=(11, 22, 33), dev_keys=cycle_keys)
+    splits, holdout = bind_patch_store(root, known=(11, 22, 33), dev_keys=cycle_keys,
+                                       parquet_path=tmp_path / "cycles.parquet")
     lock = tmp_path / "splits.json"
     lock.write_text(json.dumps(splits))
     holdout_path = H.save_holdout_manifest(holdout, path=tmp_path / "holdout.json")
@@ -393,9 +394,13 @@ def test_patch_severity_cli_consumes_the_new_trainer_checkpoint(tmp_path, monkey
 
     with pytest.raises(ValueError, match="requires exactly the seed"):
         E.main([*argv, "--seeds", "13,42"])
-    dev["end_dates"][0] += np.timedelta64(1, "D")
+    # Store/parquet drift: bump one stored end day against the pinned table.
+    fi = int(np.where(root["field_ids"][:] == 11)[0][0])
+    ci = int(np.where(root["cycle_ids"][fi] == 0)[0][0])
+    root["cycle_end_day"][fi, ci] += 1
     with pytest.raises(ValueError, match="patch bounds for 11:0"):
         E.main(argv)
+    root["cycle_end_day"][fi, ci] -= 1
 
     np.savez(sigma_path, **(sigma_args | {"model_sha256": "other model"}))
     with pytest.raises(ValueError, match="sigma is not bound"):

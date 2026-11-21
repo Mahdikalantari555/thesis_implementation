@@ -677,6 +677,59 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
     }, per_seed
 
 
+def _patch_dev_panel(root, manifest: dict) -> dict:
+    """Patch dev panel (keys + windows) from the manifest-pinned cycles table.
+
+    The masked-cycle archive (``load_masked_cycles``) is built from the v1
+    phenology, so its windows disagree with a store bound to the v2 cycle
+    chain. The locked authority is ``cycle_files.parquet``: the manifest pins
+    its sha256 and the store's ``cycle_source_sha256`` records the same
+    table. The half-open parquet bound (``t_end - 1``) equals the store's
+    inclusive ``cycle_end_day`` exactly as ``extract_patches.py`` wrote it.
+    """
+    import pandas as pd
+
+    rel = manifest.get("cycle_files", {}).get("parquet")
+    if not rel:
+        raise SystemExit(
+            "manifest has no cycle_files.parquet — a patch store built from a "
+            "v2 cycle table needs the v2 locked splits (a v1 store takes the "
+            "masked-archive panel)")
+    parquet = Path(rel)
+    if not parquet.is_absolute():
+        parquet = REPO_ROOT / rel
+    digest = hashlib.sha256(parquet.read_bytes()).hexdigest()
+    if digest != manifest["cycle_file_hashes"]["cycles_parquet_sha256"]:
+        raise ValueError(
+            f"cycles parquet {parquet} does not match the manifest-pinned hash")
+    df = pd.read_parquet(parquet)
+    if "censored" in df.columns:
+        df = df[~df["censored"].astype(bool)]
+    windows = {(int(r.field), int(r.cycle_id)): (int(r.t_start), int(r.t_end) - 1)
+               for r in df.itertuples()}
+    from ssl_anomaly.io import patches as P
+
+    index = P.patch_cycle_index(root)
+    keys, starts, ends = [], [], []
+    epoch0 = np.datetime64(manifest["base_date"], "D")
+    for key in manifest["cycles"]["dev"]:
+        if key not in index:
+            raise ValueError(f"locked dev cycle {key} is not valid in the patch store")
+        cycle = index[key]
+        pair = (cycle.field_id, cycle.cycle_id)
+        if pair not in windows:
+            raise ValueError(f"locked dev cycle {key} is censored/missing in the pinned cycle table")
+        t_start, t_end_incl = windows[pair]
+        if cycle.start_day != t_start or cycle.end_day != t_end_incl:
+            raise ValueError(f"patch bounds for {key} disagree with the manifest-pinned cycle table")
+        keys.append(key)
+        starts.append(epoch0 + np.timedelta64(cycle.start_day, "D"))
+        ends.append(epoch0 + np.timedelta64(cycle.end_day + 1, "D"))
+    return {"cycle_keys": keys,
+            "start_dates": np.array(starts, dtype="datetime64[D]"),
+            "end_dates": np.array(ends, dtype="datetime64[D]")}
+
+
 def run_patch_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict,
                                 seeds: list[str], device: str,
                                 data: dict | None = None) -> tuple[dict, list]:
@@ -893,6 +946,17 @@ def main(argv: list[str] | None = None) -> int:
     manifest = msplits.load_splits_locked(path=args.splits)
     data = minputs.load_masked_cycles()
     sel = mproto.select_splits(data, manifest, splits=("dev",))
+    if patch:
+        # The masked-cycle archive is built from the v1 phenology; a patch
+        # store bound to the v2 chain takes its locked dev panel from the
+        # manifest-pinned cycles parquet (windows + dates all v2).
+        from ssl_anomaly.io import patches as P
+
+        sel = _patch_dev_panel(
+            P.open_store(Path(args.patch_store) if args.patch_store
+                         else REPO_ROOT / "data" / "processed" / "patches.zarr"),
+            manifest,
+        )
 
     if args.protocol == "severity":
         sev_metrics, per_seed = run_severity_protocol(args, manifest, sel, seeds, device, data=data)
