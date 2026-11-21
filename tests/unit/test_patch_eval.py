@@ -207,6 +207,35 @@ def test_predict_pixels_observed_mask_is_per_channel():
     assert (table.n[:, 0, :] > 0).any()
 
 
+# --- patch round protocol (audit 2026-11-21) -------------------------------
+def test_cell_onset_rotates_per_sample_and_round_like_the_field_ladder():
+    """The pre-fix protocol pinned onset to bin 3, making every round of a
+    cell a byte-identical injection (Wilson CI on pseudo-replicates) and the
+    patch ladder single-phase. The field ladder rotates (i + round) % 3."""
+    from ssl_anomaly.monitor import perturbations as mpert
+    arm = PS.PatchArmScorer(_scorer(), np.ones((12, T)))
+    b = _batch(n=3)
+    outs = [PE.patch_arm_scores(arm, b, level_id="S3", family=sev.ACUTE_FAMILY,
+                                index="ndvi", round_idx=r)
+            for r in range(2)]
+    for r, out in enumerate(outs):
+        expect = [mpert.phase_start_bin(mpert.PHASES[(n + r) % len(mpert.PHASES)], T)
+                  for n in range(3)]
+        assert [rec["onset_bin"] for rec in out["injections"]] == expect
+    assert outs[0]["injections"][0]["onset_bin"] != outs[1]["injections"][0]["onset_bin"]
+
+
+def test_gradual_cell_cycles_the_ramp_length_per_round():
+    """Gradual ramp length follows GRADUAL_RAMP_BINS per round (field-ladder
+    parity), not the level row's duration_bins."""
+    arm = PS.PatchArmScorer(_scorer(), np.ones((12, T)))
+    b = _batch(n=2)
+    for rnd, ramp in enumerate(sev.GRADUAL_RAMP_BINS):
+        out = PE.patch_arm_scores(arm, b, level_id="S3", family=sev.GRADUAL_FAMILY,
+                                  index="ndvi", round_idx=rnd)
+        assert all(rec["duration_bins"] == int(ramp) for rec in out["injections"])
+
+
 # --- G4 localization probe -------------------------------------------------
 def test_localization_auprc_ranks_injected_pixels_first():
     N, T, S = 2, 10, 8

@@ -870,10 +870,18 @@ def run_patch_severity_protocol(args: argparse.Namespace, manifest: dict, sel: d
                         q95,
                     )
                     for j in range(inj_paths.shape[0]):
-                        fb = mscoring.first_alarm_bin(inj_paths[j], tau, k, 0)
+                        # Detection and delay are measured from the injection
+                        # ONSET (recorded per injection; phases rotate per
+                        # round like the field ladder), never from bin 0 —
+                        # counting pre-onset bins added the calibrated-FAR
+                        # floor to every detection rate and inflated delays by
+                        # onset·15 days (audit 2026-11-21; the field arm and
+                        # every other call site already used this convention).
+                        onset = int(cell["injections"][j]["onset_bin"])
+                        fb = mscoring.first_alarm_bin(inj_paths[j], tau, k, onset)
                         det_flags.append(1 if fb >= 0 else 0)
                         if fb >= 0:
-                            delays.append(float(fb * 15))
+                            delays.append(float((fb - onset) * 15))
                 n = len(det_flags)
                 n_det = int(sum(det_flags))
                 lo, hi = mscoring.wilson_ci(n_det, n)
@@ -881,6 +889,7 @@ def run_patch_severity_protocol(args: argparse.Namespace, manifest: dict, sel: d
                     "n": n, "n_detected": n_det, "detection_rate": n_det / max(1, n),
                     "wilson_ci95": [round(lo, 4), round(hi, 4)],
                     "median_delay_days": float(np.median(delays)) if delays else None,
+                    "onset_bins": sorted({int(rec["onset_bin"]) for rec in cell["injections"]}),
                     "level_id": lv.level_id, "family": fam, "index": index,
                     "delta_ndvi": lv.delta_ndvi,
                 }

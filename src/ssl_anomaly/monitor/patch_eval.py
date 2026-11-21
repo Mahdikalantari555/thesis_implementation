@@ -139,6 +139,11 @@ def patch_arm_scores(
     is verifiable against the field-level ladder's. ``injection_basis``
     selects the injector semantics (change consistent-spectral-injection); the
     caller — the eval sweep — decides which basis is the primary gate.
+
+    The onset phase rotates through early/mid/late per ``(sample + round) % 3``
+    and the gradual ramp length cycles ``GRADUAL_RAMP_BINS`` per round — the
+    exact field-ladder protocol — so consecutive rounds are genuinely different
+    treatments and the sweep's Wilson CI counts independent injections.
     """
     from ssl_anomaly.monitor import patch_perturbations as ppert
     from ssl_anomaly.monitor import severity_table as sev
@@ -147,8 +152,16 @@ def patch_arm_scores(
     if level_id not in levels:
         raise ValueError(f"unknown severity level {level_id!r}")
     delta = float(levels[level_id].delta_ndvi)
-    duration = (sev.PERSISTENT_DURATION_BINS if family == sev.PERSISTENT_FAMILY
-                else levels[level_id].duration_bins)
+    if family == sev.PERSISTENT_FAMILY:
+        duration = sev.PERSISTENT_DURATION_BINS
+    elif family == sev.GRADUAL_FAMILY:
+        # Round parity with the field ladder (perturbations.
+        # inject_index_drop_dataset): the gradual ramp cycles through the
+        # spec's D ∈ {3, 4, 6} per round; inject_patch_drop pulls the onset
+        # earlier when the full ramp would not fit, and both are recorded.
+        duration = int(sev.GRADUAL_RAMP_BINS[round_idx % len(sev.GRADUAL_RAMP_BINS)])
+    else:
+        duration = levels[level_id].duration_bins
 
     rng = rng if rng is not None else np.random.default_rng(round_idx)
     injections = []
@@ -162,12 +175,20 @@ def patch_arm_scores(
     x_dtype = batch["X"].dtype if "X" in batch else np.float32
     outputs = {key: [] for key in ("z2", "score", "p_value")}
     Minj = batch["pixel_valid"]
-    onset = ppert.onset_for_shape(family, shape[1], 3, int(duration))
     for start in range(0, n_samples, chunk_size):
         end = min(start + chunk_size, n_samples)
         Xinj = np.empty((end - start, *shape[1:]), dtype=x_dtype)
         # The same RNG is consumed once per sample, in global batch order.
         for n in range(start, end):
+            # Onset phases rotate deterministically through early/mid/late
+            # exactly like the field ladder (cycle i, round r → phase
+            # (i + r) % 3). The pre-fix code pinned onset to bin 3, which made
+            # every round of a cell a byte-identical injection (the Wilson CI
+            # then counted pseudo-replicates) and measured detection from bin
+            # 0 instead of the onset (audit 2026-11-21).
+            from ssl_anomaly.monitor import perturbations as mpert
+            phase = mpert.PHASES[(n + round_idx) % len(mpert.PHASES)]
+            onset = mpert.phase_start_bin(phase, shape[1])
             inj = ppert.inject_patch_drop(
                 batch["raw"][n].astype(np.float32), batch["obs"][n],
                 index=index, delta=delta, onset_bin=onset, shape=family,
