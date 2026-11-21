@@ -1,0 +1,579 @@
+{
+  "run_id": "patch_full_v2_ep10",
+  "model_id": "patch_cnn_gru",
+  "protocol": "severity_sweep_patch_v2",
+  "scorer": "patch_cnn_gru",
+  "bank_variant": null,
+  "severity_table_sha256": "9d720e3b40160dd07c9f564cd0d6848211756ab65212d235c63657e3a474c1b5",
+  "eval_subset_sha256": "852e1ba3d2a2a9d0",
+  "ladder_rung": "L2",
+  "input_protocol": "patch_inputs_v2",
+  "injection_basis": "bands_consistent",
+  "scoring_alignment": "one_step_ahead_v3",
+  "patch_run": "checkpoints/patch/patch_full_v2_ep10/patch_cnn_gru_seed2026/last.pt",
+  "patch_sigma_sha256": "54e6270749e1a3d1069664e5d6130a5dd4c76877d704ebb501c6dc37b337e49d",
+  "claim_noun": "synthetic anomaly",
+  "data_source": "real490 (masked rebuild from stats.zarr)",
+  "splits_locked_sha256": "30ecbe103d0d8da04208ab6c2d1145baf6e0ae298de213361d0a37293886fe50",
+  "git_sha": "e46e9a5a",
+  "seeds": [
+    2026
+  ],
+  "device": "cuda",
+  "wall_time_s": 284.4,
+  "far_target": 0.05,
+  "date_range": {
+    "first": "2014-01-30",
+    "last": "2025-11-19"
+  },
+  "n_dev_cycles": 340,
+  "n_calib_cycles": 170,
+  "n_eval_cycles": 170,
+  "channel_count": 8,
+  "mdm80_target": 0.8,
+  "mdm80": {
+    "acute/ndvi": {
+      "mean_sentinel": 7.0,
+      "std_sentinel": 0.0,
+      "per_seed_labels": [
+        ">S6"
+      ],
+      "n_censored": 1
+    },
+    "acute/savi": {
+      "mean_sentinel": 7.0,
+      "std_sentinel": 0.0,
+      "per_seed_labels": [
+        ">S6"
+      ],
+      "n_censored": 1
+    },
+    "persistent/ndvi": {
+      "mean_sentinel": 7.0,
+      "std_sentinel": 0.0,
+      "per_seed_labels": [
+        ">S6"
+      ],
+      "n_censored": 1
+    },
+    "persistent/savi": {
+      "mean_sentinel": 7.0,
+      "std_sentinel": 0.0,
+      "per_seed_labels": [
+        ">S6"
+      ],
+      "n_censored": 1
+    }
+  },
+  "smoke": false,
+  "notes": "",
+  "per_seed": [
+    {
+      "seed": 2026,
+      "tau": 1.435820952497323,
+      "k": 1,
+      "far_achieved": 0.047058823529411764,
+      "tau_calibration": "calibrate_threshold on leave-one-out calibration null alarm paths (k=1, FAR target 0.05)",
+      "alarm_statistic": "neg_log_empirical_p_vs_calibration_subset",
+      "mdm80": {
+        "acute/ndvi": {
+          "value": ">S6",
+          "sentinel": 7,
+          "censored": true,
+          "level_cell": null,
+          "median_delay_days": null
+        },
+        "acute/savi": {
+          "value": ">S6",
+          "sentinel": 7,
+          "censored": true,
+          "level_cell": null,
+          "median_delay_days": null
+        },
+        "persistent/ndvi": {
+          "value": ">S6",
+          "sentinel": 7,
+          "censored": true,
+          "level_cell": null,
+          "median_delay_days": null
+        },
+        "persistent/savi": {
+          "value": ">S6",
+          "sentinel": 7,
+          "censored": true,
+          "level_cell": null,
+          "median_delay_days": null
+        }
+      },
+      "cells": {
+        "S1/acute/ndvi": {
+          "n": 340,
+          "n_detected": 6,
+          "detection_rate": 0.01764705882352941,
+          "wilson_ci95": [
+            0.0081,
+            0.038
+          ],
+          "median_delay_days": 127.5,
+          "onset_bins": [
+            6,
+            18,
+            30
+          ],
+          "level_id": "S1",
+          "family": "acute",
+          "index": "ndvi",
+          "delta_ndvi": 0.02
+        },
+        "S1/acute/savi": {
+          "n": 340,
+          "n_detected": 7,
+          "detection_rate": 0.020588235294117647,
+          "wilson_ci95": [
+            0.01,
+            0.0419
+          ],
+          "median_delay_days": 105.0,
+          "onset_bins": [
+            6,
+            18,
+            30
+          ],
+          "level_id": "S1",
+          "family": "acute",
+          "index": "savi",
+          "delta_ndvi": 0.02
+        },
+        "S1/persistent/ndvi": {
+          "n": 340,
+          "n_detected": 6,
+          "detection_rate": 0.01764705882352941,
+          "wilson_ci95": [
+            0.0081,
+            0.038
+          ],
+          "median_delay_days": 127.5,
+          "onset_bins": [
+            6,
+            18,
+            30
+          ],
+          "level_id": "S1",
+          "family": "persistent",
+          "index": "ndvi",
+          "delta_ndvi": 0.02
+        },
+        "S1/persistent/savi": {
+          "n": 340,
+          "n_detected": 7,
+          "detection_rate": 0.020588235294117647,
+          "wilson_ci95": [
+            0.01,
+            0.0419
+          ],
+          "median_delay_days": 105.0,
+          "onset_bins": [
+            6,
+            18,
+            30
+          ],
+          "level_id": "S1",
+          "family": "persistent",
+          "index": "savi",
+          "delta_ndvi": 0.02
+        },
+        "S2/acute/ndvi": {
+          "n": 340,
+          "n_detected": 8,
+          "detection_rate": 0.023529411764705882,
+          "wilson_ci95": [
+            0.012,
+            0.0457
+          ],
+          "median_delay_days": 67.5,
+          "onset_bins": [
+            6,
+            18,
+            30
+          ],
+          "level_id": "S2",
+          "family": "acute",
+          "index": "ndvi",
+          "delta_ndvi": 0.05
+        },
+        "S2/acute/savi": {
+          "n": 340,
+          "n_detected": 8,
+          "detection_rate": 0.023529411764705882,
+          "wilson_ci95": [
+            0.012,
+            0.0457
+          ],
+          "median_delay_days": 67.5,
+          "onset_bins": [
+            6,
+            18,
+            30
+          ],
+          "level_id": "S2",
+          "family": "acute",
+          "index": "savi",
+          "delta_ndvi": 0.05
+        },
+        "S2/persistent/ndvi": {
+          "n": 340,
+          "n_detected": 8,
+          "detection_rate": 0.023529411764705882,
+          "wilson_ci95": [
+            0.012,
+            0.0457
+          ],
+          "median_delay_days": 67.5,
+          "onset_bins": [
+            6,
+            18,
+            30
+          ],
+          "level_id": "S2",
+          "family": "persistent",
+          "index": "ndvi",
+          "delta_ndvi": 0.05
+        },
+        "S2/persistent/savi": {
+          "n": 340,
+          "n_detected": 8,
+          "detection_rate": 0.023529411764705882,
+          "wilson_ci95": [
+            0.012,
+            0.0457
+          ],
+          "median_delay_days": 67.5,
+          "onset_bins": [
+            6,
+            18,
+            30
+          ],
+          "level_id": "S2",
+          "family": "persistent",
+          "index": "savi",
+          "delta_ndvi": 0.05
+        },
+        "S3/acute/ndvi": {
+          "n": 340,
+          "n_detected": 9,
+          "detection_rate": 0.026470588235294117,
+          "wilson_ci95": [
+            0.014,
+            0.0495
+          ],
+          "median_delay_days": 105.0,
+          "onset_bins": [
+            6,
+            18,
+            30
+          ],
+          "level_id": "S3",
+          "family": "acute",
+          "index": "ndvi",
+          "delta_ndvi": 0.08
+        },
+        "S3/acute/savi": {
+          "n": 340,
+          "n_detected": 11,
+          "detection_rate": 0.03235294117647059,
+          "wilson_ci95": [
+            0.0182,
+            0.057
+          ],
+          "median_delay_days": 30.0,
+          "onset_bins": [
+            6,
+            18,
+            30
+          ],
+          "level_id": "S3",
+          "family": "acute",
+          "index": "savi",
+          "delta_ndvi": 0.08
+        },
+        "S3/persistent/ndvi": {
+          "n": 340,
+          "n_detected": 8,
+          "detection_rate": 0.023529411764705882,
+          "wilson_ci95": [
+            0.012,
+            0.0457
+          ],
+          "median_delay_days": 67.5,
+          "onset_bins": [
+            6,
+            18,
+            30
+          ],
+          "level_id": "S3",
+          "family": "persistent",
+          "index": "ndvi",
+          "delta_ndvi": 0.08
+        },
+        "S3/persistent/savi": {
+          "n": 340,
+          "n_detected": 11,
+          "detection_rate": 0.03235294117647059,
+          "wilson_ci95": [
+            0.0182,
+            0.057
+          ],
+          "median_delay_days": 30.0,
+          "onset_bins": [
+            6,
+            18,
+            30
+          ],
+          "level_id": "S3",
+          "family": "persistent",
+          "index": "savi",
+          "delta_ndvi": 0.08
+        },
+        "S4/acute/ndvi": {
+          "n": 340,
+          "n_detected": 11,
+          "detection_rate": 0.03235294117647059,
+          "wilson_ci95": [
+            0.0182,
+            0.057
+          ],
+          "median_delay_days": 30.0,
+          "onset_bins": [
+            6,
+            18,
+            30
+          ],
+          "level_id": "S4",
+          "family": "acute",
+          "index": "ndvi",
+          "delta_ndvi": 0.16
+        },
+        "S4/acute/savi": {
+          "n": 340,
+          "n_detected": 17,
+          "detection_rate": 0.05,
+          "wilson_ci95": [
+            0.0314,
+            0.0786
+          ],
+          "median_delay_days": 15.0,
+          "onset_bins": [
+            6,
+            18,
+            30
+          ],
+          "level_id": "S4",
+          "family": "acute",
+          "index": "savi",
+          "delta_ndvi": 0.16
+        },
+        "S4/persistent/ndvi": {
+          "n": 340,
+          "n_detected": 12,
+          "detection_rate": 0.03529411764705882,
+          "wilson_ci95": [
+            0.0203,
+            0.0607
+          ],
+          "median_delay_days": 30.0,
+          "onset_bins": [
+            6,
+            18,
+            30
+          ],
+          "level_id": "S4",
+          "family": "persistent",
+          "index": "ndvi",
+          "delta_ndvi": 0.16
+        },
+        "S4/persistent/savi": {
+          "n": 340,
+          "n_detected": 20,
+          "detection_rate": 0.058823529411764705,
+          "wilson_ci95": [
+            0.0384,
+            0.0891
+          ],
+          "median_delay_days": 22.5,
+          "onset_bins": [
+            6,
+            18,
+            30
+          ],
+          "level_id": "S4",
+          "family": "persistent",
+          "index": "savi",
+          "delta_ndvi": 0.16
+        },
+        "S5/acute/ndvi": {
+          "n": 340,
+          "n_detected": 29,
+          "detection_rate": 0.08529411764705883,
+          "wilson_ci95": [
+            0.06,
+            0.1198
+          ],
+          "median_delay_days": 30.0,
+          "onset_bins": [
+            6,
+            18,
+            30
+          ],
+          "level_id": "S5",
+          "family": "acute",
+          "index": "ndvi",
+          "delta_ndvi": 0.28
+        },
+        "S5/acute/savi": {
+          "n": 340,
+          "n_detected": 59,
+          "detection_rate": 0.17352941176470588,
+          "wilson_ci95": [
+            0.137,
+            0.2174
+          ],
+          "median_delay_days": 30.0,
+          "onset_bins": [
+            6,
+            18,
+            30
+          ],
+          "level_id": "S5",
+          "family": "acute",
+          "index": "savi",
+          "delta_ndvi": 0.28
+        },
+        "S5/persistent/ndvi": {
+          "n": 340,
+          "n_detected": 28,
+          "detection_rate": 0.08235294117647059,
+          "wilson_ci95": [
+            0.0576,
+            0.1164
+          ],
+          "median_delay_days": 30.0,
+          "onset_bins": [
+            6,
+            18,
+            30
+          ],
+          "level_id": "S5",
+          "family": "persistent",
+          "index": "ndvi",
+          "delta_ndvi": 0.28
+        },
+        "S5/persistent/savi": {
+          "n": 340,
+          "n_detected": 64,
+          "detection_rate": 0.18823529411764706,
+          "wilson_ci95": [
+            0.1503,
+            0.2332
+          ],
+          "median_delay_days": 30.0,
+          "onset_bins": [
+            6,
+            18,
+            30
+          ],
+          "level_id": "S5",
+          "family": "persistent",
+          "index": "savi",
+          "delta_ndvi": 0.28
+        },
+        "S6/acute/ndvi": {
+          "n": 340,
+          "n_detected": 74,
+          "detection_rate": 0.21764705882352942,
+          "wilson_ci95": [
+            0.1771,
+            0.2645
+          ],
+          "median_delay_days": 30.0,
+          "onset_bins": [
+            6,
+            18,
+            30
+          ],
+          "level_id": "S6",
+          "family": "acute",
+          "index": "ndvi",
+          "delta_ndvi": 0.4
+        },
+        "S6/acute/savi": {
+          "n": 340,
+          "n_detected": 151,
+          "detection_rate": 0.4441176470588235,
+          "wilson_ci95": [
+            0.3922,
+            0.4973
+          ],
+          "median_delay_days": 30.0,
+          "onset_bins": [
+            6,
+            18,
+            30
+          ],
+          "level_id": "S6",
+          "family": "acute",
+          "index": "savi",
+          "delta_ndvi": 0.4
+        },
+        "S6/persistent/ndvi": {
+          "n": 340,
+          "n_detected": 66,
+          "detection_rate": 0.19411764705882353,
+          "wilson_ci95": [
+            0.1556,
+            0.2395
+          ],
+          "median_delay_days": 30.0,
+          "onset_bins": [
+            6,
+            18,
+            30
+          ],
+          "level_id": "S6",
+          "family": "persistent",
+          "index": "ndvi",
+          "delta_ndvi": 0.4
+        },
+        "S6/persistent/savi": {
+          "n": 340,
+          "n_detected": 149,
+          "detection_rate": 0.43823529411764706,
+          "wilson_ci95": [
+            0.3865,
+            0.4914
+          ],
+          "median_delay_days": 30.0,
+          "onset_bins": [
+            6,
+            18,
+            30
+          ],
+          "level_id": "S6",
+          "family": "persistent",
+          "index": "savi",
+          "delta_ndvi": 0.4
+        }
+      },
+      "patch_sigma_sha256": "54e6270749e1a3d1069664e5d6130a5dd4c76877d704ebb501c6dc37b337e49d",
+      "patch_norm_sha256": "493f0395537a4e2110a918ec8b8227d12e8bf50e1d487004b917afd92b1fcb98",
+      "unnormalized_channels": [],
+      "holdout_sha256": "d501bf81283ff71642d455c00513d5eb5fa368add28fcaff3de50000e36dff4b",
+      "params": 91028,
+      "patch_run": "checkpoints/patch/patch_full_v2_ep10/patch_cnn_gru_seed2026/last.pt",
+      "axis": "patch-level representation (per-pixel, in-field aggregation)",
+      "n_calib_cycles": 170,
+      "n_eval_cycles": 170,
+      "n_injected_total": 8160,
+      "scoring_alignment": "one_step_ahead_v3"
+    }
+  ]
+}
