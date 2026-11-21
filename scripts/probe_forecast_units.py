@@ -24,6 +24,12 @@ PRE-REGISTERED decision rule (evaluated verbatim, no goalpost movement):
            and clean FAR within budget (calibrated cycle-FAR ≤ 5 % AND clean
            event-FAR on the evaluation subset ≤ 5 %) → path C justified; the
            measured MDM80 becomes the trained arm's target floor.
+           AMENDED 2026-11-21: the event-FAR half of the budget was
+           scale-mismatched (false events per SCORED BIN vs a per-CYCLE
+           target — unfalsifiable at ~28-30 scored bins) and is replaced by
+           the cycle-level FAR of the clean evaluation paths; event-FAR stays
+           recorded descriptively. Finding 21 (all-censored NEGATIVE) is
+           unaffected.
   NEGATIVE all untrained arms censored ">S6" on persistent/ndvi → honest
            negative; redirect weight to path B.
   otherwise → no arm met the success condition (recorded verbatim).
@@ -162,23 +168,35 @@ def partition_calib_eval(cycle_keys: list[str]) -> tuple[list[int], list[int], s
 
 
 def evaluate_decision_rule(per_arm: dict[str, dict]) -> dict:
-    """The pre-registered decision rule, verbatim (no goalpost movement)."""
+    """The pre-registered decision rule, with one audited amendment.
+
+    Amendment 2026-11-21: the original "clean event-FAR on the evaluation
+    subset ≤ 5 %" condition was scale-mismatched — ``event_far`` counts false
+    events per SCORED BIN while the 5 % budget is a per-CYCLE rate, so with
+    ~28-30 scored bins even one false event in every clean cycle stays below
+    target (≈ 0.036) and the condition could never bind. The gating condition
+    now uses the cycle-level FAR of the clean evaluation paths at (tau, k);
+    event-FAR remains recorded per arm as a descriptive number. Finding 21's
+    recorded outcome (all arms censored → NEGATIVE) is unaffected.
+    """
     detail: dict[str, dict] = {}
     for arm in UNTRAINED_ARMS:
         r = per_arm[arm]
         mdm = r["mdm80"]["persistent/ndvi"]
         far_calib = r["far_achieved"]
+        far_cycle_eval = r["clean_cycle_far_eval"]
         far_event_eval = r["event_far_clean_eval"]["event_far"]
         conds = {
             "non_censored_mdm80_persistent_ndvi": not mdm["censored"],
             "mdm80_le_S5": (not mdm["censored"]) and mdm["sentinel"] <= 5,
             "calibrated_cycle_far_within_budget": bool(far_calib <= FAR_TARGET + 1e-12),
-            "clean_event_far_eval_within_budget": bool(far_event_eval <= FAR_TARGET + 1e-12),
+            "clean_cycle_far_eval_within_budget": bool(far_cycle_eval <= FAR_TARGET + 1e-12),
         }
         detail[arm] = {
             "mdm80_persistent_ndvi": mdm["value"],
             "far_achieved_cycle": far_calib,
-            "clean_event_far_eval": far_event_eval,
+            "clean_cycle_far_eval": far_cycle_eval,
+            "clean_event_far_eval_descriptive": far_event_eval,
             "conditions": conds,
             "success": bool(all(conds.values())),
         }
@@ -225,8 +243,13 @@ def evaluate_decision_rule(per_arm: dict[str, dict]) -> dict:
             "all_censored": False,
         }
     return {"rule": ("SUCCESS = ≥1 untrained arm non-censored MDM80 ≤ S5 on persistent/ndvi with "
-                     "clean cycle- and event-FAR within the 5% budget; NEGATIVE = all arms censored "
-                     ">S6 on persistent/ndvi"),
+                     "calibrated and clean cycle-FAR within the 5% budget; NEGATIVE = all arms "
+                     "censored >S6 on persistent/ndvi"),
+            "rule_amendment_2026_11_21": (
+                "2026-11-21: budget condition moved from event-FAR (false events per scored "
+                "BIN — unfalsifiable at ~28-30 scored bins) to cycle-level FAR of the clean "
+                "evaluation paths; event-FAR recorded descriptively per arm. Finding 21 "
+                "(all-censored NEGATIVE) unaffected."),
             "per_arm": detail,
             **verdict}
 
@@ -385,6 +408,17 @@ def probe_arm(arm: str, args: argparse.Namespace, X: np.ndarray, M: np.ndarray, 
         clean_paths[eval_idx], [None] * n_eval, tau, gap=2)
     clean_efar_calib = mscoring.event_far_from_paths(
         clean_paths[calib_idx], [None] * len(calib_idx), tau, gap=2)
+    # Cycle-level FAR of the clean evaluation paths at (tau, k) — the scale
+    # the 5 % budget is actually defined on. event_far_from_paths counts
+    # false events per SCORED BIN (~1/28 of a cycle), so the pre-registered
+    # "clean event-FAR ≤ 5 %" condition could never bind: one false event in
+    # every clean cycle evaluates to ≈ 0.036 < 0.05 (audit 2026-11-21). The
+    # gating condition moves to this faithful cycle-level reading; event-FAR
+    # stays recorded as a descriptive number. Finding 21 (all arms censored
+    # → NEGATIVE) is unaffected — the amendment cannot flip an outcome the
+    # other conditions already decided.
+    clean_cycle_far_eval = float(np.mean(
+        [mscoring.alarm_per_cycle(p, tau, k) for p in clean_paths[eval_idx]]))
 
     # ---- Finding-20 waterfall summary + forecast-σ units --------------------
     waterfall = mdiag.summarize_cells(decomps)
@@ -439,6 +473,7 @@ def probe_arm(arm: str, args: argparse.Namespace, X: np.ndarray, M: np.ndarray, 
         "cells": cells,
         "event_far_clean_eval": clean_efar_eval,
         "event_far_clean_calibration": clean_efar_calib,
+        "clean_cycle_far_eval": clean_cycle_far_eval,
         "waterfall": waterfall,
         "internal_consistency": {
             "detection_recompute_mismatches": int(recompute_mismatch),
