@@ -57,13 +57,29 @@
 
 ## 4. Owner handover (local chain, ~3–4 h)
 
-- [ ] 4.1 PowerShell: extraction
-      (`extract_patches.py --detector-store v2 --patch-size 48 --splits
-      splits_locked_v2.json --cycles cycles_490_v2.parquet --out
-      data/patch_runs/v3/patches.zarr`, resume-aware) + `build_patch_norm.py`
-      → `norm_stats_full_v2.json`; progress + final summary required.
-- [ ] 4.2 After owner reports: agent verifies store (provenance binding to
-      splits v2, shapes, valid-cycle count) and norm file.
+- [x] 4.1 DONE 2026-11-20/21 (owner ran the resume chain twice — one mid-run
+      stop, both resumed clean; final wall 1h31m49s): full store
+      `data/patch_runs/v3/patches.zarr` + `norm_stats_full_v2.json`
+      (2105 locked train cycles, inner sha `493f0395…`).
+- [x] 4.2 Agent verification 2026-11-21 — ALL GREEN:
+      manifest 490 records / 490 unique field_ids, every n_scenes > 0
+      (min 65 / median 324 / max 535), Σn_cycles = 3478 = store cycle_valid
+      total = v2 clean-window count, 0 zero-obs valid cycles, Σn_obs 149,122
+      (~94 % of Σ scene-reads); bindings `99a5253f` / `30ecbe10` /
+      `41009147` / epoch 2013-03-30; shapes (490,12,36,8,48,48); provenance
+      complete, git_sha `863758f` (docs-only commit during the run).
+      Known notes, recorded not hidden: (a) `sensor_id` = 0 (unknown) for
+      every slot in BOTH stores — scene-dir naming `landsat_YYYYMMDD_PPP_RRR`
+      carries no LC08/LC09 so `sensor_of` always returns unknown;
+      normalization is unaffected (single `unknown` stats bucket, exactly as
+      v1, so v1↔v2 stays apples-to-apples) but the `sensor_l8`/`sensor_l9`
+      covariates are constant-0 in both eras — pre-existing limitation, fix
+      would require scene renaming + re-extraction, not worth it for this
+      store; (b) fields 1–4 were written by the pre-d8c705d reader (parity
+      byte-proven on fields 1–2 by two independent gates; 3–4 same
+      deterministic path + store-parity unit tests); (c) the printed
+      `fields_written 345` counts only the final resume invocation —
+      manifest holds all 490.
 
 ## 5. Colab bundle v2
 
