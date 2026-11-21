@@ -454,3 +454,27 @@ def test_patch_path_refuses_a_cycle_missing_from_the_store(tmp_path):
             "cycle_keys": keys, "start_dates": [epoch + cycle.start_day, epoch],
             "end_dates": [epoch + cycle.end_day + 1, epoch],
         }, [13], "cpu")
+
+
+def test_patch_dev_panel_normalizes_windows_paths(tmp_path, monkeypatch):
+    """cycle_files.parquet was recorded on Windows with backslashes; the
+    panel builder must resolve it on POSIX too (the Colab eval)."""
+    import importlib.util
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parents[2]
+    spec = importlib.util.spec_from_file_location("eval_dev", repo / "scripts/eval_dev.py")
+    E = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(E)
+
+    root = _store(tmp_path, field_ids=(11,), n_cycles=2)
+    dev_keys = [f"11:{c}" for c in range(2)]
+    pq_dir = tmp_path / "data" / "processed"
+    pq_dir.mkdir(parents=True)
+    splits, _ = bind_patch_store(root, known=(11,), dev_keys=dev_keys,
+                                 parquet_path=pq_dir / "cycles.parquet")
+    splits["cycle_files"]["parquet"] = "data\processed\cycles.parquet"
+    monkeypatch.setattr(E, "REPO_ROOT", tmp_path)
+    panel = E._patch_dev_panel(root, splits)
+    assert panel["cycle_keys"] == dev_keys
+    assert panel["start_dates"].shape == (2,)

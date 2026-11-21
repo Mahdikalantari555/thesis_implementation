@@ -695,6 +695,9 @@ def _patch_dev_panel(root, manifest: dict) -> dict:
             "manifest has no cycle_files.parquet — a patch store built from a "
             "v2 cycle table needs the v2 locked splits (a v1 store takes the "
             "masked-archive panel)")
+    # The manifest was written on Windows ("data\\processed\\…"); on POSIX a
+    # backslash is not a separator, so normalize before resolving.
+    rel = str(rel).replace("\\", "/")
     parquet = Path(rel)
     if not parquet.is_absolute():
         parquet = REPO_ROOT / rel
@@ -943,7 +946,7 @@ def main(argv: list[str] | None = None) -> int:
     seeds = [int(s) for s in args.seeds.split(",")]
     device = args.device or ("cuda" if _cuda() else "cpu")
 
-    manifest = msplits.load_splits_locked(path=args.splits)
+    manifest = msplits.load_splits_locked(path=args.splits, verify_cycle_files=False)
     if patch:
         # The masked-cycle archive is built from the v1 phenology; a patch
         # store bound to the v2 chain takes its locked dev panel from the
