@@ -153,9 +153,17 @@ def fit_patch_sigma(
             sel = np.asarray(sensor_ids[:, lo:hi]) == s
             if not sel.any():
                 continue
-            block = absr[:, lo:hi][sel]                       # (n, bins, C, S, S)
+            # Boolean indexing would COLLAPSE the (cycle, bin) axes into one
+            # pair axis, turning the array into (pairs, C, S, S) — indexing
+            # `[:, :, c]` on that hits a SPATIAL ROW, not channel c (the
+            # pre-fix table was 92% NaN with its "fitted" cells actually
+            # row-7 medians of all channels mixed). Select the (cycle, bin)
+            # pairs with explicit integer indexing so `block` keeps C on
+            # axis 1 and channel lookups stay channel lookups.
+            ii, jj = np.nonzero(sel)
+            block = absr[ii, lo + jj]                         # (pairs, C, S, S)
             for c in range(C):
-                v = block[:, :, c]
+                v = block[:, c]
                 v = v[np.isfinite(v)]
                 count[g, c, s] = v.size
                 if v.size >= min_n:
@@ -361,6 +369,34 @@ def tail_max(path: np.ndarray, *, k: int = TAIL) -> np.ndarray:
         fin = window[np.isfinite(window)]
         if fin.size:
             out[t] = float(fin.max())
+    return out
+
+
+def loo_empirical_p(ref_paths: np.ndarray) -> np.ndarray:
+    """(N, T) leave-one-out empirical p of each calibration path against the
+    OTHER calibration paths, same convention as :meth:`PatchArmScorer.p_values`.
+
+    A calibration cycle judged against a reference pool that includes itself
+    can never reach the smallest p an evaluation cycle can reach, so the
+    in-sample null is slightly conservative. Excluding self gives the null
+    the evaluation subset actually faces: for finite values v at a bin,
+    ``p_i = (1 + #{j != i: v_j >= v_i}) / n_finite`` — uniform over the finite
+    ranks on clean data, never 0, NaN where the bin was never scored.
+    """
+    ref = np.asarray(ref_paths, dtype=np.float64)
+    if ref.ndim != 2:
+        raise ValueError(f"ref_paths must be (N, T), got {ref.shape}")
+    N, T = ref.shape
+    out = np.full((N, T), np.nan)
+    for t in range(T):
+        v = ref[:, t]
+        ok = np.isfinite(v)
+        n = int(ok.sum())
+        if n < 2:
+            continue
+        vv = v[ok]
+        ge = (vv[None, :] >= vv[:, None]).sum(axis=1)      # includes self
+        out[ok, t] = ge / n
     return out
 
 

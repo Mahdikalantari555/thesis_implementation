@@ -399,6 +399,15 @@ def test_patch_severity_cli_consumes_the_new_trainer_checkpoint(tmp_path, monkey
     for cell in result["cells"].values():
         assert cell["n"] == metrics["n_eval_cycles"]
         assert 0.0 <= cell["detection_rate"] <= 1.0
+    # change severity-ladder-fix: tau must be CALIBRATED (the 0.05 hardcode made
+    # clean paths alarm at their ~3rd observed bin — finding 24's flat 1.000)
+    assert result["tau"] > 0.05
+    assert result["far_achieved"] <= 0.05 + 1e-12
+    # and the strongest severity must actually be detected (a poisoned alarm
+    # path — bin-0 NaN killing the cumsum — collapses detection to ~0.13 flat)
+    _max_det_s6 = max(c["detection_rate"] for key, c in result["cells"].items()
+                      if key.startswith("S6/"))
+    assert _max_det_s6 >= 0.8
 
     with pytest.raises(ValueError, match="requires exactly the seed"):
         E.main([*argv, "--seeds", "13,42"])
@@ -509,6 +518,12 @@ def test_incremental_batch_matches_original_stack_bytes(tmp_path):
 
 @pytest.mark.parametrize("chunk", [1, 2, 3, 9])
 def test_cell_chunk_parity(tmp_path, chunk):
+    # multi-threaded CPU GEMM changes reduction blocking with batch shape, so
+    # chunked vs full forwards can differ in the last bits run-to-run — pin
+    # threads to keep the byte-parity contract deterministic
+    import torch
+
+    torch.set_num_threads(1)
     root = _store(tmp_path)
     batch = PE.patch_batch_for_cycles(root, [11, 22, 11, 22], [0, 1, 2, 0], norm=_norm())
     batch.pop("covariates")  # this fixture model was built without covariates

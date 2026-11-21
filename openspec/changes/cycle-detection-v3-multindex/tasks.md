@@ -105,8 +105,38 @@
       locked splits (fail-closed trap avoided at the notebook level).
       `--out checkpoints/patch/patch_full_v2_ep10`; same 6-trainings
       protocol, `--resume` preserved.
+- [x] **5.3a DEFECT + QUARANTINE (2026-11-21, agent): the first full
+      severity ×6 Colab run (patch_full_v2_sigma_eval_colab.zip, git
+      73476c7) is scientifically INVALID — detection EXACTLY 44/340 in all
+      24 cells × 6 runs, MDM80 censored, delay constant 60 d.** Reproduced
+      locally and root-caused to three stacked code defects:
+      (1) one_step_ahead_v3 leaves bin 0 unscored → p NaN at bin 0 →
+      cumulative_channel_max cumsum NaN-poisoned every downstream bin →
+      148/170 eval cycles (season starting at bin 0) lost their alarm path;
+      (2) tau=0.05 hardcoded (eval_dev) — clean p uniform ⇒ alarm path ≈0.33
+      ≫ 0.05 ⇒ alarm at the ~3rd observed bin of any live cycle, independent
+      of severity; (3) fit_patch_sigma boolean indexing collapsed the
+      (cycle, bin) axes so block[:,:,c] hit spatial ROW c — σ table 92 %
+      NaN, its 35 "fitted" cells were row-7 medians of all channels mixed
+      (scoring survived only via the per-channel fallback). The parity gate
+      passed because chunked ≡ baseline, both equally poisoned. Fix
+      (eval-side only, no retrain/store change): NaN-safe alarm mask in
+      cumulative_channel_max (NaN = no data = no alarm), tau calibrated on
+      leave-one-out calibration null paths at FAR 0.05
+      (loo_empirical_p + calibrate_threshold; per_seed now records
+      far_achieved + tau_calibration), integer indexing in fit_patch_sigma,
+      gate reworked to current-code full-vs-chunked parity + liveness asserts
+      (tau>0.05, far≤target, max S6 detection ≥0.8). 94 patch/eval/diagnostic
+      tests pass. **Finding 24 (v1) headline is the SAME uncalibrated-tau
+      artifact** (detection 1.000 at S1 AND S6, delay exactly 30 d = 3rd
+      observed bin) — v1 escaped the poisoning only because its checkpoints
+      were input-inclusive; finding 24 must be amended before thesis use and
+      the v1↔v2 comparison must be rebuilt from a fixed-protocol re-run of
+      both. v1 σ tables are lost (§6.2 counter-example) so a v1 re-run needs
+      σ re-calibration on the v1 store first.
 - [ ] 5.3 Findings/dev_log update: v1↔v2 comparison deliverable recorded
       (advisor SAVI hypothesis quantified); validation-ladder rung stated.
+      BLOCKED on the fixed-protocol re-run (σ ×6 re-calibration + eval ×6).
 
 #### 4.1 extraction I/O acceptance (no store or resume format change)
 

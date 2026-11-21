@@ -1,8 +1,20 @@
-"""Fail-closed synthetic severity A/B gate, including baseline CLI metrics.
+"""Fail-closed synthetic severity A/B gate: chunking parity + severity response.
 
 Example: PYTHONPATH=src:. python scripts/gate_patch_severity.py --chunk 2 --device cpu
 Uses temporary stores and smoke checkpoints only. CUDA results apply only to the
 fixture, device and installed software tested, not all production checkpoints.
+
+Two legs, both fail-closed:
+1. PARITY — the severity protocol run with ``--score-chunk`` must produce
+   byte-identical cells/reference/metrics (minus wall time) to the same code
+   run without chunking. Proves the chunked scorer is an implementation, not
+   a protocol, change.
+2. PROTOCOL LIVENESS — the sweep must be scientifically live: tau calibrated
+   above the old 0.05 hardcode, FAR target honoured on the leave-one-out
+   calibration nulls, and the strongest severity (S6) actually detected
+   (max detection ≥ 0.8) in both legs. The pre-fix sweeps were
+   byte-parity-clean yet scientifically dead (bin-0 NaN poisoning +
+   uncalibrated tau): parity alone cannot catch that class.
 """
 from __future__ import annotations
 
@@ -11,7 +23,6 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
-import subprocess
 import sys
 from tempfile import TemporaryDirectory
 import types
@@ -29,19 +40,14 @@ from tests.patch_fixtures import bind_patch_store
 from tests.unit import test_patch_eval as fixture
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE = "36a5fcb236258c1122fb3ba86a47d2129a7b4809"
 
 
-def load_source(name, filename, data=None):
+def load_source(name, filename):
     module = types.ModuleType(name)
     module.__file__ = str(ROOT / filename)
-    source = (ROOT / filename).read_text() if data is None else data
+    source = (ROOT / filename).read_text()
     exec(compile(source, module.__file__, "exec"), module.__dict__)
     return module
-
-
-def old_source(filename):
-    return subprocess.check_output(["git", "show", f"{BASE}:{filename}"], cwd=ROOT, text=True)
 
 
 def hash_value(value):
@@ -53,11 +59,19 @@ def hash_value(value):
     return hashlib.sha256(value).hexdigest()
 
 
+def max_detection(metrics_obj, level_id):
+    cells = metrics_obj["per_seed"][0]["cells"]
+    return max(c["detection_rate"] for key, c in cells.items()
+               if key.startswith(f"{level_id}/"))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--chunk", type=int, default=2)
     parser.add_argument("--size", type=int, default=8)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
+    parser.add_argument("--far", type=float, default=0.05,
+                        help="FAR target the gate asserts the sweep honours")
     args = parser.parse_args()
     if args.chunk < 1 or args.size < 4:
         parser.error("chunk must be positive and size >= 4")
@@ -65,12 +79,7 @@ def main():
         parser.error("CUDA requested but unavailable")
     torch.set_num_threads(1)
     trainer = load_source("gate_train_patch", "scripts/train_patch.py")
-    original_eval = load_source("gate_baseline_eval", "scripts/eval_dev.py", old_source("scripts/eval_dev.py"))
-    optimized_eval = load_source("gate_new_eval", "scripts/eval_dev.py")
-    original_patch = load_source("gate_baseline_patch", "src/ssl_anomaly/monitor/patch_eval.py",
-                                 old_source("src/ssl_anomaly/monitor/patch_eval.py"))
-    original_functions = {name: getattr(PE, name) for name in
-                          ("patch_batch_for_cycles", "patch_reference_paths", "patch_arm_scores")}
+    eval_module = load_source("gate_eval_dev", "scripts/eval_dev.py")
     fixture.S = args.size
     with TemporaryDirectory() as folder:
         tmp = Path(folder)
@@ -106,31 +115,30 @@ def main():
                     "--patch-sigma", str(sigma_path), "--splits", str(lock),
                     "--holdout-manifest", str(holdout_path), "--rounds", "2", "--seeds", "13",
                     "--device", args.device, "--smoke"]
-            snapshots, metrics = {}, {}
-            for label, module, functions in (("baseline", original_eval, original_patch),
-                                              ("chunked", optimized_eval, None)):
+            snapshots, metrics, objs = {}, {}, {}
+            for label, chunk in (("full", None), ("chunked", args.chunk)):
                 calls = []
-                selected = {name: getattr(functions, name) if functions else original_functions[name]
-                            for name in original_functions}
-                score = selected["patch_arm_scores"]
-                reference = selected["patch_reference_paths"]
                 references = []
+                score = PE.patch_arm_scores
+                reference = PE.patch_reference_paths
+
                 def record_reference(*a, _reference=reference, **kw):
                     value = _reference(*a, **kw)
                     references.append(hash_value(value))
                     return value
+
                 def record(*a, _score=score, **kw):
                     output = _score(*a, **kw)
                     calls.append({"cell": [kw["level_id"], kw["family"], kw["index"], kw["round_idx"]],
                                   **{key: hash_value(output[key]) for key in
                                      ("z2", "paths", "p_value", "observed", "injections")}})
                     return output
+
                 outdir = tmp / f"reports_{label}"
-                with patch.object(PE, "patch_batch_for_cycles", selected["patch_batch_for_cycles"]), \
-                     patch.object(PE, "patch_reference_paths", record_reference), \
+                with patch.object(PE, "patch_reference_paths", record_reference), \
                      patch.object(PE, "patch_arm_scores", record), \
-                     patch.object(module.mproto, "DEV_DIR", outdir):
-                    rc = module.main(argv + (["--score-chunk", str(args.chunk)] if label == "chunked" else []))
+                     patch.object(eval_module.mproto, "DEV_DIR", outdir):
+                    rc = eval_module.main(argv + (["--score-chunk", str(chunk)] if chunk is not None else []))
                 if rc != 0:
                     raise RuntimeError(f"{label} CLI failed with {rc}")
                 file = outdir / "gate" / f"metrics_{arch}_sev_{arch}_smoke_s13.json"
@@ -138,20 +146,37 @@ def main():
                 # Wall time is inherently observational and must not be compared.
                 obj.pop("wall_time_s")
                 metrics[label] = json.dumps(obj, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+                objs[label] = obj
                 snapshots[label] = calls
                 if len(references) != 1:
                     raise AssertionError("expected exactly one reference path calculation")
                 snapshots[label + "_reference"] = references[0]
-            if snapshots["baseline_reference"] != snapshots["chunked_reference"]:
+            if snapshots["full_reference"] != snapshots["chunked_reference"]:
                 raise AssertionError(f"{arch} calibration reference paths mismatch")
-            if len(snapshots["baseline"]) != 48 or len(snapshots["chunked"]) != 48:
+            if len(snapshots["full"]) != 48 or len(snapshots["chunked"]) != 48:
                 raise AssertionError("expected 24 cells times two rounds")
-            for old, new in zip(snapshots["baseline"], snapshots["chunked"], strict=True):
+            for old, new in zip(snapshots["full"], snapshots["chunked"], strict=True):
                 if old != new:
                     raise AssertionError(f"{arch} cell/array mismatch: {old} != {new}")
-            if metrics["baseline"] != metrics["chunked"]:
+            if metrics["full"] != metrics["chunked"]:
                 raise AssertionError(f"{arch} metrics mismatch (excluding wall_time_s)")
-            print(f"PASS {arch}: 48 cell rounds, reference, all arrays/injections and metrics identical (excluding wall_time_s)", flush=True)
+            # Leg 2 — the protocol must be scientifically live, in BOTH legs:
+            # tau calibrated (not the 0.05 hardcode), FAR honoured, and the
+            # strongest severity actually detected. (Strict S6>S1 monotonicity
+            # saturates at 1.0 on a 20-cycle fixture and is asserted nowhere.)
+            for label in ("full", "chunked"):
+                obj = objs[label]
+                seed0 = obj["per_seed"][0]
+                s6 = max_detection(obj, "S6")
+                if not (seed0["tau"] > 0.05
+                        and seed0["far_achieved"] <= args.far + 1e-12
+                        and s6 >= 0.8):
+                    raise AssertionError(
+                        f"{arch} {label}: protocol not live — tau={seed0['tau']}, "
+                        f"far_achieved={seed0['far_achieved']}, max S6 detection={s6} "
+                        f"(poisoned alarm path or uncalibrated tau?)")
+            print(f"PASS {arch}: chunking parity (48 cell rounds, reference, arrays, "
+                  f"metrics identical) + calibrated tau/FAR + S6 detection in both legs", flush=True)
     print(f"PASS synthetic gate: device={args.device}, size={args.size}, chunk={args.chunk}")
 
 

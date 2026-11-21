@@ -193,6 +193,14 @@ def cumulative_channel_max(
     NaN where not yet scored.
     """
     N, T, C = z2.shape
+    # A bin with no score is a bin with no data. An unscored bin (e.g. bin 0
+    # under a one-step-ahead readout) leaves NaN exactly where the mask says
+    # "observed", and a NaN entering the cumsum below poisons EVERY downstream
+    # bin of that cycle — the whole alarm path dies, detection collapses to
+    # "which cycles happen to start their season at bin ≥ 1". Exclude non-finite
+    # entries from the mask so they contribute nothing, exactly like an
+    # unobserved gap ("no data, no alarm"). NaN only: ±inf stays alarm-worthy.
+    mask = mask & ~np.isnan(z2)
     zn = z2 / q95[None, :, :]
     zn = np.where(mask, zn, 0.0)
     mf = mask.astype(np.float64)

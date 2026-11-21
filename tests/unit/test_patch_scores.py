@@ -69,7 +69,75 @@ def test_unknown_sensor_id_does_not_crash():
     assert np.isfinite(scale).all()
 
 
-# --- pixel scores ---------------------------------------------------------
+def test_sigma_counts_channels_not_spatial_rows():
+    """Regression: boolean indexing collapsed (cycle, bin) into one pair axis,
+    so `block[:, :, c]` indexed a SPATIAL ROW, not channel c — the fit then
+    counted only the rows the observation mask happens to occupy and produced
+    a 92%-NaN table whose "fitted" cells mixed every channel's residuals.
+
+    Reproduces the failure shape: observations confined to high spatial rows
+    (like a field inside a larger patch) and per-channel scales that differ by
+    orders of magnitude. The fit must resolve CHANNELS, and every channel with
+    enough samples must get its own scale."""
+    n = 24
+    g = np.random.default_rng(3)
+    res = g.normal(0.0, 1.0, size=(n, T, 2, S, S))
+    res[:, :, 0] *= 20.0                     # channel 0: |res| ~ 20
+    res[:, :, 1] *= 0.05                     # channel 1: |res| ~ 0.05
+    obs = np.zeros((n, T, 2, S, S), dtype=bool)
+    obs[:, :, :, 30:] = True                 # observed only in rows 30..31
+    st = PS.fit_patch_sigma(res, obs, np.zeros((n, T), dtype=int), min_n=20)
+    counts = st.n[:, :, 0]                   # (G, C) sensor-0 counts
+    # With the row/channel mix-up, the loop only ever visits "channels" 0..C-1
+    # = spatial rows 0..1, which are entirely unobserved here → all-NaN.
+    assert np.isfinite(st.sigma).any()
+    assert (counts > 0).all()
+    assert np.array_equal(counts[:, 0], counts[:, 1])
+    fin0 = st.sigma[:, 0, 0][np.isfinite(st.sigma[:, 0, 0])]
+    fin1 = st.sigma[:, 1, 0][np.isfinite(st.sigma[:, 1, 0])]
+    assert fin0.size == st.sigma.shape[0] and fin1.size == st.sigma.shape[0]
+    assert float(np.median(fin0)) > 10 * float(np.median(fin1))
+
+
+def test_loo_empirical_p_excludes_self():
+    """The LOO null must let the strongest path reach the smallest p an
+    evaluation cycle can reach (1/n), unlike the in-sample convention."""
+    rng = np.random.default_rng(1)
+    ref = rng.normal(0.0, 1.0, size=(6, 4))
+    ref[0, 0] = 100.0                        # extreme path at bin 0
+    ref[:, 2] = np.nan                       # an unscored bin stays NaN
+    p = PS.loo_empirical_p(ref)
+    assert p.shape == ref.shape
+    assert np.isnan(p[:, 2]).all()
+    assert np.isfinite(p[:, 0]).all()
+    # the extreme path hits the LOO floor 1/n; an in-sample rank would give 2/6
+    assert p[0, 0] == pytest.approx(1 / 6)
+    # the weakest path gets p = 1 (every other path >= it)
+    jmin = int(np.argmin(ref[:, 1]))
+    assert p[jmin, 1] == pytest.approx(1.0)
+    assert ((p[:, 1] > 0) & (p[:, 1] <= 1)).all()
+
+
+def test_cumulative_channel_max_nan_does_not_poison():
+    """Regression: an unscored bin (NaN at an observed bin, e.g. bin 0 under a
+    one-step-ahead readout) used to NaN-poison the cumsum and kill the whole
+    downstream alarm path of the cycle. NaN must behave like a data gap."""
+    from ssl_anomaly.monitor import scoring as mscoring
+
+    Tn = 8
+    paths = np.full((1, Tn, 1), 2.0)
+    paths[0, 1, 0] = np.nan                  # unscored bin inside the season
+    mask = np.ones((1, Tn, 1), dtype=bool)
+    q95 = np.full((Tn, 1), 1.301)
+    out = mscoring.cumulative_channel_max(paths, mask, q95)   # (N, T)
+    # min_history=3: no alarm before 3 scored bins total
+    assert np.isnan(out[0, :3]).all()
+    # every bin after the gap must still carry a finite alarm path
+    assert np.isfinite(out[0, 3:]).all()
+    assert np.allclose(out[0, 3:], 2.0 / 1.301)
+
+
+
 def test_pixel_scores_put_an_anomaly_in_the_right_pixels():
     res, obs = _resid(n=1)
     st = PS.fit_patch_sigma(res, obs, np.ones((1, T), dtype=int))

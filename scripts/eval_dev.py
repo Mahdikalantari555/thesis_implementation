@@ -812,9 +812,29 @@ def run_patch_severity_protocol(args: argparse.Namespace, manifest: dict, sel: d
         field_row=row_of_sample,
     )
     arm = mpscores.PatchArmScorer(scorer, ref_paths)
-    tau, k = 0.05, 1          # p-value scale: tau on the -log10(p) path
+    k = 1
+    # tau is CALIBRATED, never hardcoded. The null alarm paths are the
+    # calibration cycles' own paths (leave-one-out empirical p against the
+    # rest of the calibration subset — the null an evaluation cycle actually
+    # faces), thresholded at the FAR target with the same trailing rule the
+    # injected cycles are judged by. The pre-fix sweeps hardcoded tau=0.05 on
+    # this scale, which clean paths exceed by construction (mean ≈ 0.33), so
+    # every cycle with a live alarm path "detected" at its ~3rd observed bin
+    # regardless of severity.
+    null_p = mpscores.loo_empirical_p(ref_paths)
+    null_paths = -np.log10(np.clip(null_p, 1e-12, 1.0))[:, :, None]
+    null_q95 = np.full((null_paths.shape[1], 1), -np.log10(0.05))
+    null_obs = batch["pixel_valid"][np.asarray(calib_idx)].any(axis=(2, 3))
+    clean_S = mscoring.cumulative_channel_max(
+        null_paths, np.repeat(null_obs[:, :, None], 1, axis=2), null_q95,
+    )
+    tau, far_achieved = mscoring.calibrate_threshold(
+        [clean_S[j] for j in range(clean_S.shape[0])], k, far_target=args.far,
+    )
     print(f"[patch-severity] reference paths: {ref_paths.shape}; "
           f"alarm path = -log(empirical p) against the calibration subset")
+    print(f"[patch-severity] tau={tau:.4f} calibrated at FAR {args.far} "
+          f"(achieved {far_achieved:.3f}, k={k}) on leave-one-out calibration nulls")
 
     levels = sev.load_table()
     families = [f.strip() for f in str(args.shapes).split(",") if f.strip()]
@@ -884,6 +904,9 @@ def run_patch_severity_protocol(args: argparse.Namespace, manifest: dict, sel: d
     per_seed = [{
         "seed": int(seeds[0]) if seeds else 0,
         "tau": float(tau), "k": int(k),
+        "far_achieved": float(far_achieved),
+        "tau_calibration": ("calibrate_threshold on leave-one-out calibration "
+                            "null alarm paths (k=1, FAR target {target})".format(target=args.far)),
         "alarm_statistic": "neg_log_empirical_p_vs_calibration_subset",
         "mdm80": mdm80, "cells": cells,
         "patch_sigma_sha256": sigma.sha256,
