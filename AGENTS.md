@@ -106,6 +106,16 @@ machine. The rules below are binding.
   only training. The escalation is always **validate-locally-first, then
   escalate**; a pipeline that has not passed the local gate is never handed
   over. See §6.1 for the gate and §6.2 for the return path.
+- **Placement trigger: small-data + CPU/RAM-heavy + slow ⇒ Colab by default**
+  (owner directive 2026-11-21, after the patch severity sweep saturated the
+  laptop for hours on ~5 MB of inputs). If a job's inputs fit a small Drive
+  bundle (≲ tens of MB beyond what `thesis_data_full*.zip` already carries in
+  `MyDrive/thesis_colab/`), but it is CPU/RAM-hungry (torch scoring, sweep
+  loops, large tensor passes) and expected to take ≳ 30 minutes locally, do
+  NOT run it on the laptop — not even deprioritized or "just once". Build the
+  upload bundle (never re-upload artifacts already in Drive), write the Colab
+  notebook, pass §6.1's local gate, and hand it over through §6.2. The laptop
+  keeps only validation: tests, smoke, quick single-seed probes.
 - **The agent never launches a long job itself.** Anything expected to run
   longer than ~2 minutes (full training, multi-seed sweeps, full RQ suite,
   full evaluation, σ calibration, full exporter runs) is handed to the user as

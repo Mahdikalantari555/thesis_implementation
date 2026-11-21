@@ -944,19 +944,23 @@ def main(argv: list[str] | None = None) -> int:
     device = args.device or ("cuda" if _cuda() else "cpu")
 
     manifest = msplits.load_splits_locked(path=args.splits)
-    data = minputs.load_masked_cycles()
-    sel = mproto.select_splits(data, manifest, splits=("dev",))
     if patch:
         # The masked-cycle archive is built from the v1 phenology; a patch
         # store bound to the v2 chain takes its locked dev panel from the
-        # manifest-pinned cycles parquet (windows + dates all v2).
+        # manifest-pinned cycles parquet (windows + dates all v2). The patch
+        # path never touches the masked tensors, so the archive is not even
+        # required to exist — patch evals can run anywhere the store is.
         from ssl_anomaly.io import patches as P
 
+        data = None
         sel = _patch_dev_panel(
             P.open_store(Path(args.patch_store) if args.patch_store
                          else REPO_ROOT / "data" / "processed" / "patches.zarr"),
             manifest,
         )
+    else:
+        data = minputs.load_masked_cycles()
+        sel = mproto.select_splits(data, manifest, splits=("dev",))
 
     if args.protocol == "severity":
         sev_metrics, per_seed = run_severity_protocol(args, manifest, sel, seeds, device, data=data)
