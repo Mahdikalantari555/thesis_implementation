@@ -374,6 +374,14 @@ def test_patch_severity_cli_consumes_the_new_trainer_checkpoint(tmp_path, monkey
     path = tmp_path / "reports/r1/metrics_patch_cnn_gru_sev_patch_cnn_gru_smoke_s13.json"
     assert "NaN" not in path.read_text()
     metrics = json.loads(path.read_text())
+    # Timing is observational metadata, not a protocol result. All remaining
+    # report fields must match when chunking is enabled.
+    path.unlink()
+    assert E.main([*argv, "--score-chunk", "3"]) == 0
+    chunked_metrics = json.loads(path.read_text())
+    assert {k: v for k, v in metrics.items() if k != "wall_time_s"} == {
+        k: v for k, v in chunked_metrics.items() if k != "wall_time_s"
+    }
     assert metrics["ladder_rung"] == "engineering_smoke_only"
     assert metrics["input_protocol"] == PD.PATCH_INPUT_PROTOCOL
     # change consistent-spectral-injection: the primary sweep is bands_consistent
@@ -478,3 +486,51 @@ def test_patch_dev_panel_normalizes_windows_paths(tmp_path, monkeypatch):
     panel = E._patch_dev_panel(root, splits)
     assert panel["cycle_keys"] == dev_keys
     assert panel["start_dates"].shape == (2,)
+
+
+def test_incremental_batch_matches_original_stack_bytes(tmp_path):
+    root = _store(tmp_path)
+    cycles = [P.patch_cycle_index(root)[key] for key in ("22:2", "11:0", "11:1")]
+    rows = [PD.read_cycle_inputs(root, cycle, epoch=P.patch_epoch(root)) for cycle in cycles]
+    batch = PE.patch_batch_for_cycles(root, [22, 11, 11], [2, 0, 1], norm=_norm())
+    stats = P.patch_norm_stats(_norm())
+    for key in ("raw", "obs", "sensor_id", "in_field", "covariates"):
+        expected = np.stack([row[key] for row in rows])
+        assert batch[key].dtype == expected.dtype
+        assert batch[key].tobytes() == expected.tobytes()
+    expected_x = np.stack([P.normalize_patch(r["raw"], r["obs"], r["sensor_id"], stats)[0]
+                           for r in rows])
+    assert batch["X"].tobytes() == expected_x.tobytes()
+    assert batch["raw"].dtype == np.float16
+    assert batch["obs"].dtype == bool
+    for row in rows:
+        assert row["raw"].astype(np.float32).tobytes() == np.asarray(row["raw"], dtype=np.float32).tobytes()
+
+
+@pytest.mark.parametrize("chunk", [1, 2, 3, 9])
+def test_cell_chunk_parity(tmp_path, chunk):
+    root = _store(tmp_path)
+    batch = PE.patch_batch_for_cycles(root, [11, 22, 11, 22], [0, 1, 2, 0], norm=_norm())
+    batch.pop("covariates")  # this fixture model was built without covariates
+    arm = PS.PatchArmScorer(_scorer(), np.ones((12, T)))
+    args = dict(level_id="S3", family=sev.PERSISTENT_FAMILY, index="savi", round_idx=1,
+                injection_basis="bands_consistent")
+    reference = PE.patch_arm_scores(arm, batch, **args)
+    del batch["X"]
+    actual = PE.patch_arm_scores(arm, batch, chunk=chunk, **args)
+    assert actual["injections"] == reference["injections"]
+    for key in ("z2", "paths", "p_value", "observed"):
+        assert actual[key].tobytes() == reference[key].tobytes(), key
+
+
+def test_score_chunk_cli_rejects_nonpositive():
+    import importlib.util
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location("eval_dev_chunk", Path(__file__).resolve().parents[2] / "scripts/eval_dev.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    base = ["--run-id", "r", "--model", "patch_cnn_gru"]
+    assert module.parse_args(base).score_chunk is None
+    assert module.parse_args([*base, "--score-chunk", "4"]).score_chunk == 4
+    with pytest.raises(SystemExit):
+        module.parse_args([*base, "--score-chunk", "0"])

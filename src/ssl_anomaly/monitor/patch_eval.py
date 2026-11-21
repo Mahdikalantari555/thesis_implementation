@@ -58,16 +58,24 @@ def patch_batch_for_cycles(
         raise ValueError(f"{len(missing)} requested patch cycles are not in the store: {missing[:5]}")
     cycles = [index[key] for key in keys]
     P.assert_patch_count_bounds(root, cycles)
-    rows = [read_cycle_inputs(root, cycle, epoch=epoch) for cycle in cycles]
-    raw, obs, sensors, in_field, covariates = (
-        np.stack([data[key] for data in rows])
-        for key in ("raw", "obs", "sensor_id", "in_field", "covariates")
-    )
-    normalized = [P.normalize_patch(v, m, s, stats) for v, m, s in zip(raw, obs, sensors)]
-    x, missing_scales = zip(*normalized)
+    # Allocate each output only once; retaining every cycle and then stacking
+    # doubles the high-water mark. read_cycle_inputs preserves the store dtype
+    # (normally float16) and already returns a boolean observation mask.
+    arrays = {}
+    missing_scales = set()
+    for n, cycle in enumerate(cycles):
+        data = read_cycle_inputs(root, cycle, epoch=epoch)
+        x, missing = P.normalize_patch(data["raw"], data["obs"], data["sensor_id"], stats)
+        missing_scales.update(missing)
+        data["X"] = x
+        for key in ("X", "raw", "obs", "sensor_id", "in_field", "covariates"):
+            value = data[key]
+            if key not in arrays:
+                arrays[key] = np.empty((len(cycles), *value.shape), dtype=value.dtype)
+            arrays[key][n] = value
     return {
-        "X": np.stack(x), "unnormalized_channels": sorted(set().union(*missing_scales)), "raw": raw, "obs": obs, "pixel_valid": obs.any(axis=2),
-        "in_field": in_field, "sensor_id": sensors, "covariates": covariates,
+        **arrays, "unnormalized_channels": sorted(missing_scales),
+        "pixel_valid": arrays["obs"].any(axis=2),
         "cycles_found": len(keys), "norm_stats": stats,
     }
 
@@ -122,6 +130,7 @@ def patch_arm_scores(
     rng=None,
     field_row: np.ndarray | None = None,
     injection_basis: str = BASIS_INDEX_ONLY,
+    chunk: int | None = None,
 ) -> dict:
     """Score one severity cell: inject in the PATCH tensor, then score.
 
@@ -143,26 +152,41 @@ def patch_arm_scores(
 
     rng = rng if rng is not None else np.random.default_rng(round_idx)
     injections = []
-    Xinj = np.empty_like(batch["X"])
+    shape = batch["raw"].shape
+    n_samples = shape[0]
+    if chunk is not None and chunk <= 0:
+        raise ValueError("score chunk must be positive")
+    chunk_size = n_samples if chunk is None else chunk
+    # A caller may omit X after calibration; normalize_patch always emits
+    # float32. Preserve an explicitly supplied X dtype for legacy callers.
+    x_dtype = batch["X"].dtype if "X" in batch else np.float32
+    outputs = {key: [] for key in ("z2", "score", "p_value")}
     Minj = batch["pixel_valid"]
-    for n in range(batch["X"].shape[0]):
-        onset = ppert.onset_for_shape(family, batch["X"].shape[1], 3, int(duration))
-        inj = ppert.inject_patch_drop(
-            batch["raw"][n].astype(np.float32), batch["obs"][n],
-            index=index, delta=delta, onset_bin=onset, shape=family,
-            duration=int(duration), in_field=batch["in_field"][n],
-            level_id=level_id, rng=rng, injection_basis=injection_basis,
-        )
-        Xinj[n], _ = P.normalize_patch(
-            inj.x, batch["obs"][n], batch["sensor_id"][n], batch["norm_stats"]
-        )
-        injections.append(inj.to_hash_record())
-    extra = {} if field_row is None else {"idx": np.asarray(field_row)}
-    out = arm.score_cycles(Xinj, Minj, None, None, **extra, **_scoring_inputs(batch))
-    return {"z2": out["z2"], "paths": out["score"], "p_value": out["p_value"],
-            "observed": Minj.any(axis=(2, 3)),   # (N, T): any in-field pixel seen
-            "injection_basis": injection_basis,
-            "injections": injections}
+    onset = ppert.onset_for_shape(family, shape[1], 3, int(duration))
+    for start in range(0, n_samples, chunk_size):
+        end = min(start + chunk_size, n_samples)
+        Xinj = np.empty((end - start, *shape[1:]), dtype=x_dtype)
+        # The same RNG is consumed once per sample, in global batch order.
+        for n in range(start, end):
+            inj = ppert.inject_patch_drop(
+                batch["raw"][n].astype(np.float32), batch["obs"][n],
+                index=index, delta=delta, onset_bin=onset, shape=family,
+                duration=int(duration), in_field=batch["in_field"][n],
+                level_id=level_id, rng=rng, injection_basis=injection_basis,
+            )
+            Xinj[n - start], _ = P.normalize_patch(
+                inj.x, batch["obs"][n], batch["sensor_id"][n], batch["norm_stats"]
+            )
+            injections.append(inj.to_hash_record())
+        sl = slice(start, end)
+        extra = {} if field_row is None else {"idx": np.asarray(field_row)[sl]}
+        out = arm.score_cycles(Xinj, Minj[sl], None, None, **extra, **_scoring_inputs(batch, sl))
+        for key in outputs:
+            outputs[key].append(out[key])
+    return {"z2": np.concatenate(outputs["z2"]), "paths": np.concatenate(outputs["score"]),
+            "p_value": np.concatenate(outputs["p_value"]),
+            "observed": Minj.any(axis=(2, 3)),
+            "injection_basis": injection_basis, "injections": injections}
 
 
 # --- G4 localization probe (patch-level-controlled-trial task 2.4) --------
