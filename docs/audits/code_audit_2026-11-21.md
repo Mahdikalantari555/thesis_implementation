@@ -10,18 +10,20 @@ axis collapse) and the audit commit series below.
 
 | Finding | Location | Defect | Fix |
 |---|---|---|---|
-| A1 (P0) | `scripts/calibrate_patch_sigma.py:115-127` | σ fit omitted the per-channel `obs` mask — zero-filled (never-acquired) channels entered `fit_patch_sigma` as fabricated `pred − 0` residuals; MAD inflated, `n` overcounted, σ artifact not the claimed statistic; gate-blind (both parity legs share σ) | 99709b0: `predict_pixels` returns the per-channel `observed` mask; calibration consumes it. **All σ tables refit after this commit.** |
+| A1 (P0) | `scripts/calibrate_patch_sigma.py:115-127` | σ fit omitted the per-channel `obs` mask — zero-filled (never-acquired) channels entered `fit_patch_sigma` as fabricated `pred − 0` residuals; MAD inflated, `n` overcounted, σ artifact not the claimed statistic; gate-blind (both parity legs share σ) | 99709b0: `predict_pixels` returns the per-channel `observed` mask; calibration consumes it. **Refit ×6 proved the v2 tables BYTE-IDENTICAL** (same sha256, same n): the v2 store has all-or-nothing per-scene observation — probe across sampled dev cycles found 0 pixel-bins with `0 < channels < 8` — so the defect was contract-real but numerically inert on this store. The fix stands (any future store with partial channel availability — e.g. TIRS failing while OLI succeeds — would have poisoned σ silently). No bundle change resulted. |
 | A2 (P1) | `scripts/eval_dev.py:873-876`, `src/ssl_anomaly/monitor/patch_eval.py:150-176` | Patch detection/delay measured from bin 0 (only call site in the repo without onset) → pre-onset false alarms counted as detections (+calibrated-FAR floor per cell, MDM80 boundary risk) and delays +45 d; and every round of a cell was a byte-identical injection (rng consumed only by `spatial="white"`; onset pinned to bin 3) → Wilson CI over pseudo-replicates at `--rounds 2` | ea74a0c: onset read from the per-injection `onset_bin`, delay `(fb − onset)·15` (field-arm convention), `onset_bins` recorded per cell; onset phases rotate per `(sample + round) % 3` and gradual ramps cycle `GRADUAL_RAMP_BINS` per round — exact field-ladder parity |
 | A3 (P1) | `scripts/probe_forecast_units.py:176` | Path-C pre-registered budget compared event-FAR (false events per **scored bin**) to the 5 % **per-cycle** target — with ~28-30 scored bins the condition could never bind (one false event in every clean cycle ≈ 0.036 < 0.05) | d4b3cb8: gating condition moved to the cycle-level FAR of the clean evaluation paths at (τ, k); event-FAR kept as a descriptive record; amendment dated in output + docstring. Finding 21 (all-censored NEGATIVE) unaffected |
 
 Gate after fixes: `gate_patch_severity.py` PASS on cpu for both archs (chunking parity +
 liveness: tau 0.6464, far_achieved 0.000, S6 detection ≥ 0.8).
 
-**Consequence for results:** every patch-arm number produced before 2026-11-21
-(MDM80 tables, detection rates, delays, localization AUPRC, findings 18/22/23/24 patch
-rows, the ×6 v2 severity runs) flowed through the A1-contaminated σ tables and the A2
-accounting; they must be re-run on the refit σ + fixed protocol before being quoted.
-Field-level arms are NOT affected by A1/A2 (no patch σ, onset-true accounting already).
+**Consequence for results:** the patch-arm numbers produced before 2026-11-21 (MDM80
+tables, detection rates, delays, localization AUPRC, findings 18/22/23/24 patch rows,
+the ×6 v2 severity runs) are invalidated by the A2 accounting (onset-0 detection,
++45 d delays, duplicate-round CIs) and by the bd65829 tau/NaN artifacts they already
+carried — NOT additionally by A1, whose σ contamination is provably inert on the v2
+store (refit byte-identical). Field-level arms are NOT affected by A1/A2 (no patch σ,
+onset-true accounting already).
 
 ## Deferred (recorded, not fixed — none corrupts a current result)
 
