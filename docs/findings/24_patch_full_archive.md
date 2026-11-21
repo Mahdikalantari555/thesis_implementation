@@ -1,5 +1,21 @@
 # Finding 24 — Patch arms trained on the FULL archive (scale-up verdict)
 
+> **⚠ SUPERSEDED — read before quoting any number below (2026-11-21).**
+> The severity results in this finding were produced by the pre-fix protocol
+> and are **not valid as detection measurements**: the alarm threshold was
+> hardcoded (τ = 0.05 on the −log₁₀ p scale, never calibrated), which clean
+> paths exceed by construction, so the flat "MDM80 = S1, detection 1.000,
+> delay 30 d" ladder is an artifact of the threshold, not a measured
+> detection capability (fixed in commit `bd65829`: calibrated τ + NaN-safe
+> alarm paths + σ-table channel fix; see finding 25 for the corrected
+> protocol). Additionally, the v1 chain itself (799 valid cycles over 370
+> fields) is **superseded by the v2 chain** (3,478 valid cycles over 490
+> fields, 4.4× recovery, same downstream architecture): by owner decision
+> (2026-11-21) the v1 accuracy comparison was **not** carried out — the v2
+> results (finding 25) replace this finding entirely. The v1 artifacts
+> remain archived for provenance; do not cite this finding's severity
+> numbers in the thesis.
+
 **2026-11-20 · owner-executed training (Colab T4 per the handover notebook) +
 agent-executed σ calibration and severity evaluation · rung L2 · claim noun:
 synthetic anomaly**

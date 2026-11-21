@@ -134,9 +134,22 @@
       the v1↔v2 comparison must be rebuilt from a fixed-protocol re-run of
       both. v1 σ tables are lost (§6.2 counter-example) so a v1 re-run needs
       σ re-calibration on the v1 store first.
-- [ ] 5.3 Findings/dev_log update: v1↔v2 comparison deliverable recorded
-      (advisor SAVI hypothesis quantified); validation-ladder rung stated.
-      BLOCKED on the fixed-protocol re-run (σ ×6 re-calibration + eval ×6).
+- [x] **5.3b OWNER SCOPE DECISION (2026-11-21): the v1 accuracy comparison is
+      DROPPED — v2 supersedes v1 outright, one fixed-protocol run only.**
+      The finding states exactly this and nothing more: v1 was replaced
+      because the number of cycles it discovered (799 valid cycles, 370
+      fields) is far below v2 (3,478 valid cycles, 490 fields, 4.4×
+      recovery) — a full accuracy comparison was not carried out. Finding 24
+      carries a supersession banner (EN + FA): its severity numbers come from
+      the pre-fix protocol (uncalibrated τ) and must not be quoted. The v1
+      panel-fallback code work was reverted (tree = bd65829 exactly); the v1
+      chain stays archived for provenance. v1↔v2 deliverable = this
+      supersession statement in finding 25 (advisor SAVI hypothesis rides on
+      the v2 numbers alone).
+- [ ] 5.3 Findings/dev_log update: v2-only finding 25 (fixed protocol,
+      calibrated τ, σ refit) + finding 24 supersession banner.
+      BLOCKED on the fixed-protocol re-run (σ ×6 done; eval ×6 pending on
+      Colab).
 
 #### 4.1 extraction I/O acceptance (no store or resume format change)
 
