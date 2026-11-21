@@ -86,7 +86,8 @@ null alarm paths (k = 1, FAR target 0.05, recorded verbatim in
    call at the extreme-severity end, but **neither arm reaches MDM80**, so no
    winner is declared here.
 3. **The information floor is the story.** Even the largest ladder step
-   (S6 = −0.12 index units, realized bands-consistently on the raw patch) leaves
+   (S6 = −0.40 NDVI/SAVI units ≈ 6.1× the across-field MAD of 0.066, realized
+   bands-consistently on the raw patch) leaves
    the alarm statistic below the calibrated τ for more than half the cycles of
    the best arm. This is the same conclusion the field-level arms reached in
    finding 18 and the deep-research severity analysis anticipated (real stress =
