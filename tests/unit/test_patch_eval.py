@@ -358,14 +358,14 @@ def test_patch_severity_cli_consumes_the_new_trainer_checkpoint(tmp_path, monkey
     dev = {"cycle_keys": cycle_keys,
            "start_dates": np.array([epoch + index[k].start_day for k in cycle_keys]),
            "end_dates": np.array([epoch + index[k].end_day + 1 for k in cycle_keys])}
-    monkeypatch.setattr(E.msplits, "load_splits_locked", lambda: splits)
+    monkeypatch.setattr(E.msplits, "load_splits_locked", lambda *a, **kw: splits)
     monkeypatch.setattr(E.minputs, "load_masked_cycles", lambda: None)
     monkeypatch.setattr(E.mproto, "select_splits", lambda *_a, **_kw: dev)
     monkeypatch.setattr(E.mproto, "DEV_DIR", tmp_path / "reports")
     argv = [
         "--run-id", "r1", "--model", "patch_cnn_gru", "--scorer", "patch_cnn_gru",
         "--patch-store", str(store), "--patch-checkpoint", str(ckpt), "--patch-sigma", str(sigma_path),
-        "--holdout-manifest", str(holdout_path), "--rounds", "1", "--seeds", "13", "--device", "cpu",
+        "--splits", str(lock), "--holdout-manifest", str(holdout_path), "--rounds", "1", "--seeds", "13", "--device", "cpu",
         "--smoke",
     ]
     assert E.main(argv) == 0

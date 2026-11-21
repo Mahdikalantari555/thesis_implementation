@@ -96,6 +96,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         "gate, protocol id v2); index_only is the historical channel-level "
                         "behavior kept verbatim for the findings 18/22/23/24 sensitivity row "
                         "(protocol id v1)")
+    p.add_argument("--splits", type=Path, default=msplits.SPLITS_LOCKED_PATH,
+                   help="locked splits manifest the dev panel is selected from "
+                        "(default: the locked v1 path; pass splits_locked_v2.json "
+                        "for stores bound to the v2 chain)")
     p.add_argument("--holdout-manifest", type=Path, default=mholdout.HOLDOUT_MANIFEST_PATH,
                    help="frozen holdout for patch scoring provenance")
     p.add_argument("--bank-k", type=int, choices=[1, 5], default=5)
@@ -886,7 +890,7 @@ def main(argv: list[str] | None = None) -> int:
     seeds = [int(s) for s in args.seeds.split(",")]
     device = args.device or ("cuda" if _cuda() else "cpu")
 
-    manifest = msplits.load_splits_locked()
+    manifest = msplits.load_splits_locked(path=args.splits)
     data = minputs.load_masked_cycles()
     sel = mproto.select_splits(data, manifest, splits=("dev",))
 
