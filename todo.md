@@ -139,6 +139,13 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
 
 ## Queued — openspec candidates (one change each, user-approved direction)
 
+0. **`code-audit-2026-11-21-deferred`** — the deferred defect list from the post-bd65829
+   audit (`docs/audits/code_audit_2026-11-21.md`): the 3 result-corrupting bugs are FIXED
+   (99709b0 / ea74a0c / d4b3cb8, σ refit + severity re-run required); the remaining
+   3 P1 latent defects (farm_own shrinkage no-op, absorption polarity, GRU init slice),
+   26 P2 hygiene items and 10 perf opportunities are RECORDED there and must be picked
+   up as small fixes before the code they touch is next used. Nothing on this list
+   corrupts a current result.
 1. **`visualize-metric-products`** — wire METRIC products into the platform:
    - ✅ Interim visualization DONE (user, 2026-11-10): `data/interim/metric_interpolation_timeseries.png` — ticked 2026-11-14; platform wiring still pending
    - `Data/Metric/products/ETaDaily/` — 271 scene rasters (mm/day, 30 m, UTM39N, AOI 496×472)
