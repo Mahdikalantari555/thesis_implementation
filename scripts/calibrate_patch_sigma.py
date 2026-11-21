@@ -5,8 +5,10 @@ task 2.4 artifact handoff): ``eval_dev.py`` refuses to score a patch arm
 without the frozen sigma table bound to its checkpoint, and nothing wrote it.
 
 Pipeline: dev-clean cycles of the locked manifest → store batch (normalized)
-→ pixel-level residuals through the trained model (unit sigma — the table is
-fit on RAW residuals) → ``fit_patch_sigma`` (1.4826 x median |res| per
+→ per-channel-observed residuals through the trained model (unit sigma — the
+table is fit on RAW residuals; the per-channel ``obs`` mask is passed through
+``predict_pixels`` so zero-filled, never-acquired channels contribute nothing)
+→ ``fit_patch_sigma`` (1.4826 x median |res| per
 phenophase x channel x sensor, min_n floor + fallback) → npz carrying the
 binding hashes eval_dev verifies (model_sha256, norm_sha256,
 input_protocol). Dev-clean-only is the caller's guarantee, honored here by
@@ -119,12 +121,19 @@ def main(argv: list[str] | None = None) -> int:
             idx=field_rows[sl],
             sensor_ids=batch["sensor_id"][sl],
             covariates=batch["covariates"][sl],
+            obs=batch["obs"][sl],
         )
-        pred, mask = info["pred"], info["mask"]
-        # Signed residual on observed in-field pixels; NaN elsewhere.
-        res = np.where(mask[:, :, None], pred - batch["X"][sl], np.nan)
+        # Per-channel observation mask (audit 2026-11-21): the pixel-level
+        # mask broadcast across channels would treat zero-filled channels as
+        # observed — normalize_patch emits 0.0 there (the channel median, not
+        # data), so the fitted residual would be pred − median, i.e. the
+        # seasonal signal itself rather than observation error, and n would
+        # count residuals that do not exist. The table must contain exactly
+        # the residuals the scorer divides by.
+        observed = info["observed"]
+        res = np.where(observed, info["resid"], np.nan)
         res_blocks.append(res.astype(np.float64))
-        msk_blocks.append(np.broadcast_to(mask[:, :, None], res.shape).copy())
+        msk_blocks.append(observed)
     residuals = np.concatenate(res_blocks)   # (N, T, C, S, S)
     obs_mask = np.concatenate(msk_blocks)
 

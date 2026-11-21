@@ -180,6 +180,33 @@ def test_persistent_cell_uses_the_frozen_duration():
     assert out["injections"][0]["duration_bins"] == int(sev.PERSISTENT_DURATION_BINS)
 
 
+# --- sigma calibration contract (audit 2026-11-21) ------------------------
+def test_predict_pixels_observed_mask_is_per_channel():
+    """``predict_pixels`` must expose the per-channel mask the residuals are
+    scored under. The normalized input is zero-filled (finite everywhere), so
+    a pixel-level mask broadcast across channels would admit fabricated
+    ``pred − 0`` residuals on never-acquired channels — the σ artifact would
+    no longer be the statistic it claims to be."""
+    scorer = _scorer()
+    n = 2
+    batch = _batch(n=n)
+    batch["X"] = np.where(batch["obs"], batch["X"], 0.0).astype(np.float32)
+    batch["obs"][:] = True
+    batch["obs"][:, :, 2] = False            # channel 2 never acquired
+    out = scorer.predict_pixels(
+        batch["X"], batch["pixel_valid"], idx=np.arange(n),
+        sensor_ids=batch["sensor_id"], obs=batch["obs"],
+    )
+    assert out["observed"].shape == batch["obs"].shape
+    assert not out["observed"][:, :, 2].any(), "unobserved channel must not count as observed"
+    assert out["observed"][:, :, 0].any()
+    # residuals outside ``observed`` must be excluded by the calibration mask
+    resid = np.where(out["observed"], out["resid"], np.nan)
+    table = PS.fit_patch_sigma(resid, out["observed"], batch["sensor_id"], n_bins=T)
+    assert (table.n[:, 2, :] == 0).all(), "fitted-cell count must not include unobserved channels"
+    assert (table.n[:, 0, :] > 0).any()
+
+
 # --- G4 localization probe -------------------------------------------------
 def test_localization_auprc_ranks_injected_pixels_first():
     N, T, S = 2, 10, 8

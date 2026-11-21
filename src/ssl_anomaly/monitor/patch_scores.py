@@ -678,7 +678,15 @@ class PatchDeepScorer:
         covariates=None,
         obs: np.ndarray | None = None,
     ) -> dict:
-        """Full-fidelity pass: per-pixel residuals, z² maps and field paths."""
+        """Full-fidelity pass: per-pixel residuals, z² maps and field paths.
+
+        The returned ``observed`` is the exact per-channel mask the residuals
+        were scored under (pixel mask ∧ per-channel ``obs``): σ calibration
+        must reuse it so the fitted table sees the SAME residuals the scorer
+        divides by — a pixel-level mask broadcast across channels would admit
+        fabricated ``pred − 0`` residuals on zero-filled (unobserved)
+        channels, because the normalized input is finite everywhere.
+        """
         x = np.asarray(X, dtype=np.float32)
         if x.ndim != 5:
             raise ValueError(f"X must be (N, T, C, S, S), got {x.shape}")
@@ -711,7 +719,8 @@ class PatchDeepScorer:
             top_frac=self.top_frac, min_pixels=self.min_pixels,
         )
         self.last_pixel_maps = z2
-        return {"resid": resid, "pred": pred, "mask": mask, "pixel_z2": z2, "paths": paths}
+        return {"resid": resid, "pred": pred, "mask": mask, "observed": observed,
+                "pixel_z2": z2, "paths": paths}
 
     def predict_pixels_from_z(
         self,
