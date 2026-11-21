@@ -106,6 +106,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--bank-distance", choices=["knn", "mahalanobis"], default="knn")
     p.add_argument("--seeds", default="13,42,2026", help="seeds to evaluate (default: 13,42,2026)")
     p.add_argument("--far", type=float, default=0.05)
+    p.add_argument("--score-chunk", type=int, default=None,
+                   help="patch severity: score at most N cycles at a time (positive integer)")
     p.add_argument("--rounds", type=int, default=2,
                    help="severity sweep: injection rounds per cell (each round injects every eval cycle once)")
     p.add_argument("--n-per-stratum", type=int, default=8,
@@ -122,7 +124,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--smoke", action="store_true", help="tiny subset for agent smoke runs")
     p.add_argument("--device", default=None)
     p.add_argument("--notes", default="")
-    return p.parse_args(argv)
+    args = p.parse_args(argv)
+    if args.score_chunk is not None and args.score_chunk <= 0:
+        p.error("--score-chunk must be positive")
+    return args
 
 
 def load_patch_artifacts(run_id: str, *, checkpoint_path: Path | None = None,
@@ -813,8 +818,11 @@ def run_patch_severity_protocol(args: argparse.Namespace, manifest: dict, sel: d
 
     levels = sev.load_table()
     families = [f.strip() for f in str(args.shapes).split(",") if f.strip()]
+    # Clean model-space inputs are no longer needed after reference scoring.
+    del batch["X"]
     eval_batch = {key: value[eval_idx] if isinstance(value, np.ndarray) else value
                   for key, value in batch.items()}
+    del batch
     cells: dict[str, dict] = {}
     for lv in levels:
         for fam in families:
@@ -828,6 +836,7 @@ def run_patch_severity_protocol(args: argparse.Namespace, manifest: dict, sel: d
                         level_id=lv.level_id, family=fam, index=index, round_idx=rnd,
                         field_row=row_of_sample[eval_idx],
                         injection_basis=args.injection_basis,
+                        chunk=getattr(args, "score_chunk", None),
                     )
                     # -log10(p) is already the standardized path (p is uniform on
                     # clean data, so q95(=-log10 0.05) normalizes it exactly);
@@ -879,7 +888,7 @@ def run_patch_severity_protocol(args: argparse.Namespace, manifest: dict, sel: d
         "mdm80": mdm80, "cells": cells,
         "patch_sigma_sha256": sigma.sha256,
         "patch_norm_sha256": norm["sha256"],
-        "unnormalized_channels": batch["unnormalized_channels"],
+        "unnormalized_channels": eval_batch["unnormalized_channels"],
         "holdout_sha256": holdout["manifest_sha256"],
         "params": sum(p.numel() for p in model.parameters()),
         "patch_run": str(args.patch_checkpoint or patch_run),
