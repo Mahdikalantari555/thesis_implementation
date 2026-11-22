@@ -132,7 +132,7 @@ def part_d_arm(model: str, run_id: str, seed: int, sel: dict, tau_source: str,
 
     scorer, norm = load_arm_scorer(run_id, model, seed)
     X, M = sel["X"], sel["M"]
-    doy = minputs.doy_channels(sel["harvest_days"])
+    doy = minputs.doy_channels(sel["harvest_days"], epoch=sel["epoch"])
     z2, m_eff = arm_clean_z2(scorer, norm, X, M, doy)
     paths = mscoring.cumulative_channel_max(z2, m_eff, q95)
     n = X.shape[0]

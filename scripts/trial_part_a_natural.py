@@ -54,7 +54,7 @@ def part_a_arm(model: str, run_id: str, seed: int, sel: dict, eval_idx: list[int
     Me = sel["M"][eval_idx]
     from ssl_anomaly.monitor import inputs as minputs
 
-    doye = minputs.doy_channels(sel["harvest_days"])[eval_idx]
+    doye = minputs.doy_channels(sel["harvest_days"], epoch=sel["epoch"])[eval_idx]
     z2, m_eff = arm_clean_z2(scorer, norm, Xe, Me, doye)
     paths = mscoring.cumulative_channel_max(z2, m_eff, q95)
     z2_b, m_eff_b = arm_clean_z2(scorer, norm, Xe, Me, doye)  # determinism recompute

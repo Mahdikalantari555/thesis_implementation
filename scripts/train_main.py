@@ -161,7 +161,7 @@ def main(argv: list[str] | None = None) -> int:
     })
 
     z_all = minputs.apply_norm(stats, X_all, M_all)
-    doy_all = minputs.doy_channels(sel["harvest_days"])
+    doy_all = minputs.doy_channels(sel["harvest_days"], epoch=sel["epoch"])
 
     use_doy = not args.no_doy
     d_in = mmodels.token_dim(X_all.shape[2], use_doy)

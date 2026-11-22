@@ -49,6 +49,7 @@ import numpy as np
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
+from ssl_anomaly.io.stats_zarr import BASE_DATE
 from ssl_anomaly.monitor import inputs as minputs  # noqa: E402
 from ssl_anomaly.monitor import scoring as mscoring  # noqa: E402
 from ssl_anomaly.monitor import splits as msplits  # noqa: E402
@@ -238,7 +239,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         built[preset] = cycles
         is_train, is_dev = _load_reference(cycles, manifest)
-        doy_sin = minputs.doy_channels(cycles["harvest_days"])[:, :, 0].astype(np.float32)
+        doy_sin = minputs.doy_channels(cycles["harvest_days"], epoch=BASE_DATE)[:, :, 0].astype(np.float32)
         arm = run_arm(
             cycles, is_train=is_train, is_dev=is_dev, doy_sin=doy_sin,
             far_target=args.far_target, persistence_k=args.persistence_k,
@@ -257,7 +258,7 @@ def main(argv: list[str] | None = None) -> int:
             cycles_parquet_path=args.cycles, preset="level", reference_keys=reference_keys,
         )
         is_train, is_dev = _load_reference(level, manifest)
-        doy = minputs.doy_channels(level["harvest_days"])[:, :, 0].astype(np.float32)
+        doy = minputs.doy_channels(level["harvest_days"], epoch=BASE_DATE)[:, :, 0].astype(np.float32)
         scores_dist, _ = zd.fit_score_b1(level, train_mask=is_train, doy_sin=doy,
                                          min_n=args.min_n)
         # Reference path: the same median channels built by monitor.inputs.

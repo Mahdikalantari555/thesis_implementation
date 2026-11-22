@@ -506,7 +506,8 @@ def main() -> None:
             loaded = models[key]
             assert isinstance(loaded, LoadedCausalModel)
             log.info("Running causal checkpoint inference with %s on %d masked cycles...", key, len(masked_rows))
-            new_raw_errs[key] = loaded.score_cycles(X_masked, M_masked, H_masked)
+            new_raw_errs[key] = loaded.score_cycles(X_masked, M_masked, H_masked,
+                                                    epoch=str(reader.dates[0]))
 
     # Legacy checkpoints keep their pipeline: interpolated (non-censored) cycle
     # tensors, squashed per-bin scores.

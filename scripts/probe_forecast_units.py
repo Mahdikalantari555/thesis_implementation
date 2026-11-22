@@ -493,7 +493,7 @@ def main(argv: list[str] | None = None) -> int:
     args._start_dates, args._end_dates = sel["start_dates"], sel["end_dates"]
 
     X, M = sel["X"], sel["M"]
-    doy = minputs.doy_channels(sel["harvest_days"])
+    doy = minputs.doy_channels(sel["harvest_days"], epoch=sel["epoch"])
     cycle_keys = list(sel["cycle_keys"])
     calib_idx, eval_idx, eval_hash = partition_calib_eval(cycle_keys)
     if eval_hash != EVAL_HASH_EXPECTED:

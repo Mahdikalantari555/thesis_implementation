@@ -170,7 +170,8 @@ class LoadedCausalModel:
     _scorer: object = None
     _norm: dict = field(repr=False, default_factory=dict)
 
-    def score_cycles(self, X_raw: np.ndarray, M: np.ndarray, harvest_days: np.ndarray) -> np.ndarray:
+    def score_cycles(self, X_raw: np.ndarray, M: np.ndarray, harvest_days: np.ndarray,
+                     *, epoch) -> np.ndarray:
         """RAW per-bin causal scores ``(n_cycles, n_bins)`` (no squash).
 
         NaN at unobserved bins (mask all-False). Display squash
@@ -180,7 +181,10 @@ class LoadedCausalModel:
         from ssl_anomaly.monitor.inputs import apply_norm, doy_channels
 
         z = apply_norm(self._norm, np.asarray(X_raw), np.asarray(M, dtype=bool))
-        doy = doy_channels(np.asarray(harvest_days, dtype=np.int64)) if self.use_doy else None
+        # audit 2026-11-21 item 18: the DOY epoch is data-derived (the
+        # store's first acquisition), threaded from the caller.
+        doy = (doy_channels(np.asarray(harvest_days, dtype=np.int64), epoch=epoch)
+               if self.use_doy else None)
         scores, _ = self._scorer.loo_batch(z, np.asarray(M, dtype=bool), doy)
         return np.asarray(scores, dtype=np.float64)
 

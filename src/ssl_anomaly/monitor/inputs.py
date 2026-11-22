@@ -254,6 +254,11 @@ def load_masked_cycles(
     """Load (or build once and cache) the masked cycle tensors."""
     if not force_rebuild and Path(cache_path).exists():
         d = np.load(cache_path, allow_pickle=True)
+        if "epoch" not in d.files:
+            # audit 2026-11-21 item 18: a pre-fix cache carries no recorded
+            # epoch — assume the build-era constant, but say so out loud.
+            print("[inputs] notice: legacy masked-cycles NPZ has no recorded "
+                  "epoch; assuming the build-era constant 2013-03-30")
         return {
             "X": d["X"],
             "M": d["M"],
@@ -262,9 +267,7 @@ def load_masked_cycles(
             "end_dates": d["end_dates"],
             "harvest_days": d["harvest_days"],
             "cycle_keys": [str(k) for k in d["cycle_keys"]],
-            "epoch": (str(d["epoch"]) if "epoch" in d.files else
-                      "2013-03-30 (legacy cache — epoch assumed from the build-era "
-                      "constant, unverified: audit item 18)"),
+            "epoch": (str(d["epoch"]) if "epoch" in d.files else "2013-03-30"),
             "band_names": [str(b) for b in d["band_names"]],
             "source": str(cache_path),
         }

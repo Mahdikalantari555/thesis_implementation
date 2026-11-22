@@ -512,7 +512,7 @@ def test_resolve_scores_v5_causal_with_synthetic_main_checkpoint(tmp_path):
     X = np.stack([c.x for c in rows])
     M = np.stack([c.mask for c in rows])
     H = np.array([c.harvest_day for c in rows], dtype=np.int64)
-    raw = loaded.score_cycles(X, M, H)
+    raw = loaded.score_cycles(X, M, H, epoch="2013-03-30")
     assert raw.shape == (2, 36)
     assert np.isnan(raw[:, 20:]).all(), "unobserved bins must score NaN"
     assert np.isfinite(raw[:, :20]).all()

@@ -67,7 +67,7 @@ def part_c_arm(model: str, run_id: str, seed: int, sel: dict, eval_idx: list[int
 
     scorer, norm = load_arm_scorer(run_id, model, seed)
     Xe, Me = sel["X"][eval_idx], sel["M"][eval_idx]
-    doye = minputs.doy_channels(sel["harvest_days"])[eval_idx]
+    doye = minputs.doy_channels(sel["harvest_days"], epoch=sel["epoch"])[eval_idx]
     z_nat_all, pred_nat_all = arm_z_pred_both(scorer, norm, Xe, Me, doye)
 
     cells: dict[str, list] = {}
