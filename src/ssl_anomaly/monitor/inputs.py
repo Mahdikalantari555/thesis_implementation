@@ -241,6 +241,7 @@ def rebuild_masked_cycles(
         "end_dates": np.array(ends, dtype=object),
         "harvest_days": np.array(harvests, dtype=np.int64),
         "cycle_keys": keys,
+        "epoch": str(epoch),  # audit item 18: the DOY epoch travels with the data
         "band_names": channel_names,
     }
 
@@ -261,6 +262,9 @@ def load_masked_cycles(
             "end_dates": d["end_dates"],
             "harvest_days": d["harvest_days"],
             "cycle_keys": [str(k) for k in d["cycle_keys"]],
+            "epoch": (str(d["epoch"]) if "epoch" in d.files else
+                      "2013-03-30 (legacy cache — epoch assumed from the build-era "
+                      "constant, unverified: audit item 18)"),
             "band_names": [str(b) for b in d["band_names"]],
             "source": str(cache_path),
         }
@@ -272,6 +276,7 @@ def load_masked_cycles(
         start_dates=out["start_dates"], end_dates=out["end_dates"],
         harvest_days=out["harvest_days"],
         cycle_keys=np.array(out["cycle_keys"], dtype=object),
+        epoch=np.array(out["epoch"]),
         band_names=np.array(out["band_names"], dtype=object),
     )
     out["source"] = str(cache_path)
@@ -281,16 +286,27 @@ def load_masked_cycles(
 # ---------------------------------------------------------------------------
 # DOY auxiliary channels (R3)
 # ---------------------------------------------------------------------------
-def doy_channels(harvest_days: np.ndarray, *, bin_days: int = BIN_DAYS, n_bins: int = N_BINS) -> np.ndarray:
+def doy_channels(
+    harvest_days: np.ndarray,
+    *,
+    epoch: str | np.datetime64,
+    bin_days: int = BIN_DAYS,
+    n_bins: int = N_BINS,
+) -> np.ndarray:
     """sin/cos of the day-of-year at each bin midpoint; shape (N, n_bins, 2).
 
     Bin b covers days [harvest + b·bin_days, harvest + (b+1)·bin_days); the
     midpoint carries the phase. Always "observed" (covariates, never targets).
+
+    ``harvest_days`` are day offsets from the store's FIRST acquisition, so
+    ``epoch`` must equal the ``stats.zarr`` ``times[0]``. Audit 2026-11-21
+    item 18: the epoch used to be the hardcoded literal 2013-03-30 with
+    nothing asserting the invariant — it is now threaded through explicitly.
     """
     n = len(harvest_days)
     doy_day = np.arange(n_bins) * bin_days + bin_days / 2.0  # (36,)
     offsets = (harvest_days.astype("int64")[:, None] + doy_day[None, :]).ravel()  # (N*36,)
-    dates = pd.Timestamp("2013-03-30") + pd.to_timedelta(offsets, unit="D")  # 1-D DatetimeIndex
+    dates = pd.Timestamp(str(epoch)) + pd.to_timedelta(offsets, unit="D")  # 1-D DatetimeIndex
     doy = np.asarray(dates.dayofyear, dtype=np.float64).reshape(n, n_bins)
     ang = 2.0 * np.pi * doy / 365.25
     return np.stack([np.sin(ang), np.cos(ang)], axis=-1).astype(np.float32)

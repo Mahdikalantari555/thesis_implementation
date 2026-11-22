@@ -403,6 +403,12 @@ def load_splits_locked(
             "splits_locked.json manifest hash mismatch — the split was modified or "
             "corrupted. Refusing to run (manifest-drift requirement)."
         )
+    if not verify_cycle_files:
+        # audit 2026-11-21 item 27: the cycle-file drift check is disabled
+        # deliberately on the Colab paths (36a5fcb) — make the skip loud,
+        # never silent.
+        print("[splits] notice: cycle-file drift check SKIPPED "
+              "(verify_cycle_files=False; deliberate for Colab, see 36a5fcb)")
     if verify_cycle_files:
         recorded = manifest.get("cycle_files", {})
         pq_path = Path(cycles_parquet_path or recorded.get("parquet", CYCLES_PARQUET_PATH))

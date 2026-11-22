@@ -77,7 +77,7 @@ def test_norm_roundtrip_save_load(tmp_path: Path) -> None:
 # DOY channels
 # ---------------------------------------------------------------------------
 def test_doy_channels_shape_and_range() -> None:
-    d = minputs.doy_channels(np.array([100, 500], dtype=np.int64))
+    d = minputs.doy_channels(np.array([100, 500], dtype=np.int64), epoch="2013-03-30")
     assert d.shape == (2, 36, 2)
     assert np.all(np.isfinite(d))
     assert np.all(np.abs(d) <= 1.0 + 1e-6)
@@ -88,8 +88,17 @@ def test_doy_channels_shape_and_range() -> None:
 
 def test_doy_channels_depend_on_harvest() -> None:
     """Different harvest dates → different seasonal phase (R3 motivation)."""
-    d1 = minputs.doy_channels(np.array([0], dtype=np.int64))
-    d2 = minputs.doy_channels(np.array([200], dtype=np.int64))
+    d1 = minputs.doy_channels(np.array([0], dtype=np.int64), epoch="2013-03-30")
+    d2 = minputs.doy_channels(np.array([200], dtype=np.int64), epoch="2013-03-30")
+    assert not np.allclose(d1, d2)
+
+
+def test_doy_channels_epoch_is_explicit() -> None:
+    """Audit item 18: the epoch is a required argument and shifts the phase."""
+    with pytest.raises(TypeError):
+        minputs.doy_channels(np.array([0], dtype=np.int64))
+    d1 = minputs.doy_channels(np.array([0], dtype=np.int64), epoch="2013-03-30")
+    d2 = minputs.doy_channels(np.array([0], dtype=np.int64), epoch="2013-06-30")
     assert not np.allclose(d1, d2)
 
 
@@ -100,7 +109,7 @@ def test_build_tokens_no_nan() -> None:
     X, M = make_synthetic(n=3)
     s = minputs.fit_robust_norm(X, M)
     z = minputs.apply_norm(s, X, M)
-    doy = minputs.doy_channels(np.full(3, 150, dtype=np.int64))
+    doy = minputs.doy_channels(np.full(3, 150, dtype=np.int64), epoch="2013-03-30")
     tok = mmodels.build_tokens(z[0], M[0], doy[0])
     assert tok.shape == (36, 18)
     assert np.all(np.isfinite(tok))

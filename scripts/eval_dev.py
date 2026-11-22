@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import sys
 import time
 from pathlib import Path
@@ -279,6 +280,22 @@ def score_cycles(scorer, X_raw: np.ndarray, M: np.ndarray, doy: np.ndarray, norm
 # ---------------------------------------------------------------------------
 # Severity protocol helpers (change literature-grounded-severity-protocol)
 # ---------------------------------------------------------------------------
+def _jsonable(obj):
+    """NaN/±inf → None (explicit null = not-measured).
+
+    Audit 2026-11-21 item 14: one JSON policy for both paths — the patch path
+    already dumped with ``allow_nan=False``; the field-level path now
+    sanitizes non-finite floats to null and dumps under the same policy.
+    """
+    if isinstance(obj, dict):
+        return {k: _jsonable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_jsonable(v) for v in obj]
+    if isinstance(obj, float) and not math.isfinite(obj):
+        return None
+    return obj
+
+
 def partition_calib_eval(
     cycle_keys: list[str],
     *,
@@ -299,11 +316,28 @@ def partition_calib_eval(
         raise ValueError(
             f"partition_calib_eval needs ≥8 dev cycles for a disjoint split, got {len(cycle_keys)}"
         )
-    order = sorted(range(len(cycle_keys)),
-                   key=lambda i: hashlib.sha256((salt + cycle_keys[i]).encode("utf-8")).hexdigest())
-    n_eval = max(4, int(round(frac_eval * len(cycle_keys))))
-    eval_idx = sorted(order[-n_eval:])
-    calib_idx = sorted(order[:-n_eval])
+    # Audit 2026-11-21 item 13: partition by FIELD, not by cycle — the per-cycle
+    # hash let one field's cycles straddle the calib/eval boundary (within-dev
+    # spatial bleed at threshold-calibration stakes). Whole fields go to one
+    # side. NOTE: the evaluation-subset hash CHANGES versus the per-cycle
+    # protocol (field-level arms pinned 852e1ba3d2a2a9d0; legacy v1 6186edf8) —
+    # re-run the eval before quoting new numbers.
+    fields = sorted({k.split(":", 1)[0] for k in cycle_keys})
+    if len(fields) < 2:
+        raise ValueError(
+            f"partition_calib_eval needs ≥2 distinct fields for a field-level "
+            f"disjoint split, got {len(fields)} across {len(cycle_keys)} cycles"
+        )
+    field_order = sorted(
+        fields,
+        key=lambda f: hashlib.sha256((salt + f).encode("utf-8")).hexdigest(),
+    )
+    n_eval_fields = max(1, int(round(frac_eval * len(field_order))))
+    eval_fields = set(field_order[-n_eval_fields:])
+    eval_idx = sorted(i for i, k in enumerate(cycle_keys)
+                      if k.split(":", 1)[0] in eval_fields)
+    calib_idx = sorted(i for i, k in enumerate(cycle_keys)
+                       if k.split(":", 1)[0] not in eval_fields)
     eval_keys = sorted(cycle_keys[i] for i in eval_idx)
     eval_hash = hashlib.sha256(json.dumps(eval_keys).encode("utf-8")).hexdigest()[:16]
     return calib_idx, eval_idx, eval_hash
@@ -345,7 +379,7 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
     if args.scorer in PATCH_SCORERS:
         return run_patch_severity_protocol(args, manifest, sel, seeds, device, data=data)
     X, M = sel["X"], sel["M"]
-    doy = minputs.doy_channels(sel["harvest_days"])
+    doy = minputs.doy_channels(sel["harvest_days"], epoch=sel["epoch"])
     N, T, C = X.shape
     cycle_keys = list(sel["cycle_keys"])
 
@@ -435,7 +469,7 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
             Xtr, Mtr = sel_train["X"], sel_train["M"]
             if Mtr.shape[2] != M.shape[2]:
                 Xtr, Mtr = Xtr[:, :, :M.shape[2]], Mtr[:, :, :M.shape[2]]
-            doytr = minputs.doy_channels(sel_train["harvest_days"])
+            doytr = minputs.doy_channels(sel_train["harvest_days"], epoch=sel_train["epoch"])
             emb_fn = nbank.gru_embedding_fn(scorer)
             ztr = minputs.apply_norm(norm, Xtr, Mtr)
             emb_tr = emb_fn(ztr, Mtr, doytr)
@@ -579,7 +613,11 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
         # ---- Secondary metrics ----------------------------------------------
         # Partial-cycle AUC-PR: the acute/ndvi cells (all levels pooled) vs
         # the evaluation subset's clean cycles — the primary index/family.
-        auc_inj_idx = [f"{lv.level_id}/{sev.ACUTE_FAMILY}/ndvi" for lv in levels]
+        # audit 2026-11-21 item 7: --shapes without "acute" left the AUC-PR
+        # block KeyErroring on missing path_pool keys; filter to what the
+        # sweep actually produced (a filtered-empty case yields NaN — honest).
+        auc_inj_idx = [k for k in (f"{lv.level_id}/{sev.ACUTE_FAMILY}/ndvi" for lv in levels)
+                       if k in path_pool]
         auc_clean = np.array([
             np.nanmax(np.where(np.isfinite(clean_eval_paths[i]), clean_eval_paths[i], -np.inf))
             for i in range(n_eval)
@@ -591,7 +629,7 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
                 np.array([np.nanmax(np.where(np.isfinite(p[:cut]), p[:cut], -np.inf))
                           for p in path_pool[key]])
                 for key in auc_inj_idx
-            ]) if n_eval else np.array([np.nan])
+            ]) if (n_eval and auc_inj_idx) else np.array([np.nan])
             aucpr[str(frac)] = mscoring.partial_auc_pr(auc_clean, inj_max)
         aucpr_per_level = {
             lv.level_id: mscoring.partial_auc_pr(
@@ -599,6 +637,7 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
                 np.array([np.nanmax(np.where(np.isfinite(p), p, -np.inf))
                           for p in path_pool[f"{lv.level_id}/{sev.ACUTE_FAMILY}/ndvi"]]),
             ) for lv in levels
+            if f"{lv.level_id}/{sev.ACUTE_FAMILY}/ndvi" in path_pool  # audit item 7
         }
 
         # Clean event-level FAR (every event false — no injection windows).
@@ -1084,7 +1123,7 @@ def main(argv: list[str] | None = None) -> int:
             with out_path.open("x", encoding="utf-8") as output:
                 json.dump(metrics, output, indent=2, allow_nan=False)
         else:
-            out_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+            out_path.write_text(json.dumps(_jsonable(metrics), indent=2), encoding="utf-8")
 
         if patch and not args.smoke:
             # The patch score has a different calibration/report contract. Do not
@@ -1156,7 +1195,7 @@ def main(argv: list[str] | None = None) -> int:
     # LEGACY protocol (finding-16 continuity; flagged "legacy")
     # ------------------------------------------------------------------
     X, M = sel["X"], sel["M"]
-    doy = minputs.doy_channels(sel["harvest_days"])
+    doy = minputs.doy_channels(sel["harvest_days"], epoch=sel["epoch"])
     N, T, C = X.shape
 
     norm = None

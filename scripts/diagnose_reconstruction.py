@@ -142,7 +142,7 @@ def diagnose_arm(args, model: str, run_id: str, seed: int, manifest: dict, data:
 
     sel = mproto.select_splits(data, manifest, splits=("dev",))
     X, M = sel["X"][:, :, :n_ch], sel["M"][:, :, :n_ch]
-    doy = minputs.doy_channels(sel["harvest_days"])
+    doy = minputs.doy_channels(sel["harvest_days"], epoch=sel["epoch"])
     cycle_keys = list(sel["cycle_keys"])
 
     # Same deterministic partition as the sweep (independent evaluation subset).

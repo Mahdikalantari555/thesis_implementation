@@ -349,7 +349,7 @@ def final_test(args) -> int:
     data = minputs.load_masked_cycles()
     sel = mproto.select_splits(data, manifest, splits=("test",), allow_test=True)
     X, M = sel["X"], sel["M"]
-    doy = minputs.doy_channels(sel["harvest_days"])
+    doy = minputs.doy_channels(sel["harvest_days"], epoch=sel["epoch"])
     field_ids = sel["field_ids"]
 
     scorer, norm, params, cfg = load_scorer_and_norm(args.model, seed, args.run_id, device)
@@ -683,7 +683,7 @@ def final_test_severity(args) -> int:
     data = minputs.load_masked_cycles()
     sel = mproto.select_splits(data, manifest, splits=("test",), allow_test=True)
     X, M = sel["X"], sel["M"]
-    doy = minputs.doy_channels(sel["harvest_days"])
+    doy = minputs.doy_channels(sel["harvest_days"], epoch=sel["epoch"])
     field_ids = sel["field_ids"]
 
     scorer, norm, params, _cfg = load_scorer_and_norm(args.model, seed, args.run_id, "cpu")

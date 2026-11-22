@@ -196,7 +196,7 @@ def test_covariate_bin_grid_matches_the_monitor_epoch():
     """doy_sin must agree with monitor.inputs.doy_channels at the same day."""
     from ssl_anomaly.monitor import inputs as minputs
 
-    ref = minputs.doy_channels(np.array([0]), n_bins=T)[0]      # (T, 2)
+    ref = minputs.doy_channels(np.array([0]), n_bins=T, epoch="2013-03-30")[0]      # (T, 2)
     cov = PD.build_covariates(np.full(T, 0), np.ones(T, int), np.ones(T, int), 1.0)
     np.testing.assert_allclose(cov[:2, :2], ref[:2, :2], atol=1e-6)
 
