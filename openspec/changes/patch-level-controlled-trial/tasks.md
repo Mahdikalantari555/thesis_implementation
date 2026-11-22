@@ -101,6 +101,15 @@ The input, training and scoring components have fixture coverage:
       ≤2× letter FAILS (~10–20×, recorded verbatim, ≤15 min/seed laptop
       budget is the operative constraint). Scale-up verdict now waits on
       the full-archive training + dev severity gate only.
+      **AMENDMENT 2026-11-22 (doc-sync to finding 25):** the G3/G4 verdicts
+      above are void as measurements — produced by the pre-2026-11-21 patch
+      protocol (onset-0 detection accounting + duplicate-round CIs, fixed
+      `ea74a0c`, on top of the `bd65829` τ/NaN artifacts; see finding 24's
+      banner). Corrected verdict = finding 25 (v2 chain, eval hash
+      852e1ba3…): MDM80 censored beyond S6 for both arms × 4 families ×
+      3 seeds → **G3 FAILS on the corrected numbers**; no winner declared;
+      the finding-24 "frozen winner = patch_pixelwise" call is void. Tasks
+      4.1/4.2 stand as executed (record); do not cite the superseded numbers.
 - [x] 4.2 Finding 23 (Persian, persian-writing skill): patch-level PoC
       verdict with all gate numbers, n, date ranges, seeds, device, hashes
       and explicit L1–L2 rung labelling; scale-up decision (full train run)

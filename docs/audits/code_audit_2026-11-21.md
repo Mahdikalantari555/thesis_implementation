@@ -150,3 +150,25 @@ checks when the caller omits dates — enforcement sits with callers), `monitor/
 `monitor/splits.py`, `scripts/build_locked_splits.py`, `scripts/build_holdout_manifest.py`,
 `train/run_plan.py`, `models/tcn_challenger.py` (causality genuinely tested),
 `io/patches.py` geometry/norm-freeze chain.
+
+## Addendum — owner disposition, 2026-11-22 (doc-sync only, no code changes)
+
+Per the owner's decisions of 2026-11-22, the deferred items above are NOT fixed
+before the proposal defense. Dispositions:
+
+- Training-path items **3** (GRU `weight_hh` init), **16** (`hybrid_loss` ×B
+  scale) and **24** (contamination basis) land as the first act of the
+  post-defense openspec change that next trains; item **17** gets the docstring
+  fix only (the per-token objective is kept — provably equivalent on the
+  all-or-nothing v2 store per the A1 refit).
+- Item **1** (indicator `farm_own` shrinkage no-op) fixes inside the farm-local
+  change before first use; item **2** (`absorption_a` polarity) fixes as a
+  labels-only change before the E7 report (dated spec amendment: adopt LOWEST
+  `a_patch`; intent unchanged, so not goalpost-moving).
+- Item **13** (dev calib/eval per-cycle partition) lands with the next
+  eval-affecting change (cheap re-eval; eval-subset hash change → finding-25
+  amendment).
+- Until then a deferral gate in `todo.md` blocks new patch training/eval runs.
+  Deviations are recorded in finding 25 ("Known training-path deviations"); no
+  retrain was performed — the audit's own judgment stands: none corrupts a
+  current result.

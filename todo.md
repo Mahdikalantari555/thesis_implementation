@@ -84,6 +84,27 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
   - ✅ `--cpu-threads` heat throttle added to `train_patch.py` (owner request): caps torch CPU pools, rides the config hash, recorded in the manifest; smoke verified identical loss at 4 threads.
   - ✅ Full-store plumbing smoke chain: train `--smoke` → `calibrate_patch_sigma` → `eval_dev --smoke` all green (§7 seed manifest gap fixed; smoke artifacts removed so the real `--out` is free).
   - ✅ **HANDOVER EXECUTED + FULL-ARCHIVE VERDICT (2026-11-20, finding 24)**: owner trained all 6 runs on Colab T4 (cuda, ~247 s/seed, git 36b6161, results zip verified 84 files, bindings green: norm 3cb1ca60 / holdout 39284712 / splits 9aa5eb11 / 37 holdout-excluded); agent ran σ ×6 + severity eval ×6 on the same panel (eval hash 6186edf8) → **MDM80 = S1, all four families × both patch arms × 3 seeds, detection 1.000 (CI [0.947,1.0], n=68), delay 30 d** — field-level refs all stay >S6. Full-archive gate PASS; scale-up rule satisfied → **frozen winner = patch_pixelwise**; freeze + platform wiring stay BLOCKED on owner approval of `platform-patch-scorer-wiring`. Record: `docs/findings/24_patch_full_archive.md` (+ .fa).
+  - ⚠ **CORRECTION (2026-11-22, doc-sync to finding 25):** the verdicts in the two
+    entries above are **void as measurements** — the finding-23/24 patch numbers
+    (G4 localization AUPRC, "Full-archive gate PASS", "MDM80 = S1, detection
+    1.000, delay 30 d") were produced by the pre-2026-11-21 patch protocol
+    (onset-0 detection accounting + duplicate-round CIs, fixed `ea74a0c`; on top
+    of the `bd65829` uncalibrated-τ/NaN artifacts). Corrected verdict =
+    **finding 25** (v2 chain, 3,478 cycles/490 fields, eval hash 852e1ba3…):
+    MDM80 **censored beyond S6** for both arms × 4 families × 3 seeds;
+    full-archive gate **FAIL**; **no frozen winner exists** (the finding-24
+    "frozen winner = patch_pixelwise" call is void; `platform-patch-scorer-wiring`
+    stays dead). Supersession banners added to findings 23/24; amendment in
+    `patch-level-controlled-trial/tasks.md`.
+  - ⛔ **GATE (owner decision 2026-11-22): no new patch training/eval runs until the
+    deferred audit fixes land** — training-path items #3 (GRU `weight_hh` init),
+    #16 (`hybrid_loss` ×B scale) and #24 (contamination basis) land with the first
+    post-defense openspec change that trains; #13 (dev calib/eval per-field
+    partition) lands with the first change that re-evaluates (cheap re-eval,
+    eval-subset hash change → finding-25 amendment). Deviations recorded in
+    finding 25 ("Known training-path deviations"). Doc-only sync now; code fixes
+    deferred to first use, no retrain (audit verdict stands: none corrupts a
+    current result).
 - ▶ **`cycle-recovery-diagnosis` (user-requested phase 0, 2026-11-19)** — quantify how many of the
   ~5,600 lost field-years (missed winter harvests → censored/skipped spans in `cycles_490.parquet`)
   a multi-index detector could recover, vs the frozen NDVI-only v1 (`segment_cycles`, prom 0.15 /

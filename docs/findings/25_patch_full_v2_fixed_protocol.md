@@ -136,6 +136,37 @@ out — v1 was dropped because it discovered far fewer cycles than v2, not
 because of a measured accuracy difference. Finding 24's supersession banner
 records this; v1 artifacts remain archived for provenance only.
 
+## Known training-path deviations (recorded 2026-11-22, owner decision — no retrain)
+
+The checkpoints behind these numbers were trained under four code defects and one
+eval-side limitation documented in `docs/audits/code_audit_2026-11-21.md` (deferred
+items 3, 16, 17, 24, 13). All five apply **uniformly to every arm, family and seed**
+of this finding, so the cross-arm comparisons remain internally fair; their effect
+on the absolute capability ceiling is unknown (the defects handicap the models, so
+the censored-MDM80 verdict is conservative, not optimistic). Per owner decision the
+code fixes are deferred to the first post-defense use of each path (gated in
+`todo.md`); no retrain was performed:
+
+1. **GRU `weight_hh` orthogonal init covers rows 0:63 of 192** (item 3,
+   `patch_cnn_gru.py:217-219`): 67 % of the recurrent kernel at PyTorch default;
+   shared by both patch arms, seed-deterministic.
+2. **`hybrid_loss` denominators scale with batch size** (item 16,
+   `patch_cnn_gru.py:352-364`): loss/grads ∝ 1/B; batch size identical across all
+   compared runs.
+3. **Contamination injected with `injection_basis=index_only`** (item 24,
+   `train_patch.py:196-200`) while evaluation uses `bands_consistent`; training-time
+   augmentation only, evaluation injections unaffected.
+4. **Masked-TF objective is per-token (`any` channel), not the per-channel its
+   docstring promised** (item 17, `masked_tf.py:196-218`); provably equivalent on
+   the v2 store (all-or-nothing per-scene observation, A1 refit), so inert here.
+5. **Dev calib/eval partition is per-cycle, not per-field** (item 13,
+   `eval_dev.py:282-306`): within-dev spatial bleed possible at threshold-calibration
+   stakes; fixing it changes the eval-subset hash and requires a cheap re-eval (not
+   retraining), scheduled with the post-defense changes.
+
+No recorded deviation invalidates the censored-MDM80 verdict; the fix-vs-record
+disposition of each item is owner-decided (2026-11-22) and gated in `todo.md`.
+
 ## Provenance
 
 - Evaluation: owner-run on Colab T4 (device `cuda`), git **e46e9a5a** (the

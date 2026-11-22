@@ -1,5 +1,20 @@
 # Finding 23 — Patch-level PoC (controlled trial, first real runs)
 
+> **⚠ SUPERSEDED — read before quoting any number below (2026-11-22).**
+> The severity results and the G4 localization verdict in this finding were
+> produced by the pre-2026-11-21 patch protocol and are **not valid as
+> measurements**: detection was measured from bin 0 instead of the injection
+> onset and every round of a cell was a byte-identical injection (fixed in
+> `ea74a0c`), on top of the uncalibrated-τ/NaN artifacts already fixed in
+> `bd65829` (full list in finding 24's banner). The corrected-protocol verdict
+> is **finding 25** (v2 chain, 3,478 valid cycles over 490 fields, eval hash
+> 852e1ba3…): MDM80 is censored beyond S6 for both arms × 4 families × 3
+> seeds, no winner is declared, and the finding-24 "frozen winner =
+> patch_pixelwise" call is void. The environment fixes recorded below (OpenMP
+> crash, holdout manifest v2, geometry correction, …) remain valid as
+> engineering history. Do not cite this finding's patch severity or
+> localization numbers in the thesis.
+
 **2026-11-18 · agent-executed under the owner's run mandate ("run all scripts that need data and submit results") · rung L2 · claim noun: synthetic anomaly**
 
 ## Environment defects found and fixed first (all committed)
