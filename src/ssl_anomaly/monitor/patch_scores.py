@@ -635,7 +635,7 @@ class PatchDeepScorer:
         return torch.from_numpy(a.astype(np.float32))
 
     # -- scoring --------------------------------------------------------
-    def _forward(self, X: np.ndarray, M: np.ndarray, covariates=None):
+    def _forward(self, X: np.ndarray, M: np.ndarray, covariates=None, gap: int = 1):
         """Run the patch model; returns (resid (N,T,C,S,S) signed, pred).
 
         The readout follows the checkpoint's training alignment:
@@ -649,6 +649,13 @@ class PatchDeepScorer:
           input-inclusive filtered residual — kept verbatim so v2-era
           checkpoints stay scoreable under their own semantics (findings
           23/24), never presented as a forecast.
+
+        ``gap`` (one-step alignments only): forecast bin ``t`` from
+        ``anchor[:, t-gap]``, i.e. from bins ≤ ``t-gap`` — the causal context
+        ends ``gap-1`` bins earlier, so a sustained shift cannot be absorbed
+        through the shifted neighbours (oracle-floor audit; ``gap=1`` is the
+        production semantics and reproduces it exactly). Bins ``< gap`` are
+        unscored (NaN).
         """
         import torch
         self.model.eval()
@@ -660,13 +667,39 @@ class PatchDeepScorer:
         pred_anchor = out["pred"][:, :, 0] if out["pred"].ndim == 6 else out["pred"]
         pred_anchor_np = pred_anchor.detach().cpu().numpy()
         if self.alignment == ALIGNMENT_ONE_STEP_AHEAD:
+            if not 1 <= gap <= pred_anchor_np.shape[1]:
+                raise ValueError(
+                    f"gap must be in [1, {pred_anchor_np.shape[1]}], got {gap}")
             # pred_anchor[:, b] forecasts bin b+1 from bins ≤ b: realign to
-            # "prediction OF bin t" and leave bin 0 unscored.
+            # "prediction OF bin t" and leave the head bins unscored. For
+            # gap=g the causal context ends at t-g, so pred[:, t] reads
+            # anchor[:, t-g]; gap=1 is the production slice exactly.
             pred = np.full_like(pred_anchor_np, np.nan)
-            pred[:, 1:] = pred_anchor_np[:, :-1]
+            pred[:, gap:] = pred_anchor_np[:, :pred_anchor_np.shape[1] - gap]
             return pred - x.detach().cpu().numpy(), pred
+        if gap != 1:
+            raise ValueError("gap realignment applies to one-step alignments only")
         # input_inclusive_v2: horizon 1 at bin t consumed bins ≤ t (historical).
         return pred_anchor_np - x.detach().cpu().numpy(), pred_anchor_np
+
+    def forward_anchor(self, X: np.ndarray, M: np.ndarray, covariates=None):
+        """Raw alignment output for multi-gap audits (oracle-floor-audit).
+
+        Returns ``(pred_anchor, x)`` where ``pred_anchor[:, b]`` forecasts bin
+        ``b+1`` from bins ≤ ``b`` — the alignment-agnostic form every ``gap``
+        realignment reads from. Production scoring stays in ``predict_pixels``;
+        this exists so the σ/α audit can serve all gap values from ONE forward
+        pass instead of one per gap.
+        """
+        import torch
+        self.model.eval()
+        x = self._to_tensor(X).to(self.device)
+        m = self._to_tensor(M).to(self.device)
+        cov = None if covariates is None else self._to_tensor(covariates).to(self.device)
+        with torch.no_grad():
+            out = self.model(x, m, cov)
+        pred_anchor = out["pred"][:, :, 0] if out["pred"].ndim == 6 else out["pred"]
+        return pred_anchor.detach().cpu().numpy(), x.detach().cpu().numpy()
 
     def predict_pixels(
         self,
@@ -677,6 +710,7 @@ class PatchDeepScorer:
         sensor_ids: np.ndarray | None = None,
         covariates=None,
         obs: np.ndarray | None = None,
+        gap: int = 1,
     ) -> dict:
         """Full-fidelity pass: per-pixel residuals, z² maps and field paths.
 
@@ -700,7 +734,7 @@ class PatchDeepScorer:
         # Zero-filled channels are not observed values. Keep both the target
         # mask and the set of input pixels aligned with the training loader.
         mask = observed.any(axis=2)
-        resid, pred = self._forward(np.where(observed, x, 0.0), mask, covariates)
+        resid, pred = self._forward(np.where(observed, x, 0.0), mask, covariates, gap=gap)
         bins = self.bins[:T]
         sid = (np.zeros((N, T), dtype=np.int64) if sensor_ids is None
                else np.asarray(sensor_ids, dtype=np.int64))

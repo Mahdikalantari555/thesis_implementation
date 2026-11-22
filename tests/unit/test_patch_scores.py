@@ -606,3 +606,43 @@ def test_unknown_alignment_is_loud():
         PS.PatchDeepScorer(
             "tiny", scorer.model, scorer.sigma, in_field=scorer.in_field,
             n_channels=8, bins=np.arange(8), device="cpu", alignment="magic")
+
+
+# --- gap realignment (oracle-floor-audit 1.1/1.2) -----------------------------
+def test_gap_one_is_the_production_realignment():
+    scorer, x, pv, sids = _tiny_scorer()
+    out1 = scorer.predict_pixels(x, pv, sensor_ids=sids, gap=1)
+    out_default = scorer.predict_pixels(x, pv, sensor_ids=sids)
+    # gap=1 must be byte-identical to the pre-change one_step_ahead_v3 readout
+    assert np.array_equal(out1["resid"], out_default["resid"], equal_nan=True)
+    assert np.array_equal(out1["pred"], out_default["pred"], equal_nan=True)
+    # bin 0 unscored, everything else finite
+    assert np.isnan(out1["pred"][:, 0]).all()
+    assert np.isfinite(out1["pred"][:, 1:]).all()
+
+
+def test_gap_h_reads_anchor_t_minus_h():
+    scorer, x, pv, sids = _tiny_scorer()
+    out1 = scorer.predict_pixels(x, pv, sensor_ids=sids, gap=1)
+    for h in (2, 3, 4):
+        outh = scorer.predict_pixels(x, pv, sensor_ids=sids, gap=h)
+        # pred_h[:, t] == pred_1[:, t - h + 1] for t >= h (same anchor, shifted)
+        assert np.array_equal(
+            outh["pred"][:, h:], out1["pred"][:, 1:1 + outh["pred"].shape[1] - h])
+        # head bins < h are unscored
+        assert np.isnan(outh["pred"][:, :h]).all()
+        assert np.isfinite(outh["pred"][:, h:]).all()
+
+
+def test_gap_out_of_range_is_loud():
+    scorer, x, pv, sids = _tiny_scorer(T=8)
+    with pytest.raises(ValueError, match="gap must be in"):
+        scorer.predict_pixels(x, pv, sensor_ids=sids, gap=0)
+    with pytest.raises(ValueError, match="gap must be in"):
+        scorer.predict_pixels(x, pv, sensor_ids=sids, gap=9)
+
+
+def test_gap_rejects_input_inclusive_alignment():
+    scorer, x, pv, sids = _tiny_scorer(alignment=PS.ALIGNMENT_INPUT_INCLUSIVE)
+    with pytest.raises(ValueError, match="one-step alignments only"):
+        scorer.predict_pixels(x, pv, sensor_ids=sids, gap=3)
