@@ -49,7 +49,7 @@ def test_deep_scores_causal_to_appended_bins(model_id: str, norm) -> None:
     scorer = make_scorer(model_id)
     x, m = make_cycle(seed=5)
     z = minputs.apply_norm(norm, x[None], m[None])[0]
-    doy = minputs.doy_channels(np.array([100]))[0]
+    doy = minputs.doy_channels(np.array([100]), epoch="2013-03-30")[0]
 
     full_scores = scorer.score_cycle(z, m, doy)
     for cut in (10, 18, 27):
@@ -69,7 +69,7 @@ def test_deep_scores_causal_to_future_perturbation(model_id: str, norm) -> None:
     scorer = make_scorer(model_id)
     x, m = make_cycle(seed=9)
     z = minputs.apply_norm(norm, x[None], m[None])[0]
-    doy = minputs.doy_channels(np.array([200]))[0]
+    doy = minputs.doy_channels(np.array([200]), epoch="2013-03-30")[0]
 
     scores_a = scorer.score_cycle(z, m, doy)
     z_future = z.copy()
@@ -87,7 +87,7 @@ def test_b1_scores_causal(norm) -> None:
     """B1 uses frozen train stats + bin b's own values only."""
     X = np.stack([make_cycle(seed=s)[0] for s in range(12)])
     M = np.stack([make_cycle(seed=s)[1] for s in range(12)])
-    doy = minputs.doy_channels(np.full(12, 100, dtype=np.int64))
+    doy = minputs.doy_channels(np.full(12, 100, dtype=np.int64), epoch="2013-03-30")
     b1 = mmodels.B1PhaseZCausal(use_doy=True, min_n=8)
     b1.fit(X, M, doy[:, :, 0])
 
@@ -102,7 +102,7 @@ def test_b1_scores_causal(norm) -> None:
 def test_b1_frozen_stats_not_refit_by_scoring(norm) -> None:
     X = np.stack([make_cycle(seed=s)[0] for s in range(12)])
     M = np.stack([make_cycle(seed=s)[1] for s in range(12)])
-    doy = minputs.doy_channels(np.full(12, 100, dtype=np.int64))
+    doy = minputs.doy_channels(np.full(12, 100, dtype=np.int64), epoch="2013-03-30")
     b1 = mmodels.B1PhaseZCausal(use_doy=True, min_n=8)
     b1.fit(X, M, doy[:, :, 0])
     med_before = b1.median.copy()
@@ -118,7 +118,7 @@ def test_scores_deterministic_across_calls(model_id: str, norm) -> None:
     scorer = make_scorer(model_id, seed=1)
     x, m = make_cycle(seed=11)
     z = minputs.apply_norm(norm, x[None], m[None])[0]
-    doy = minputs.doy_channels(np.array([150]))[0]
+    doy = minputs.doy_channels(np.array([150]), epoch="2013-03-30")[0]
     a = scorer.score_cycle(z, m, doy)
     b = scorer.score_cycle(z, m, doy)
     obs = np.isfinite(a)
@@ -183,7 +183,7 @@ def test_param_counts_within_cap_and_matching() -> None:
 def test_b1_fit_shapes_and_score_range(norm) -> None:
     X = np.stack([make_cycle(seed=s)[0] for s in range(12)])
     M = np.stack([make_cycle(seed=s)[1] for s in range(12)])
-    doy = minputs.doy_channels(np.full(12, 100, dtype=np.int64))
+    doy = minputs.doy_channels(np.full(12, 100, dtype=np.int64), epoch="2013-03-30")
     b1 = mmodels.B1PhaseZCausal(use_doy=True, min_n=8)
     b1.fit(X, M, doy[:, :, 0])
     assert b1.median.shape == (2, 36, 8)
