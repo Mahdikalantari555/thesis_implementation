@@ -193,11 +193,19 @@ class CausalMaskedTransformer(nn.Module):
         channel_mask: torch.Tensor | None = None,
         delta: float = 1.0,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Smooth-L1 loss on masked, observed channels only.
+        """Smooth-L1 loss on masked tokens.
 
         x: (B, T, d_in); pretext_mask: (B, T); target: (B, T, n_out) the value
-        channels; channel_mask: (B, T, n_out) bool observation mask (loss is
-        computed only on observed entries — masked entries give zero loss).
+        channels; channel_mask: (B, T, n_out) bool observation mask. The loss
+        is per-TOKEN (``channel_mask.any(dim=-1)``): one observed channel pulls
+        the whole token into the loss, and unobserved channels inside that
+        token are trained toward their targets as usual. This IS the trained
+        objective of every checkpoint to date — the docstring previously
+        promised per-channel masking (audit 2026-11-21 item 17). Provably
+        equivalent to per-channel masking on the v2 store, whose observation is
+        all-or-nothing per scene (A1 refit: zero pixel-bins with
+        0 < channels < 8), so the distinction is inert on current data; do NOT
+        change the objective without an explicit retrain decision.
         Returns (loss_scalar, per_token_loss (B, T)).
         """
         recon = self.forward(x, pretext_mask=pretext_mask, key_padding_mask=key_padding_mask)
