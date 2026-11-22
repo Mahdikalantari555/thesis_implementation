@@ -850,6 +850,7 @@ def run_patch_severity_protocol(args: argparse.Namespace, manifest: dict, sel: d
                 key = f"{lv.level_id}/{fam}/{index}"
                 det_flags: list[int] = []
                 delays: list[float] = []
+                det_by_onset: dict[int, dict] = {}
                 for rnd in range(max(1, args.rounds)):
                     cell = pE.patch_arm_scores(
                         arm, eval_batch,
@@ -879,7 +880,12 @@ def run_patch_severity_protocol(args: argparse.Namespace, manifest: dict, sel: d
                         # every other call site already used this convention).
                         onset = int(cell["injections"][j]["onset_bin"])
                         fb = mscoring.first_alarm_bin(inj_paths[j], tau, k, onset)
-                        det_flags.append(1 if fb >= 0 else 0)
+                        det = 1 if fb >= 0 else 0
+                        det_flags.append(det)
+                        bucket = det_by_onset.setdefault(
+                            onset, {"n": 0, "n_detected": 0})
+                        bucket["n"] += 1
+                        bucket["n_detected"] += det
                         if fb >= 0:
                             delays.append(float((fb - onset) * 15))
                 n = len(det_flags)
@@ -890,6 +896,15 @@ def run_patch_severity_protocol(args: argparse.Namespace, manifest: dict, sel: d
                     "wilson_ci95": [round(lo, 4), round(hi, 4)],
                     "median_delay_days": float(np.median(delays)) if delays else None,
                     "onset_bins": sorted({int(rec["onset_bin"]) for rec in cell["injections"]}),
+                    # per-injection outcomes (oracle-floor-audit 4.1): aligned
+                    # with the per-round injections order, enables field-blocked
+                    # bootstrap and per-onset MDE on future runs
+                    "det_flags": list(det_flags),
+                    "detection_by_onset": [
+                        {"onset_bin": ob, "n": b["n"],
+                         "n_detected": b["n_detected"],
+                         "detection_rate": b["n_detected"] / max(1, b["n"])}
+                        for ob, b in sorted(det_by_onset.items())],
                     "level_id": lv.level_id, "family": fam, "index": index,
                     "delta_ndvi": lv.delta_ndvi,
                 }

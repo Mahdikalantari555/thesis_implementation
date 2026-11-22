@@ -113,8 +113,17 @@ class PatchSigmaTable:
         sids = np.asarray(sids, dtype=np.int64)
         out = np.full((len(bins), C), np.nan)
         for t, (g, s) in enumerate(zip(groups, sids)):
-            s_idx = int(s) if 0 <= int(s) < self.sigma.shape[2] else 0
-            out[t] = self.sigma[g, :, s_idx]
+            s = int(s)
+            if not (0 <= s < self.sigma.shape[2]):
+                # audit 2026-11-21 item 8: silently substituting sensor 0's σ
+                # for an out-of-range sensor id hid store/scorer mismatches;
+                # fail loudly instead (the v2 store is all-sensor-0 by
+                # construction, so its coverage is unaffected).
+                raise ValueError(
+                    f"sensor id {s} outside the σ table's {self.sigma.shape[2]} "
+                    f"sensor slots — check the store's sensor-id coverage"
+                )
+            out[t] = self.sigma[g, :, s]
         bad = ~np.isfinite(out) | (out <= 0)
         if bad.any():
             out = np.where(bad, np.broadcast_to(self.fallback, out.shape), out)

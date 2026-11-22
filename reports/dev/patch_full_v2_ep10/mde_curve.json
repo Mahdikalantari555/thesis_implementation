@@ -1,0 +1,267 @@
+{
+  "delta_req": 0.165,
+  "max_measured": 0.4,
+  "bootstrap": "parametric (cycle-level); field-blocked needs the per-injection logging that lands in this change",
+  "arms": {
+    "patch_pixelwise": {
+      "acute/ndvi": {
+        "family": "acute/ndvi",
+        "n_per_cell": 340,
+        "deltas": [
+          0.02,
+          0.05,
+          0.08,
+          0.16,
+          0.28,
+          0.4
+        ],
+        "rates_pooled": [
+          0.011764705882352941,
+          0.011764705882352941,
+          0.011764705882352941,
+          0.011764705882352941,
+          0.0196078431372549,
+          0.0588235294117647
+        ],
+        "floor": 0.011764705882352941,
+        "probit_a": -4.192441370174482,
+        "probit_b": 6.312357441339054,
+        "delta_star_080": null,
+        "delta_star_080_extrapolated": 0.7961507698125541,
+        "bootstrap_ci95": [
+          0.44471908573357016,
+          1.461153640424804
+        ],
+        "censored_gt_s6": true,
+        "delta_req": 0.165,
+        "gate": "FAIL (\u0394*(0.8) above the decision-relevant drop)"
+      },
+      "acute/savi": {
+        "family": "acute/savi",
+        "n_per_cell": 340,
+        "deltas": [
+          0.02,
+          0.05,
+          0.08,
+          0.16,
+          0.28,
+          0.4
+        ],
+        "rates_pooled": [
+          0.011764705882352941,
+          0.011764705882352941,
+          0.011764705882352941,
+          0.011764705882352941,
+          0.0303921568627451,
+          0.18823529411764706
+        ],
+        "floor": 0.011764705882352941,
+        "probit_a": -4.788529324427252,
+        "probit_b": 9.669839308091014,
+        "delta_star_080": null,
+        "delta_star_080_extrapolated": 0.5813619038946236,
+        "bootstrap_ci95": [
+          0.5067998248035994,
+          0.6789823176793446
+        ],
+        "censored_gt_s6": true,
+        "delta_req": 0.165,
+        "gate": "FAIL (\u0394*(0.8) above the decision-relevant drop)"
+      },
+      "persistent/ndvi": {
+        "family": "persistent/ndvi",
+        "n_per_cell": 340,
+        "deltas": [
+          0.02,
+          0.05,
+          0.08,
+          0.16,
+          0.28,
+          0.4
+        ],
+        "rates_pooled": [
+          0.011764705882352941,
+          0.011764705882352941,
+          0.011764705882352941,
+          0.014705882352941175,
+          0.020588235294117647,
+          0.061764705882352944
+        ],
+        "floor": 0.011764705882352941,
+        "probit_a": -3.9532479464760946,
+        "probit_b": 5.778492793586979,
+        "delta_star_080": null,
+        "delta_star_080_extrapolated": 0.8283119809144153,
+        "bootstrap_ci95": [
+          0.4452442820909426,
+          1.4586258662910525
+        ],
+        "censored_gt_s6": true,
+        "delta_req": 0.165,
+        "gate": "FAIL (\u0394*(0.8) above the decision-relevant drop)"
+      },
+      "persistent/savi": {
+        "family": "persistent/savi",
+        "n_per_cell": 340,
+        "deltas": [
+          0.02,
+          0.05,
+          0.08,
+          0.16,
+          0.28,
+          0.4
+        ],
+        "rates_pooled": [
+          0.011764705882352941,
+          0.011764705882352941,
+          0.011764705882352941,
+          0.014705882352941175,
+          0.052941176470588235,
+          0.20784313725490197
+        ],
+        "floor": 0.011764705882352941,
+        "probit_a": -3.8446165218644293,
+        "probit_b": 7.498993052162724,
+        "delta_star_080": null,
+        "delta_star_080_extrapolated": 0.6237855343251669,
+        "bootstrap_ci95": [
+          0.5511448345823104,
+          0.7265934583768354
+        ],
+        "censored_gt_s6": true,
+        "delta_req": 0.165,
+        "gate": "FAIL (\u0394*(0.8) above the decision-relevant drop)"
+      }
+    },
+    "patch_cnn_gru": {
+      "acute/ndvi": {
+        "family": "acute/ndvi",
+        "n_per_cell": 340,
+        "deltas": [
+          0.02,
+          0.05,
+          0.08,
+          0.16,
+          0.28,
+          0.4
+        ],
+        "rates_pooled": [
+          0.01764705882352941,
+          0.0196078431372549,
+          0.022549019607843137,
+          0.026470588235294117,
+          0.07254901960784314,
+          0.1784313725490196
+        ],
+        "floor": 0.019934640522875816,
+        "probit_a": -3.2484876498744137,
+        "probit_b": 5.679971190814305,
+        "delta_star_080": null,
+        "delta_star_080_extrapolated": 0.717550450377815,
+        "bootstrap_ci95": [
+          0.5989128521035162,
+          0.8762777864373132
+        ],
+        "censored_gt_s6": true,
+        "delta_req": 0.165,
+        "gate": "FAIL (\u0394*(0.8) above the decision-relevant drop)"
+      },
+      "acute/savi": {
+        "family": "acute/savi",
+        "n_per_cell": 340,
+        "deltas": [
+          0.02,
+          0.05,
+          0.08,
+          0.16,
+          0.28,
+          0.4
+        ],
+        "rates_pooled": [
+          0.018627450980392157,
+          0.02156862745098039,
+          0.025490196078431376,
+          0.04313725490196078,
+          0.1549019607843137,
+          0.4029411764705882
+        ],
+        "floor": 0.02189542483660131,
+        "probit_a": -3.143366641499388,
+        "probit_b": 7.186403171973097,
+        "delta_star_080": null,
+        "delta_star_080_extrapolated": 0.5523071710700074,
+        "bootstrap_ci95": [
+          0.5148852714803492,
+          0.6031273016570813
+        ],
+        "censored_gt_s6": true,
+        "delta_req": 0.165,
+        "gate": "FAIL (\u0394*(0.8) above the decision-relevant drop)"
+      },
+      "persistent/ndvi": {
+        "family": "persistent/ndvi",
+        "n_per_cell": 340,
+        "deltas": [
+          0.02,
+          0.05,
+          0.08,
+          0.16,
+          0.28,
+          0.4
+        ],
+        "rates_pooled": [
+          0.01764705882352941,
+          0.020588235294117647,
+          0.024509803921568627,
+          0.03137254901960784,
+          0.07450980392156863,
+          0.17058823529411762
+        ],
+        "floor": 0.02091503267973856,
+        "probit_a": -3.107735398197505,
+        "probit_b": 5.236538603674067,
+        "delta_star_080": null,
+        "delta_star_080_extrapolated": 0.751296419961076,
+        "bootstrap_ci95": [
+          0.6250376791233385,
+          0.9251626225049653
+        ],
+        "censored_gt_s6": true,
+        "delta_req": 0.165,
+        "gate": "FAIL (\u0394*(0.8) above the decision-relevant drop)"
+      },
+      "persistent/savi": {
+        "family": "persistent/savi",
+        "n_per_cell": 340,
+        "deltas": [
+          0.02,
+          0.05,
+          0.08,
+          0.16,
+          0.28,
+          0.4
+        ],
+        "rates_pooled": [
+          0.018627450980392157,
+          0.02156862745098039,
+          0.028431372549019607,
+          0.04901960784313725,
+          0.17156862745098037,
+          0.4058823529411765
+        ],
+        "floor": 0.02287581699346405,
+        "probit_a": -3.002713426427177,
+        "probit_b": 6.871142296352561,
+        "delta_star_080": null,
+        "delta_star_080_extrapolated": 0.5570727057405835,
+        "bootstrap_ci95": [
+          0.5190251984162978,
+          0.6079602585891347
+        ],
+        "censored_gt_s6": true,
+        "delta_req": 0.165,
+        "gate": "FAIL (\u0394*(0.8) above the decision-relevant drop)"
+      }
+    }
+  }
+}

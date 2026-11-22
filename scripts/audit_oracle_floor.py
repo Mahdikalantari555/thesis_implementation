@@ -74,7 +74,11 @@ def gaussian_oracle(profile, *, far: float = 0.05, t_bins: int = 36,
     exceeding a threshold calibrated to a cycle-FAR of ``far`` over T bins.
     Reports power per onset and the phase-rotation average.
     """
-    profile = np.asarray(profile, dtype=float)
+    scalar = np.isscalar(profile) or (hasattr(profile, "ndim") and profile.ndim == 0)
+    profile = np.atleast_1d(np.asarray(profile, dtype=float))
+    if scalar:
+        # a scalar δ means a SUSTAINED shift on every post-onset bin
+        profile = np.full(t_bins, float(profile[0]))
     rng = np.random.default_rng(seed)
     z0 = rng.standard_normal((n_sims, t_bins))
     thr = float(np.quantile(trailing_window_means(z0, window).max(axis=1), 1.0 - far))
@@ -327,11 +331,12 @@ def audit_arm(arm: str, args, V: dict, is_cal: np.ndarray, out_dir: Path) -> dic
         zmax_by_gap[h] = {}
         for name, mask in (("v_cal", is_cal), ("v_test", ~is_cal)):
             sig = per_split_sigma[name]
-            # channel-max per INDEX family (not across families)
+            # channel-max per INDEX family: per touched channel take ITS OWN
+            # column (N, T), then max across the touched channels
             zmax_by_gap[h][name] = {
                 idx: np.nanmax(np.stack(
-                    [(inj_h[(idx, h)][mask] - clean_h[h][mask])
-                     / sig[c][groups][None, :]
+                    [((inj_h[(idx, h)][mask] - clean_h[h][mask])
+                      / sig[c][groups][None, :, None])[:, :, c]
                      for c in TOUCHED_CHANNELS[idx]], axis=0), axis=0)
                 for idx in args.index}
 

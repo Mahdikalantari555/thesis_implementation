@@ -464,6 +464,16 @@ def test_patch_severity_cli_consumes_the_new_trainer_checkpoint(tmp_path, monkey
     _max_det_s6 = max(c["detection_rate"] for key, c in result["cells"].items()
                       if key.startswith("S6/"))
     assert _max_det_s6 >= 0.8
+    # oracle-floor-audit 4.1: per-injection outcomes land in every cell —
+    # det_flags aligned with the injections, onset buckets partitioning the cell
+    for cell in result["cells"].values():
+        assert len(cell["det_flags"]) == cell["n"]
+        assert sum(cell["det_flags"]) == cell["n_detected"]
+        buckets = cell["detection_by_onset"]
+        assert {b["onset_bin"] for b in buckets} == set(cell["onset_bins"])
+        assert sum(b["n"] for b in buckets) == cell["n"]
+        for b in buckets:
+            assert b["detection_rate"] == b["n_detected"] / max(1, b["n"])
 
     with pytest.raises(ValueError, match="requires exactly the seed"):
         E.main([*argv, "--seeds", "13,42"])
