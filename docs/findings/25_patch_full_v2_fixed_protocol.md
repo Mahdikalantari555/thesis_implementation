@@ -164,8 +164,17 @@ code fixes are deferred to the first post-defense use of each path (gated in
    stakes; fixing it changes the eval-subset hash and requires a cheap re-eval (not
    retraining), scheduled with the post-defense changes.
 
-No recorded deviation invalidates the censored-MDM80 verdict; the fix-vs-record
-disposition of each item is owner-decided (2026-11-22) and gated in `todo.md`.
+No recorded deviation invalidates the censored-MDM80 verdict. Owner disposition
+(2026-11-22: first "defer to first use", then — the same day — "implement the
+whole backlog now"): the code fixes for items 3/15/16/24/17 and 1/2 (with the
+dated E7 spec amendment) landed the same day, plus the hygiene set
+4/5/6/8/10/11/12/19/20/21/22/23/25/26/28. Still pending: the eval-side items
+7/13/14/18/27 in `scripts/eval_dev.py` (held by a parallel writer) — item 13's
+fix changes the eval-subset hash, so these numbers stay bound to the recorded
+852e1ba3… protocol until a re-eval. The deviations above remain a TRUE record
+of how the existing v2 checkpoints were trained; any future run starts from
+the fixed code (a new generation, not comparable seed-for-seed with these
+checkpoints).
 
 ## Provenance
 

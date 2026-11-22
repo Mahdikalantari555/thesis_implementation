@@ -96,15 +96,20 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
     "frozen winner = patch_pixelwise" call is void; `platform-patch-scorer-wiring`
     stays dead). Supersession banners added to findings 23/24; amendment in
     `patch-level-controlled-trial/tasks.md`.
-  - ⛔ **GATE (owner decision 2026-11-22): no new patch training/eval runs until the
-    deferred audit fixes land** — training-path items #3 (GRU `weight_hh` init),
-    #16 (`hybrid_loss` ×B scale) and #24 (contamination basis) land with the first
-    post-defense openspec change that trains; #13 (dev calib/eval per-field
-    partition) lands with the first change that re-evaluates (cheap re-eval,
-    eval-subset hash change → finding-25 amendment). Deviations recorded in
-    finding 25 ("Known training-path deviations"). Doc-only sync now; code fixes
-    deferred to first use, no retrain (audit verdict stands: none corrupts a
-    current result).
+  - ✅ **GATE UPDATE (2026-11-22, later the same day — owner ordered immediate
+    implementation of the whole backlog): the training-path fixes are LANDED,
+    gate lifted for training.** Landed: #3/#15/#16 (`b082283`), #24 (`e9221cd`),
+    #17 (`cbeff9f`), #2 + dated E7 amendment (`d7432a9`), #1 (`adae60d`), and
+    hygiene #4/#5/#6/#8/#10/#11/#12/#19/#20/#21/#22/#23/#25/#26/#28 (this
+    commit). 103 targeted unit tests green before commit; full battery recorded
+    with the commit. Future training runs start from the FIXED code (a new
+    generation — the finding-25 checkpoints remain as recorded; the deviations
+    section stays a true record of how they were trained).
+    **Still pending:** #7/#13/#14/#18/#27 in `scripts/eval_dev.py` (file held
+    by the parallel writer) — #13's fix changes the eval-subset hash, so the
+    finding-25 numbers remain bound to the recorded 852e1ba3… protocol until a
+    re-eval; do not re-run eval before #13 lands. Plus #9 (farm_local mask
+    raise) and #29 (staged-machinery annotations).
 - ▶ **`cycle-recovery-diagnosis` (user-requested phase 0, 2026-11-19)** — quantify how many of the
   ~5,600 lost field-years (missed winter harvests → censored/skipped spans in `cycles_490.parquet`)
   a multi-index detector could recover, vs the frozen NDVI-only v1 (`segment_cycles`, prom 0.15 /
