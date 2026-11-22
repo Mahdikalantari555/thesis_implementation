@@ -1,0 +1,80 @@
+{
+  "git_sha": "4a91bcd",
+  "n_cycles": 60,
+  "shape": "persistent",
+  "levels": [
+    "S4",
+    "S5",
+    "S6"
+  ],
+  "deltas": {
+    "S4": 0.16,
+    "S5": 0.28,
+    "S6": 0.4
+  },
+  "seed": 13,
+  "per_level": {
+    "S4": {
+      "ndvi": {
+        "delta_red": 0.005369448067594703,
+        "delta_nir": -0.005369448081139191,
+        "delta_ndvi_channel": -0.026183324930382057,
+        "band_magnitude": 0.007593546289227835
+      },
+      "savi": {
+        "delta_red": 0.008240590672650906,
+        "delta_nir": -0.008240590679457357,
+        "delta_ndvi_channel": -0.039597063207219375,
+        "band_magnitude": 0.011653955096041025
+      },
+      "rho_savi_over_ndvi": 1.5347183848175476,
+      "ndvi_equivalent_delta": 0.24555494157080762
+    },
+    "S5": {
+      "ndvi": {
+        "delta_red": 0.009396534140433288,
+        "delta_nir": -0.009396534108832856,
+        "delta_ndvi_channel": -0.04586074433615718,
+        "band_magnitude": 0.01328870599835769
+      },
+      "savi": {
+        "delta_red": 0.014421033663346742,
+        "delta_nir": -0.014421033680173705,
+        "delta_ndvi_channel": -0.06924465300307905,
+        "band_magnitude": 0.02039442140204238
+      },
+      "rho_savi_over_ndvi": 1.5347183845110928,
+      "ndvi_equivalent_delta": 0.42972114766310604
+    },
+    "S6": {
+      "ndvi": {
+        "delta_red": 0.013423620166190869,
+        "delta_nir": -0.013423620154673504,
+        "delta_ndvi_channel": -0.06553816370375593,
+        "band_magnitude": 0.0189838656870281
+      },
+      "savi": {
+        "delta_red": 0.020601476696658794,
+        "delta_nir": -0.020601476687238864,
+        "delta_ndvi_channel": -0.09889224278511863,
+        "band_magnitude": 0.02913488774266724
+      },
+      "rho_savi_over_ndvi": 1.5347183878663582,
+      "ndvi_equivalent_delta": 0.6138873551465434
+    }
+  },
+  "measured_detection_reference": {
+    "S4": {
+      "ndvi": 0.014705882352941176,
+      "savi": 0.014705882352941176
+    },
+    "S5": {
+      "ndvi": 0.01764705882352941,
+      "savi": 0.052941176470588235
+    },
+    "S6": {
+      "ndvi": 0.061764705882352944,
+      "savi": 0.20588235294117646
+    }
+  }
+}

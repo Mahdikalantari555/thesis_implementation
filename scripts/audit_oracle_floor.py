@@ -201,10 +201,16 @@ def build_v_pool(manifest: dict, root):
 
 # ---------------------------------------------------------------- scoring core
 def _field_mean(resid: np.ndarray, observed: np.ndarray) -> np.ndarray:
-    """(N, T, C) in-field observed-pixel mean of signed residuals."""
+    """(N, T, C) in-field observed-pixel mean of signed residuals.
+
+    A (cycle, bin, channel) with NO observed pixel is NaN — production marks
+    such bins NaN in the path (``np.where(mask, z2, nan)``); a zero-filled
+    mean here would fabricate a constant column whose σ is 0 and whose
+    z-scores explode to inf.
+    """
     num = (resid * observed).sum(axis=(3, 4))
-    den = np.maximum(observed.sum(axis=(3, 4)), 1)
-    return num / den
+    den = observed.sum(axis=(3, 4))
+    return np.where(den > 0, num / np.maximum(den, 1), np.nan)
 
 
 def audit_arm(arm: str, args, V: dict, is_cal: np.ndarray, out_dir: Path) -> dict:
@@ -319,50 +325,74 @@ def audit_arm(arm: str, args, V: dict, is_cal: np.ndarray, out_dir: Path) -> dic
     inj_h = {k: np.concatenate(a, axis=0) for k, a in acc_inj.items()}
     n_all = onsets.shape[0]
 
-    # z-shift relative to per-(gap, group, channel) clean sigma, then channel-max
+    # z-shift relative to per-(gap, group, channel) clean sigma, then channel-max.
+    # The EMPIRICAL leg freezes sigma from V_cal only (production-style: the
+    # calibration population owns every scale), so V_test power is honest.
     zmax_by_gap = {}
+    zclean_by_gap = {}
+    cal_sigma_by_gap = {}
     for h in h_list:
-        per_split_sigma = {}
-        for name, mask in (("v_cal", is_cal), ("v_test", ~is_cal)):
-            sig = {c: np.array([robust_sigma(clean_h[h][mask][:, groups == g, c])
-                                for g in range(n_groups)])
-                   for c in touched}
-            per_split_sigma[name] = sig
-        zmax_by_gap[h] = {}
-        for name, mask in (("v_cal", is_cal), ("v_test", ~is_cal)):
-            sig = per_split_sigma[name]
-            # channel-max per INDEX family: per touched channel take ITS OWN
-            # column (N, T), then max across the touched channels
-            zmax_by_gap[h][name] = {
-                idx: np.nanmax(np.stack(
-                    [((inj_h[(idx, h)][mask] - clean_h[h][mask])
-                      / sig[c][groups][None, :, None])[:, :, c]
-                     for c in TOUCHED_CHANNELS[idx]], axis=0), axis=0)
-                for idx in args.index}
+        cal_sigma = {c: np.array([robust_sigma(clean_h[h][is_cal][:, groups == g, c])
+                                  for g in range(n_groups)])
+                     for c in touched}
+        cal_sigma_by_gap[h] = cal_sigma
+        zclean_by_gap[h] = np.nanmax(np.stack(
+            [(clean_h[h][is_cal] / cal_sigma[c][groups][None, :, None])[:, :, c]
+             for c in touched], axis=0), axis=0)               # (n_cal, T)
+        zmax_by_gap[h] = {
+            idx: {nm: np.nanmax(np.stack(
+                [((inj_h[(idx, h)][msk] - clean_h[h][msk])
+                  / cal_sigma[c][groups][None, :, None])[:, :, c]
+                 for c in TOUCHED_CHANNELS[idx]], axis=0), axis=0)
+                for nm, msk in (("v_cal", is_cal), ("v_test", ~is_cal))}
+            for idx in args.index}
 
     splits = {}
-    for name, mask in (("v_cal", is_cal), ("v_test", ~is_cal)):
+    onsets_cal, onsets_test = onsets[is_cal], onsets[~is_cal]
+    # EMPIRICAL leg (admissible): sigma + tau frozen from the V_cal clean null
+    # (production discipline); injected power measured per split from the onset
+    emp = {}
+    w = args.window
+    # per-gap tau: the null paths must be scored under the SAME alignment as
+    # the injected evidence (gap-h clean forecasts are noisier than gap-1);
+    # head bins are NaN under realignment — NaN-aware max/quantile, else tau
+    # poisons to NaN and every comparison goes False (power 0)
+    tau_by_h = {}
+    for h in h_list:
+        s_clean = trailing_window_means(zclean_by_gap[h], w)
+        tau_by_h[h] = float(np.nanquantile(np.nanmax(s_clean, axis=1),
+                                           1.0 - args.far))
+    tau = tau_by_h[h_list[0]]
+    for name, mask, ons_split in (("v_cal", is_cal, onsets_cal),
+                                  ("v_test", ~is_cal, onsets_test)):
         per_index = {}
         for idx in args.index:
             curves = {}
             for h in h_list:
-                zmax = zmax_by_gap[h][name][idx]              # (n_split, T)
-                d_range = t_bins - int(onsets[mask].min())
+                zmax = zmax_by_gap[h][idx][name]              # (n_split, T)
+                tau_h = tau_by_h[h]
+                d_range = t_bins - int(ons_split.min())
                 prof, prof_n = [], []
                 for d in range(d_range):
                     vals = np.full(mask.sum(), np.nan)
-                    ok = (onsets[mask] + d) < t_bins
+                    ok = (ons_split + d) < t_bins
                     vals[ok] = zmax[np.arange(mask.sum())[ok],
-                                    onsets[mask][ok] + d]
+                                    ons_split[ok] + d]
                     prof.append(float(np.nanmedian(vals)))
                     prof_n.append(int(ok.sum()))
                 prof = np.array(prof)
-                d_win = best_window_median(zmax, None, args.window,
-                                           onsets[mask], t_bins)
-                # absorption-free ideal: the onset-bin response of the FIRST
-                # gap (identical for every h by construction — sanity anchor)
+                d_win = best_window_median(zmax, None, w, ons_split, t_bins)
+                # empirical window power at THIS gap's frozen tau: fraction of
+                # cycles whose best post-onset window mean exceeds tau_h
+                wm = trailing_window_means(zmax, w)
+                win_end = np.arange(w - 1, t_bins)
+                valid = win_end >= w - 1
+                hits = (wm[:, valid] > tau_h).any(axis=1) if valid.any() else \
+                    np.zeros(mask.sum(), dtype=bool)
                 curves[h] = {"profile": [round(float(v), 4) for v in prof],
-                             "profile_n": prof_n, "delta_win": d_win}
+                             "profile_n": prof_n, "delta_win": d_win,
+                             "tau_h": tau_h,
+                             "power_emp": float(hits.mean())}
             delta_ideal = curves[h_list[0]]["profile"][0]
             for h in h_list:
                 curves[h]["retention"] = (float(curves[h]["delta_win"] / delta_ideal)
@@ -373,7 +403,8 @@ def audit_arm(arm: str, args, V: dict, is_cal: np.ndarray, out_dir: Path) -> dic
             per_index[idx] = {"curves": {str(h): curves[h] for h in h_list},
                               "delta_ideal": float(delta_ideal),
                               "h_star": int(h_star)}
-        splits[name] = {"n_cycles": int(mask.sum()), "per_index": per_index}
+        splits[name] = {"n_cycles": int(mask.sum()), "per_index": per_index,
+                        "tau": tau if name == "v_cal" else None}
 
     # measured detection from the committed fixed-protocol metrics
     metrics_path = REPO_ROOT / args.metrics_dir / \
@@ -390,25 +421,36 @@ def audit_arm(arm: str, args, V: dict, is_cal: np.ndarray, out_dir: Path) -> dic
         ret_test = splits["v_test"]["per_index"][idx]["curves"][str(h_star)]["retention"]
         if not np.isfinite(ret_test):
             raise ValueError(f"[{arm}] {idx}: retention on V_test is not finite")
+        # ADMISSIBLE verdict: empirical power of the field-mean window statistic
+        # at the frozen V_cal tau, minus the committed production detection
+        p_cal = splits["v_cal"]["per_index"][idx]["curves"][str(h_star)]["power_emp"]
+        p_test = splits["v_test"]["per_index"][idx]["curves"][str(h_star)]["power_emp"]
+        gap_emp = p_test - measured[idx]
+        # MC Gaussian oracle kept for the record only — its iid assumption is
+        # violated by per-cycle residual correlation (pixelwise n_eff ≈ 2.4),
+        # so it CANNOT arbitrate the branch decision
         prof = splits["v_test"]["per_index"][idx]["curves"][str(h_star)]["profile"]
         oracle = gaussian_oracle(prof, far=args.far, t_bins=t_bins,
                                  window=args.window, n_sims=args.n_sims)
-        gap = oracle["power"] - measured[idx]
         verdicts[idx] = {"h_star": h_star,
                          "retention_v_cal": ret_cal, "retention_v_test": ret_test,
                          "delta_win_v_test": splits["v_test"]["per_index"][idx]
                              ["curves"][str(h_star)]["delta_win"],
                          "delta_ideal": splits["v_test"]["per_index"][idx]["delta_ideal"],
                          "measured_detection": measured[idx],
-                         "oracle_power": oracle["power"],
-                         "gap": gap, "decision": decision_for_gap(gap),
+                         "power_emp_v_cal": p_cal, "power_emp_v_test": p_test,
+                         "gap_emp": gap_emp,
+                         "decision_emp": decision_for_gap(gap_emp),
+                         "tau_emp": tau,
+                         "oracle_power_mc_descriptive": oracle["power"],
+                         "gap_mc_descriptive": oracle["power"] - measured[idx],
                          "q_gate": {
                              "recoverable": bool(ret_cal >= Q_RECOVERABLE
                                                  and ret_test >= Q_RECOVERABLE),
                              "branch_a": bool(max(ret_cal, ret_test) < Q_DEAD)}}
 
-    decisions = {idx: v["decision"] for idx, v in verdicts.items()}
-    overall = max(verdicts.values(), key=lambda v: v["gap"])["decision"]
+    decisions = {idx: v["decision_emp"] for idx, v in verdicts.items()}
+    overall = max(verdicts.values(), key=lambda v: v["gap_emp"])["decision_emp"]
     report = {
         "run_id": args.run_id, "arm": arm,
         "checkpoint_seed": args.checkpoint_seed,
@@ -427,11 +469,20 @@ def audit_arm(arm: str, args, V: dict, is_cal: np.ndarray, out_dir: Path) -> dic
         "verdicts": verdicts,
         "decision_per_index": decisions,
         "decision_overall": overall,
+        "admissibility_note": (
+            "the ADMISSIBLE verdict is decision_emp: empirical power of the "
+            "field-mean window statistic at a tau frozen from the V_cal clean "
+            "null (production discipline), minus the committed production "
+            "detection. The iid-Gaussian MC oracle is kept as a descriptive "
+            "record only — per-cycle residual correlation (pixelwise field-mean "
+            "n_eff ≈ 2.4) violates it and it must not arbitrate branches."),
         "caveats": [
-            "iid-Gaussian evidence oracle is optimistic; heavy tails lower true power",
-            "the channel-max multiplicity penalty is not in the oracle",
-            "V shares fields with train (243/251) — acceptable for a frozen-scorer "
-            "ceiling audit, not for confirmatory gates",
+            "the field-mean statistic is NOT the production statistic (pixel "
+            "z² + top-frac + per-group σ + empirical-p): a large gap_emp is "
+            "therefore the E1 aggregator-swap case measured on V, not yet a "
+            "confirmatory result on the locked panel",
+            "V shares fields with train (243/251) — acceptable for a "
+            "frozen-scorer audit, not for confirmatory gates",
             "retention gates replace the consultant's Q_h form 1:1 (same "
             "ideal-fraction semantics, measured on the window statistic)",
         ],
@@ -443,11 +494,13 @@ def audit_arm(arm: str, args, V: dict, is_cal: np.ndarray, out_dir: Path) -> dic
     for idx in args.index:
         v = verdicts[idx]
         print(f"  {idx}: h*={v['h_star']} retention={v['retention_v_test']:.3f} "
-              f"δ_win={v['delta_win_v_test']:.3f}σ ideal={v['delta_ideal']:.3f}σ "
-              f"oracle={v['oracle_power']:.3f} measured={v['measured_detection']:.3f} "
-              f"gap={v['gap']:+.3f} → {v['decision']} "
-              f"(recoverable={v['q_gate']['recoverable']}, "
-              f"branchA={v['q_gate']['branch_a']})", flush=True)
+              f"δ_win={v['delta_win_v_test']:.3f}σ ideal={v['delta_ideal']:.3f}σ | "
+              f"EMPIRICAL: power_cal={v['power_emp_v_cal']:.3f} "
+              f"power_test={v['power_emp_v_test']:.3f} "
+              f"measured={v['measured_detection']:.3f} "
+              f"gap={v['gap_emp']:+.3f} → {v['decision_emp']} "
+              f"(MC oracle descriptive={v['oracle_power_mc_descriptive']:.3f})",
+              flush=True)
     print(f"  OVERALL → {overall}", flush=True)
     return report
 
