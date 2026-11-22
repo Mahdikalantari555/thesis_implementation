@@ -157,6 +157,7 @@ def indicator_z(
     *,
     across_field: np.ndarray | None = None,   # (N, T) other farms at the same bins
     pooled_history: np.ndarray | None = None,  # the field's own clean history (T or N,T)
+    pooled_reference: np.ndarray | None = None,  # explicit pooled values (population or FieldSigmaTable.pooled) — audit item 1
     unit: str = "across_field",
     phase_bins: np.ndarray | None = None,      # (T,) phase group per bin
     min_history: int = 5,
@@ -166,9 +167,12 @@ def indicator_z(
 
     ``across_field`` ranks the farm against the population at the same bins
     (population-referenced — today's behaviour, restated). ``farm_own`` uses
-    the farm's OWN clean history, shrunk toward the pooled spread with
-    ``w = n/(n+κ)``; a farm with no history falls back to the pooled scale and
-    says so. The tier is reported either way.
+    the farm's OWN clean history as the center and shrinks the scale toward
+    the EXPLICIT ``pooled_reference`` spread with ``w = n/(n+κ)`` (audit
+    2026-11-21 item 1: the pooled stats used to alias the farm's own, making
+    κ a no-op); a farm with no or too-thin history falls back to the pooled
+    reference entirely (center and scale) and says so. The tier is reported
+    either way.
     """
     if unit not in ("across_field", "farm_own"):
         raise ValueError(f"unknown indicator z unit {unit!r}")
@@ -196,25 +200,41 @@ def indicator_z(
     hist = pooled_history
     if hist is None:
         raise ValueError("farm_own unit needs the field's own clean history")
+    # audit 2026-11-21 item 1: the pooled reference is an EXPLICIT argument —
+    # previously pooled_med/pooled_scale aliased the farm's own stats, so the
+    # κ-shrinkage was a no-op and the "pooled fallback" z-scored the farm
+    # against its own 2–4 thin-history points.
+    if pooled_reference is None:
+        raise ValueError(
+            "farm_own unit needs an explicit pooled reference for shrinkage/fallback"
+        )
+    pool = np.asarray(pooled_reference, dtype=np.float64)
+    pool = pool[np.isfinite(pool)]
+    if pool.size < 2:
+        raise ValueError("pooled reference has fewer than 2 finite values")
+    pooled_med = float(np.median(pool))
+    pooled_scale = max(1.4826 * float(np.median(np.abs(pool - pooled_med))), 1e-3)
     h = np.asarray(hist, dtype=np.float64)
     n = int(np.sum(np.isfinite(h)))
     if n < min_history:
-        # pooled fallback: the field's own history is too thin to speak for it
-        z = _robust_z(vals, h if h.size else np.array([]))
+        # pooled fallback: the field's own history is too thin to speak for it —
+        # center AND scale come from the pooled reference (n → 0 ⇒ pooled).
+        z = _robust_z(vals, pool)
         if not np.isfinite(z).any():
             raise ValueError(
-                "farm_own unit has neither enough history nor a pooled reference"
+                "farm_own unit has neither enough history nor a usable pooled reference"
             )
         tier = "none" if n == 0 else "sparse"
-        return IndicatorZ(values=z, unit=unit, tier=tier, n_reference=n, fallback_used=True)
+        return IndicatorZ(
+            values=z, unit=unit, tier=tier, n_reference=int(pool.size),
+            fallback_used=True,
+        )
 
     own_med = float(np.median(h))
     own_scale = max(1.4826 * float(np.median(np.abs(h - own_med))), 1e-3)
-    pooled_med = float(np.median(h))
-    pooled_scale = own_scale
     w = n / (n + float(kappa))
     scale = w * own_scale + (1.0 - w) * pooled_scale
-    z = (vals - pooled_med) / scale
+    z = (vals - own_med) / scale
     tier = "sparse" if n < 20 else ("moderate" if n < 60 else "rich")
     return IndicatorZ(values=z, unit=unit, tier=tier, n_reference=n)
 

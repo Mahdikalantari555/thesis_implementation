@@ -96,16 +96,50 @@ def test_across_field_z_labels_a_single_farm_as_an_outlier():
 def test_farm_own_z_uses_the_fields_own_history():
     hist = np.random.default_rng(2).normal(0.5, 0.01, 36)
     own = np.full(36, 0.6)                    # far from its OWN history
-    out = I.indicator_z(own, pooled_history=hist, unit="farm_own")
+    pool = np.random.default_rng(3).normal(0.5, 0.05, 400)
+    out = I.indicator_z(own, pooled_history=hist, pooled_reference=pool, unit="farm_own")
     assert out.unit == "farm_own"
     assert out.tier in ("moderate", "rich")
     assert not out.fallback_used
     assert np.nanmin(out.values) > 5
 
 
+def test_farm_own_kappa_shrinkage_pulls_toward_the_pooled_scale():
+    """Audit item 1: κ must actually act — n/(n+κ) blends own vs pooled scale."""
+    hist = np.random.default_rng(4).normal(0.5, 0.01, 36)[:12]   # n=12 ≥ min_history
+    own = np.full(36, 0.6)
+    pool = np.random.default_rng(5).normal(0.5, 0.05, 400)       # ~5× wider spread
+    own_only = I.indicator_z(
+        own, pooled_history=hist, pooled_reference=pool, unit="farm_own", kappa=1e-9,
+    )                                                             # w≈1 → own scale
+    blended = I.indicator_z(
+        own, pooled_history=hist, pooled_reference=pool, unit="farm_own", kappa=10.0,
+    )                                                             # w≈0.55 → blend
+    assert np.nanmax(np.abs(own_only.values)) > np.nanmax(np.abs(blended.values))
+
+
+def test_farm_own_zero_history_falls_back_to_the_pooled_reference():
+    """Audit item 1: n → 0 ⇒ the pooled reference, center AND scale."""
+    out = I.indicator_z(
+        np.full(36, 0.6), pooled_history=np.array([np.nan]),
+        pooled_reference=np.random.default_rng(6).normal(0.5, 0.05, 400),
+        unit="farm_own",
+    )
+    assert out.fallback_used is True
+    assert out.tier == "none"
+    assert out.n_reference == 400
+    assert np.isfinite(out.values).all()
+    # centered/scaled on the POOLED reference: 0.6 vs 0.5±0.05 → |z| ≈ 2, not garbage
+    assert np.nanmax(np.abs(out.values)) < 6
+
+
 def test_farm_own_falls_back_and_says_so_when_history_is_thin():
     hist = np.array([0.5, 0.51, np.nan, np.nan])
-    out = I.indicator_z(np.full(36, 0.6), pooled_history=hist, unit="farm_own")
+    out = I.indicator_z(
+        np.full(36, 0.6), pooled_history=hist,
+        pooled_reference=np.random.default_rng(7).normal(0.5, 0.05, 400),
+        unit="farm_own",
+    )
     assert out.fallback_used is True
     assert out.tier in ("none", "sparse")
 
@@ -123,6 +157,13 @@ def test_across_field_unit_requires_the_population():
 def test_farm_own_unit_requires_history():
     with pytest.raises(ValueError, match="needs the field's own clean history"):
         I.indicator_z(_series(), unit="farm_own")
+
+
+def test_farm_own_unit_requires_the_pooled_reference():
+    """Audit item 1: no silent own-only shrinkage — the pooled reference is
+    mandatory for farm_own (fail-closed, no production caller today)."""
+    with pytest.raises(ValueError, match="explicit pooled reference"):
+        I.indicator_z(_series(), pooled_history=_series(), unit="farm_own")
 
 
 def test_mismatched_bin_counts_are_loud():
