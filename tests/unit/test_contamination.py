@@ -127,17 +127,20 @@ def _a_case(factor: float) -> dict:
     return C.absorption_a(pred_clean, pred_cont, x_clean, x_cont, M[0], onset=14)
 
 
-def test_a_patch_is_one_when_the_anomaly_is_fully_passed_through():
+def test_a_patch_is_one_when_the_output_follows_the_injection_absorber():
     out = _a_case(1.0)
     assert out["usable"]
     assert out["a_patch"] == pytest.approx(1.0, abs=1e-6)
-    assert out["share_absorbed"] == pytest.approx(0.0, abs=1e-6)
+    # audit item 2 (corrected 2026-11-22): a=1 means the output reproduces the
+    # injected shift — that IS absorption, so share_absorbed = a = 1.
+    assert out["share_absorbed"] == pytest.approx(1.0, abs=1e-6)
 
 
-def test_a_patch_is_zero_when_the_model_absorbs_the_anomaly():
+def test_a_patch_is_zero_when_the_output_stays_clean_detector():
     out = _a_case(0.0)
     assert out["a_patch"] == pytest.approx(0.0, abs=1e-9)
-    assert out["share_absorbed"] == pytest.approx(1.0, abs=1e-9)
+    # a=0: the output stays at the clean state — nothing absorbed.
+    assert out["share_absorbed"] == pytest.approx(0.0, abs=1e-9)
 
 
 def test_a_patch_is_linear_in_the_passed_share():

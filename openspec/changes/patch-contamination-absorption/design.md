@@ -33,6 +33,22 @@ within one standard error; ties → simpler configuration (trimmed loss only
 escalate the documented NEXT step (memory-augmented bottleneck) to the
 owner as a separate decision — not silently.
 
+> **AMENDMENT 2026-11-22 (absorption polarity corrected — audit item 2):** the
+> rule above was written under an inverted reading of A_patch. The formula
+> `A = (pred_cont − pred_clean)/(x_cont − x_clean)` measures how much of the
+> injected shift the OUTPUT follows: A ≈ 1 = absorber (the anomaly vanishes
+> into the reconstruction), A ≈ 0 = detector-like (the residual carries the
+> anomaly). Restated in the corrected polarity: report A_patch (↓ = less
+> absorption); `share_absorbed = a` (no longer 1 − a). Adopt the configuration
+> with the **lowest** A_patch whose clean MDM80 stays within one standard
+> error of the clean-trained baseline; ties → simpler configuration. If NO
+> configuration reaches A_patch ≤ ε (no meaningful absorption), record the
+> honest negative and escalate the documented NEXT step (memory-augmented
+> bottleneck) to the owner. The pre-registered INTENT — minimize absorption,
+> no goalpost movement — is unchanged; only the numeric direction is corrected
+> to match the measurement physics and its sibling implementations
+> (`monitor/diagnostics.py`, `scripts/trial_gates.py`).
+
 ### Risks
 
 - 5–10% contamination of ~100 subset field-cycles = 5–10 injected cycles —

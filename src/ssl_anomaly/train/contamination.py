@@ -174,16 +174,21 @@ def absorption_a(
     onset: int,
     channel: int = CH_NDVI,
 ) -> dict:
-    """A_patch = how much of the injected shift the model's output keeps.
+    """A_patch = how much of the injected shift the model's output follows.
 
         injected  = x_cont − x_clean          (negative for a drop)
         passed    = pred_cont − pred_clean    (what the model reproduces)
         A         = passed / injected         (per bin, after onset)
 
-    A ≈ 1 → the model predicts the ORIGINAL (clean) state and the residual
-    carries the full anomaly (a detector). A ≈ 0 → the model has learned to
+    A ≈ 1 → the output reproduces the injected shift: the model has learned to
     predict the CONTAMINATED state, so the anomaly vanishes into the
-    reconstruction (absorption — the failure the experiment looks for).
+    reconstruction (absorption — the failure the experiment looks for;
+    ``share_absorbed = a`` ≈ 1). A ≈ 0 → the output stays at the ORIGINAL
+    clean state and the residual carries the full anomaly (detector-like
+    behavior). The docstring previously stated the opposite polarity
+    (audit 2026-11-21 item 2, corrected 2026-11-22: the formula is unchanged,
+    the labels are flipped to match the measurement and the sibling
+    implementations in ``monitor/diagnostics.py`` and ``scripts/trial_gates.py``).
 
     Only the onset window is used, and only bins observed in both cycles; the
     ratio is a mean of per-bin ratios weighted by |injected|, so a bin where
@@ -205,7 +210,7 @@ def absorption_a(
         "n_bins": int(ok.sum()),
         "mean_injected": float(np.mean(inj[ok])),
         "mean_passed": float(np.mean(passed[ok])),
-        "share_absorbed": float(1.0 - a),
+        "share_absorbed": float(a),  # audit item 2: the absorbed share IS a (was the complement)
     }
 
 
