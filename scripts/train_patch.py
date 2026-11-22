@@ -190,13 +190,21 @@ def build_scheduler(optimizer, epochs: int, *, warmup: int = 1):
 
 def _contaminate_values(raw, obs, in_field, *, rec: dict):
     """Apply the preregistered raw-unit perturbation before standardization."""
-    from ssl_anomaly.monitor.patch_perturbations import FOOTPRINT_PROTOCOL, inject_patch_drop
+    from ssl_anomaly.monitor.patch_perturbations import (
+        BASIS_BANDS_CONSISTENT,
+        FOOTPRINT_PROTOCOL,
+        inject_patch_drop,
+    )
     from ssl_anomaly.train.contamination import CONTAMINATION_INDEX
 
+    # audit 2026-11-21 item 24: contamination trains under the same
+    # bands_consistent basis the evaluation gate uses (was the index_only
+    # default, unrecorded).
     return inject_patch_drop(
         raw, obs, index=CONTAMINATION_INDEX, delta=float(rec["delta"]),
         onset_bin=rec["onset_bin"], shape=rec["family"], duration=rec["n_bins_window"],
         footprint=FOOTPRINT_PROTOCOL, in_field=in_field, level_id=rec.get("level_id"),
+        injection_basis=BASIS_BANDS_CONSISTENT,
     ).x
 
 
@@ -518,6 +526,7 @@ def main(argv=None) -> int:
     contamination_meta: dict = {"fraction": float(cfg["contaminate_fraction"])}
     contaminations: dict[int, dict] | None = None
     if cfg["contaminate_fraction"] > 0:
+        from ssl_anomaly.monitor.patch_perturbations import BASIS_BANDS_CONSISTENT
         keys = [c.key for c in ds.cycles]
         row_by_key = {key: i for i, key in enumerate(keys)}
         excluded = set(ds.excluded_by_holdout)
@@ -528,13 +537,14 @@ def main(argv=None) -> int:
         rows = [row_by_key[key] for key in chosen]
         contaminations = CT.plan_contamination(rows, seed=int(args.contaminate_seed))
         print(f"[patch] contaminating {len(rows)}/{len(ds)} train cycles "
-              f"(S4 persistent ndvi, seed {args.contaminate_seed})")
+              f"(S4 persistent ndvi, bands_consistent basis, seed {args.contaminate_seed})")
         contamination_meta = {
             "fraction": float(cfg["contaminate_fraction"]),
             "seed": int(args.contaminate_seed),
             "level_id": CT.CONTAMINATION_LEVEL,
             "family": CT.CONTAMINATION_FAMILY,
             "index": CT.CONTAMINATION_INDEX,
+            "injection_basis": BASIS_BANDS_CONSISTENT,
             "n_selected": len(rows),
             "selected_keys": chosen,
             "onsets": {str(k): v["onset_bin"] for k, v in contaminations.items()},
