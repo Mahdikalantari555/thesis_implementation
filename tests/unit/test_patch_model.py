@@ -178,6 +178,44 @@ def test_group_norm_is_invariant_to_batch_composition():
     assert torch.equal(alone, together)
 
 
+# --- audit 2026-11-21 items 3/16 --------------------------------------------
+def test_weight_hh_orthogonal_init_covers_all_rows():
+    """Audit item 3: the orthogonal init must cover all 3×hidden rows of
+    weight_hh (pre-fix it sliced by p.shape[1]//3 and touched rows 0:63/192,
+    leaving 67 % of the recurrent kernel at PyTorch default)."""
+    m = _model()
+    seen = False
+    for name, p in m.named_parameters():
+        if "weight_hh" not in name:
+            continue
+        seen = True
+        rows = p.shape[0]
+        block = rows // 3
+        for i in range(3):
+            w = p[i * block:(i + 1) * block, :]
+            gram = w @ w.T
+            assert torch.allclose(gram, torch.eye(block), atol=1e-4), (
+                f"{name} gate block {i} is not orthonormal (init did not cover it)"
+            )
+    assert seen, "the model exposes no GRU weight_hh parameter"
+
+
+def test_hybrid_loss_is_batch_size_independent():
+    """Audit item 16: duplicating the batch must not change the loss value
+    (pre-fix the denominators carried a ×B factor, so loss/grads ∝ 1/B)."""
+    m = _model()
+    x, pv = _batch(b=1, seed=3)
+    obs = torch.rand(1, T, C, S, S, generator=torch.Generator().manual_seed(1)) > 0.4
+    out = m(x, pv)
+    l1, _ = m.hybrid_loss(out, x, obs)
+    x2 = torch.cat([x, x], dim=0)
+    pv2 = torch.cat([pv, pv], dim=0)
+    obs2 = torch.cat([obs, obs], dim=0)
+    out2 = m(x2, pv2)
+    l2, _ = m.hybrid_loss(out2, x2, obs2)
+    assert float(l1.detach()) == pytest.approx(float(l2.detach()), rel=1e-4, abs=1e-6)
+
+
 def test_degenerate_all_masked_batch_is_finite():
     m = _model()
     x, _ = _batch(b=2)

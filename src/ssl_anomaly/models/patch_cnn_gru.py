@@ -215,8 +215,11 @@ class PatchCausalGRU(nn.Module):
                     if "weight_ih" in name:
                         nn.init.xavier_uniform_(p)
                     elif "weight_hh" in name:
+                        # audit 2026-11-21 item 3: slice by ROWS (p.shape[0]) —
+                        # p.shape[1]//3 covered only rows 0:63 of 192 and left
+                        # 67 % of the recurrent kernel at PyTorch default.
                         for i in range(3):
-                            nn.init.orthogonal_(p[i * p.shape[1] // 3:(i + 1) * p.shape[1] // 3])
+                            nn.init.orthogonal_(p[i * p.shape[0] // 3:(i + 1) * p.shape[0] // 3])
                     elif "bias" in name:
                         nn.init.zeros_(p)
         nn.init.zeros_(self.h0)
@@ -258,15 +261,6 @@ class PatchCausalGRU(nn.Module):
         pixel_valid: torch.Tensor,
         covariates: torch.Tensor | None = None,
     ) -> dict[str, torch.Tensor]:
-        """Causal predictions for one batch of field-cycles.
-
-        Returns a dict with
-            ``pred``   (B, T, n_horizons, C, S, S)  — pred[t, k] targets bin
-                                                      t + k - 1 (zero where
-                                                      that bin does not exist)
-            ``aux``    (B, T, C, S, S)              — horizon-1 reconstruction
-            ``mask``   (B, T, S, S)                 — the effective in-field mask
-        """
         """Causal predictions for one batch of field-cycles.
 
         Returns a dict with
@@ -352,7 +346,10 @@ class PatchCausalGRU(nn.Module):
             tok = F.smooth_l1_loss(pred_k, tgt_k, reduction="none").mean(dim=2)  # (B,T,S,S)
             tok = tok * obs_k.mean(dim=2)                                        # any-channel
             tok = self._trim(tok, obs_k.mean(dim=2), trimmed_top_frac)
-            denom = obs_k.mean(dim=2).sum().clamp(min=1.0) * B
+            # audit 2026-11-21 item 16: no ×B — the loss is a per-observed-bin
+            # mean, batch-size independent (pre-fix checkpoints carry the old
+            # 1/B scale; recorded in finding 25's deviations).
+            denom = obs_k.mean(dim=2).sum().clamp(min=1.0)
             lk = tok.sum() / denom
             w = weights[k] if k < len(weights) else weights[-1]
             total = total + w * lk
@@ -361,7 +358,7 @@ class PatchCausalGRU(nn.Module):
         aux_tok = F.smooth_l1_loss(out["aux"], target, reduction="none").mean(dim=2)
         aux_w = obs_f.mean(dim=2)
         aux_tok = self._trim(aux_tok, aux_w, trimmed_top_frac) * aux_w
-        aux_denom = aux_w.sum().clamp(min=1.0) * B
+        aux_denom = aux_w.sum().clamp(min=1.0)
         l_aux = aux_tok.sum() / aux_denom
         losses["aux"] = float(l_aux.detach())
         total = total + aux_weight * l_aux
