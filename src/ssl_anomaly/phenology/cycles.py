@@ -255,7 +255,9 @@ def _ys_at(grid: np.ndarray, ys: np.ndarray, day: int) -> float:
         j = i + off
         if 0 <= j < ys.size and np.isfinite(ys[j]):
             return float(ys[j])
-    return 0.0
+    # audit 2026-11-21 item 21: fabricating 0.0 violated §2 provenance — a
+    # missing boundary value is absent (NaN), never zero.
+    return float("nan")
 
 
 def _build_cycles_from_boundaries(
@@ -332,75 +334,6 @@ def _build_cycles_from_boundaries(
             kind=last_complete_kind,
             ratoon_no=max(0, ratoon_no),
             ndvi_at_harvest=_ys_at(grid, ys, hlast),
-        )
-    )
-    return cycles
-
-    # Build cycles:
-    #  - lead-in: from series start to first harvest → censored plant cycle
-    #    (start_harvest = -1; dsh not meaningful but end_harvest = first harvest)
-    #  - between harvests h[i]..h[i+1]: complete cycle, start_harvest=h[i], end_harvest=h[i+1]
-    #  - trailing: last harvest to series end → censored cycle
-    cycles: list[Cycle] = []
-    # Leading
-    cycles.append(
-        Cycle(
-            field=field_id,
-            cycle_id=0,
-            t_start=int(grid[0]),
-            t_end=int(grid[harvest_idx[0]]),
-            start_harvest=-1,
-            end_harvest=int(grid[harvest_idx[0]]),
-            censored=True,
-            kind="plant",
-            ratoon_no=0,
-            ndvi_at_harvest=float(ys[harvest_idx[0]]),
-        )
-    )
-    ratoon_no = 0
-    cid = 1
-    last_complete_kind = "plant"
-    for i in range(harvest_idx.size - 1):
-        h0, h1 = harvest_idx[i], harvest_idx[i + 1]
-        length = h1 - h0
-        if length < min_cycle_days or length > max_cycle_days:
-            continue
-        if i in replant_harvests:
-            ratoon_no = 0
-            kind = "plant"
-        else:
-            ratoon_no += 1
-            kind = "ratoon"
-        last_complete_kind = kind
-        cycles.append(
-            Cycle(
-                field=field_id,
-                cycle_id=cid,
-                t_start=int(grid[h0]),
-                t_end=int(grid[h1]),
-                start_harvest=int(grid[h0]),
-                end_harvest=int(grid[h1]),
-                censored=False,
-                kind=kind,
-                ratoon_no=ratoon_no,
-                ndvi_at_harvest=float(ys[h1]),
-            )
-        )
-        cid += 1
-    # Trailing
-    hlast = harvest_idx[-1]
-    cycles.append(
-        Cycle(
-            field=field_id,
-            cycle_id=cid,
-            t_start=int(grid[hlast]),
-            t_end=int(grid[-1]) + 1,
-            start_harvest=int(grid[hlast]),
-            end_harvest=int(grid[-1]),
-            censored=True,
-            kind=last_complete_kind,
-            ratoon_no=max(0, ratoon_no),
-            ndvi_at_harvest=float(ys[hlast]),
         )
     )
     return cycles

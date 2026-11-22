@@ -2,6 +2,10 @@
 ``compare-spatial-representation-strategies``, requirement "Zonal
 distribution-statistics representation (R0.5)").
 
+Audit 2026-11-21 item 29: ``fit_score_calendar``, ``pathmax_scores`` and
+``channel_z2`` are staged (tested) with no production caller — wire up or
+annotate before first use.
+
 The owner's representation comparison asks for three arms — Zonal Mean,
 **Spatial Statistics**, Patch-based. The middle arm needs no new data: the
 store already holds ``mean/std/p10/p25/p75/p90/iqr`` per (field, date, band)
@@ -434,7 +438,8 @@ def calendar_doy_bins(bins: np.ndarray, start_day: int, *, bin_days: int = BIN_D
 
     ``b0_calendar`` scores a cycle against its calendar position rather than
     its harvest-relative position, so the same 36-bin tensor is re-indexed by
-    the absolute day at each bin midpoint (``start_day + b·bin_days + 15``).
+    the absolute day at each bin start (``start_day + b·bin_days`` — the
+    docstring previously said midpoint, audit 2026-11-21 item 10).
     """
     abs_bins = (int(start_day) + np.asarray(bins, dtype=np.int64) * bin_days) % 365
     return np.clip((abs_bins / 365.0 * n_calendar).astype(np.int64), 0, n_calendar - 1)

@@ -62,11 +62,13 @@ def test_sigma_falls_back_when_a_cell_is_undersampled():
     assert np.all(scale > 0)
 
 
-def test_unknown_sensor_id_does_not_crash():
+def test_unknown_sensor_id_raises_loudly():
+    """Audit item 8: an out-of-range sensor id must fail loudly — silently
+    substituting sensor 0's σ hid store/scorer mismatches."""
     res, obs = _resid(n=2)
     st = PS.fit_patch_sigma(res, obs, np.full((2, T), 9))
-    scale = st.lookup(np.arange(T), np.full(T, 9, dtype=int))
-    assert np.isfinite(scale).all()
+    with pytest.raises(ValueError, match="sensor id"):
+        st.lookup(np.arange(T), np.full(T, 9, dtype=int))
 
 
 def test_sigma_counts_channels_not_spatial_rows():

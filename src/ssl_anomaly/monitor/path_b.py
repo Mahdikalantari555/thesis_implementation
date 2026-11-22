@@ -1,5 +1,9 @@
 """Path-B anomaly families: relational breaks and phenology-shape warps.
 
+Audit 2026-11-21 items 28/29: the relational and stage appliers FAIL CLOSED
+at patch resolution (S > 1 — they are not mask-aware) and the module has no
+production caller; both must be resolved before any patch-level path-B use.
+
 Change ``anomaly-definition-path-b`` tasks 1.1-1.4. This module is
 **verdict-independent machinery**: it defines and applies the families, and
 touches no arm and no report. Evaluating them (§2) is hard-gated on both
@@ -283,6 +287,15 @@ def inject_relational_break(
     if mask.shape != arr.shape:
         raise ValueError(f"mask shape {mask_src.shape} != values {np.shape(x)}")
     T, C = arr.shape[:2]
+    if not field_level and arr.shape[2] > 1:
+        # audit 2026-11-21 item 28: the relational applier anchors/measures at
+        # spatial pixel (0, 0) and skips a whole bin on any non-finite pixel —
+        # correct only for field-level (T, C, 1, 1) tensors. Fail closed
+        # before any patch-level path-B use; make it mask-aware first.
+        raise NotImplementedError(
+            "relational path-B applier is not mask-aware at patch resolution "
+            "(S > 1); use field-level (T, C) inputs"
+        )
     names = tuple(channel_names)
     response, predictor = pair.split("|")
     if "|" not in pair or response not in names or predictor not in names:
@@ -438,6 +451,14 @@ def warp_shape(
     if mask.shape != arr.shape:
         raise ValueError(f"mask shape {mask_src.shape} != values {np.shape(x)}")
     T = arr.shape[0]
+    if not field_level and arr.shape[2] > 1:
+        # audit 2026-11-21 item 28: stage anchors are computed from spatial
+        # pixel (0, 0) only — per-pixel anchors at patch resolution need a
+        # mask-aware applier. Fail closed before any patch-level path-B use.
+        raise NotImplementedError(
+            "stage-warp path-B applier is not mask-aware at patch resolution "
+            "(S > 1); use field-level (T, C) inputs"
+        )
     adm = admitted_bins(T, burn_in=burn_in)
     anchors = _stage_anchors(arr[:, channel, 0, 0], mask[:, channel, 0, 0])
     out = arr.copy()

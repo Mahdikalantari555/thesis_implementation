@@ -1,5 +1,9 @@
 """Patch scoring: per-pixel residuals → field-level alarm paths (task 2.2).
 
+Audit 2026-11-21 item 29: ``cusum_path``, ``ewma_path``, ``tail_max`` and
+``calibrate_cusum_h`` are staged (tested) with no production caller — wire up
+or annotate before first use.
+
 The patch arms must be indistinguishable from the existing arms *downstream of
 the score* — that is what makes the comparison a comparison of representations
 rather than of rules. So this module produces exactly the interface

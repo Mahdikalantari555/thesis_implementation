@@ -152,14 +152,16 @@ def test_relational_severity_is_measured_back_not_assumed():
     assert max(hi.meta["achieved_deviation_mad"]) > max(lo.meta["achieved_deviation_mad"])
 
 
-def test_relational_applier_works_on_a_patch_tensor():
+def test_relational_applier_fails_closed_on_a_patch_tensor():
+    """Audit item 28: the relational applier anchors/measures at spatial
+    pixel (0, 0) and skips whole bins on any non-finite pixel — it must fail
+    closed at patch resolution instead of silently mis-injecting."""
     X, M = _cycles()
     fit = PB.fit_relations(X, M, NAMES)
     x = np.repeat(X[0][:, :, None, None], 4, axis=2).repeat(4, axis=3)
     m = np.ones_like(x, dtype=bool)
-    out = PB.inject_relational_break(x, m, fit, level_id="S4")
-    assert out.x.shape == x.shape
-    assert out.x.ndim == 4
+    with pytest.raises(NotImplementedError, match="not mask-aware"):
+        PB.inject_relational_break(x, m, fit, level_id="S4")
 
 
 def test_relational_mask_is_never_changed():

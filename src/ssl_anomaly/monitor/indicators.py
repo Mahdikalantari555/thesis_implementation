@@ -1,5 +1,9 @@
 """Independent indicators: physical CWSI, indicator z-scores, ERA5 context.
 
+Audit 2026-11-21 items 1/29: this whole module is staged with no production
+caller; the ``farm_own`` unit now REQUIRES an explicit ``pooled_reference``
+(the aliasing no-op is fixed) — fix-before-first-use complete.
+
 Change ``patch-independent-indicators``. "Independent" is the claim that must
 be earned, so every function here is explicit about what it does and does not
 share with the patch model:
@@ -112,7 +116,9 @@ def cwsi_idso_jackson(
     with np.errstate(invalid="ignore", divide="ignore"):
         raw = (tc_a - wet) / denom
     bad = ~np.isfinite(raw) | (np.abs(denom) < 1e-6)
-    out = np.clip(raw, 0.0, 1.0)
+    # audit 2026-11-21 item 5: a ≈0 denominator is ABSENT (NaN), not maximal
+    # stress — clipping the degenerate raw value to 1.0 fabricated "max stress".
+    out = np.where(bad, np.nan, np.clip(np.where(bad, np.nan, raw), 0.0, 1.0))
     return {
         "value": out,
         "n_valid": int(np.sum(~bad)) if out.ndim else int(not bad),

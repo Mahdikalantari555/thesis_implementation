@@ -1,5 +1,9 @@
 """Causal scoring, alarm rule and FAR calibration (design D5, spec §Threshold).
 
+Audit 2026-11-21 item 29: ``channel_max_from_pred``, ``per_bin_q95_normalizer``
+and ``normalize_scores`` are staged (tested) with no production caller — wire
+up or annotate before first use.
+
 - Per-bin score: causal prediction error of the current bin from earlier bins
   (observed-mask-weighted MSE in z-space for deep models, mean z² for B1).
 - Alarm rule: ``suspected_stress`` when the score exceeds τ at k consecutive
@@ -202,6 +206,12 @@ def cumulative_channel_max(
     # unobserved gap ("no data, no alarm"). NaN only: ±inf stays alarm-worthy.
     mask = mask & ~np.isnan(z2)
     zn = z2 / q95[None, :, :]
+    # audit 2026-11-21 item 6: +inf z² entering the cumsum turns trailing
+    # differences into inf − inf = NaN and kills the alarm path the comment
+    # above promises to keep ("±inf stays alarm-worthy"). Map +inf to a large
+    # finite sentinel before the cumsum — any real +inf z² is an extreme
+    # exceedance by definition (−inf cannot arise from observed z² ≥ 0).
+    zn = np.where(np.isposinf(zn), 1e12, zn)
     zn = np.where(mask, zn, 0.0)
     mf = mask.astype(np.float64)
     csum = np.cumsum(zn, axis=1)          # (N, T, C)
@@ -368,6 +378,10 @@ def partial_auc_pr(
     Standard step-wise average precision: sort by score descending, then
     AUC-PR = Σ_i (recall_i − recall_{i−1}) · precision_i. AUC-PR (not ROC) is
     required by the dev protocol because injected:clean is class-imbalanced.
+    Ties break clean-before-injected (stable sort over the concatenated
+    [clean, injected] arrays) — slightly conservative AP versus sklearn's
+    group-tie handling; recorded as such (audit 2026-11-21 item 12). Align
+    with sklearn only if a consumer needs exact parity.
     """
     y = np.concatenate([np.zeros(len(clean_max_scores)), np.ones(len(injected_max_scores))])
     s = np.concatenate([clean_max_scores, injected_max_scores])

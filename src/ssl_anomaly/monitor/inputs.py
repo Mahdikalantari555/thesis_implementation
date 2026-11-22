@@ -48,6 +48,7 @@ SCALE_FLOOR = 1e-3
 # temperature *differences* (MAD) are identical in K and °C, so MAD-scaled
 # perturbations are unaffected.
 PHYSICAL_RANGES: dict[str, tuple[float, float]] = {
+    "ndvi": (-1.0, 1.0),  # audit 2026-11-21 item 19: NDVI gets the same bounds check
     "blue": (-0.1, 1.6), "green": (-0.1, 1.6), "red": (-0.1, 1.6),
     "nir": (-0.1, 1.6), "swir1": (-0.1, 1.6), "swir2": (-0.1, 1.6),
     "lst": (180.0, 350.0),

@@ -149,7 +149,10 @@ class NormalBank:
         pooled = self._pooled.get(sig)
         if pooled is not None and len(pooled) >= self.min_class_count:
             return self._rows_for(("pooled", sig), pooled), "pooled", ("pooled", sig)
-        if self._global is not None and len(self._global):
+        if self._global is not None and len(self._global) >= self.min_class_count:
+            # audit 2026-11-21 item 11: the global fallback is gated by the
+            # same min_class_count as cell/pooled tiers — a tiny global pool
+            # is "absent", not silently used.
             return self._rows_for(("global",), self._global), "global", ("global",)
         return None, "absent", ("absent",)
 
@@ -212,11 +215,17 @@ class NormalBank:
             zs = (V - med[None, :]) / scale[None, :]
             dists = np.sqrt(np.mean(zs * zs, axis=1)).tolist()
         dists = [d for d in dists if np.isfinite(d)]
-        return float(np.percentile(dists, 95)) if dists else 1.0
+        # audit 2026-11-21 item 11: an empty LOO neighbourhood has no q95 —
+        # absent (NaN), never a hardcoded 1.0.
+        return float(np.percentile(dists, 95)) if dists else float("nan")
 
     def _q95_for(self, key: CellKey, rows: np.ndarray) -> float:
         if key not in self._q95:
-            self._q95[key] = max(self._loo_q95(key, rows), SCALE_FLOOR)
+            q = self._loo_q95(key, rows)
+            if not np.isfinite(q):
+                self._q95[key] = float("nan")   # absent — audit item 11
+            else:
+                self._q95[key] = max(q, SCALE_FLOOR)
         return self._q95[key]
 
     # -- scoring -----------------------------------------------------------

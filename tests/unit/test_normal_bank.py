@@ -116,19 +116,45 @@ def test_mask_class_comparison_and_pooled_fallback() -> None:
     assert np.isfinite(scores[0, 12])
 
 
-def test_global_fallback_when_pooled_sparse() -> None:
+def test_global_fallback_is_gated_by_min_class_count() -> None:
+    """Audit item 11: the global tier obeys the same min_class_count gate.
+
+    Sparse case: pooled AND global both under the gate → "absent" (previously
+    the global tier fired regardless of size). Adequate case: a rare signature
+    (pooled < gate) inside a large-enough global pool still falls back to
+    "global" — the tier is gated, not removed.
+    """
     rng = np.random.default_rng(5)
     n = 3  # tiny bank
     emb = fake_embeddings(rng, n)
     keys = [f"f{i}:1" for i in range(n)]
     m = np.zeros((n, T, C), dtype=bool)
-    m[:, :2, :] = True  # 2 observed bins per cycle → pooled class count 6 < 8 → global
+    m[:, :2, :] = True  # pooled 6 < 8, global 3 < 8 → absent (was "global")
     bank = nbank.build_bank(emb, m, keys, make_manifest(keys), min_class_count=8)
     qm = np.zeros((1, T, C), dtype=bool)
     qm[:, :2, :] = True
     scores, meta = bank.score_batch(np.stack([emb[0]]), qm, None)
-    assert meta["fallback"][0, 1] == "global"
-    assert np.isfinite(scores[0, 1])
+    assert meta["fallback"][0, 1] == "absent"
+
+    # rare band-mask signature (3 rows < 8) inside a 33-row global pool:
+    # the rare group leaves band 7 unobserved (signature "11111110"), the
+    # 30-cycle group observes all bands ("11111111") — the global tier fires
+    # for the rare query because it passes the same gate the cell/pooled
+    # tiers use (audit item 11: gated, not removed).
+    m[:, :2, 7] = False
+    emb2 = fake_embeddings(rng, 30)
+    keys2 = [f"g{i}:1" for i in range(30)]
+    m2 = np.zeros((30, T, C), dtype=bool)
+    m2[:, :2, :] = True
+    bank2 = nbank.build_bank(
+        np.concatenate([emb, emb2]), np.concatenate([m, m2]),
+        keys + keys2, make_manifest(keys + keys2), min_class_count=8,
+    )
+    qmr = qm.copy()
+    qmr[:, :, 7] = False                      # query carries the rare signature
+    scores2, meta2 = bank2.score_batch(np.stack([emb[0]]), qmr, None)
+    assert meta2["fallback"][0, 1] == "global"
+    assert np.isfinite(scores2[0, 1])
 
 
 def test_injected_bin_scores_higher_than_clean() -> None:

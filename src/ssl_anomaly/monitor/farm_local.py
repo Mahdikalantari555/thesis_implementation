@@ -177,23 +177,22 @@ def other_farm_perturbation_is_invariant(
     field_id: int = 1,
     rng: np.random.Generator | None = None,
 ) -> bool:
-    """Bitwise invariance under a perturbed OTHER farm.
+    """Independence gate for a locally anchored scorer (audit item 4).
 
-    ``scorer`` takes ``(field_id, values)``; the "other farm" exists only
-    conceptually because a locally anchored scorer is never handed one, so the
-    real assertion is on the ACCESS record.
+    ``scorer`` takes the field's own values only; ``score_field_only`` never
+    hands it another farm, and its access record is fabricated by
+    construction. The real assertions here are: (a) the access record names
+    exactly this field, and (b) an exact re-score is bitwise deterministic —
+    a scorer carrying hidden cross-farm/global state would fail (b). The
+    previous tail compared ``base`` with itself, which asserted nothing
+    (audit 2026-11-21 item 4). ``rng`` is kept for signature compatibility.
     """
-    """Bitwise invariance: perturbing ANOTHER farm cannot move this farm's score."""
-    rng = rng or np.random.default_rng(0)
     base = score_field_only(field_id, field_values, scorer=scorer).scores
-    # the "other farm" exists only conceptually: a locally anchored scorer is
-    # never handed it. The test therefore operates on the access record.
     rec = score_field_only(field_id, field_values, scorer=scorer)
     if rec.accessed_fields != {field_id}:
         return False
-    again = score_field_only(field_id, field_values + rng.normal(0, 1e-12, field_values.shape),
-                             scorer=scorer).scores
-    return bool(np.array_equal(base, base)) and again.shape == base.shape
+    again = score_field_only(field_id, field_values, scorer=scorer).scores
+    return bool(np.array_equal(base, again)) and again.shape == base.shape
 
 
 def field_id_permutation_is_invariant(
@@ -315,7 +314,13 @@ def build_field_sigma_table(
         v = np.abs(np.asarray(residuals[f], dtype=np.float64))
         if mask is not None and f in mask:
             m = np.asarray(mask[f], dtype=bool)
-            v = v[m] if m.shape == v.shape else v
+            if m.shape != v.shape:
+                # audit 2026-11-21 item 9: a wrong-shaped mask was silently
+                # ignored (the fit ran unmasked) — fail loudly instead.
+                raise ValueError(
+                    f"field {f}: mask shape {m.shape} != residuals shape {v.shape}"
+                )
+            v = v[m]
         v = v[np.isfinite(v)]
         n_by_field[f] = int(v.size)
         per_field[f] = np.array([1.4826 * float(np.median(v))]) if v.size else np.array([])

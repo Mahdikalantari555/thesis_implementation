@@ -483,7 +483,10 @@ class B1PhaseZCausal:
                         s = float(np.median(np.abs(vals - med))) * self.mad_k
                         if s > 0:
                             self.median[g, b, c] = med
-                            self.scale[g, b, c] = s
+                            # audit 2026-11-21 item 23: apply the same
+                            # scale_floor the pooled path uses — a near-zero
+                            # group MAD must not explode the z-score.
+                            self.scale[g, b, c] = max(s, self.scale_floor)
         self.band_names = [f"ch{i}" for i in range(C)]
 
         # Raw-unit robust range per band (NRMSE denominator, same definition

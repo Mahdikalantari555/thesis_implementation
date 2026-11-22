@@ -699,7 +699,14 @@ def export_field(
                                                for s in (e[2] for e in entries)])
             values[b] = agg.values
             valid_bins[b, 0] = agg.pixel_valid
-            counts[b] = min(int(agg.n_obs), 255)
+            if int(agg.n_obs) > 255:
+                # audit 2026-11-21 item 26: a silent uint8 clamp would corrupt
+                # the recorded observation count; fail loudly instead.
+                raise ValueError(
+                    f"n_obs {int(agg.n_obs)} exceeds the uint8 count capacity "
+                    f"(255) at field {fi} cycle {ci} bin {b}"
+                )
+            counts[b] = int(agg.n_obs)
             sensors[b] = agg.sensor_id
         if profile is not None:
             profile["aggregation_s"] += time.perf_counter() - tick

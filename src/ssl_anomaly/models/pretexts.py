@@ -437,7 +437,13 @@ def score_cycle_pretext(
         e_np = emb[0].numpy()
         e_norm = e_np / max(float(np.linalg.norm(e_np)), 1e-8)
         if ref_embeddings is None or len(ref_embeddings) == 0:
-            return float(np.linalg.norm(e_np))
+            # audit 2026-11-21 item 25: no silent semantic switch — without a
+            # reference bank this scorer previously degraded to the raw
+            # embedding norm, a different quantity on the same scale.
+            raise ValueError(
+                "contrastive scorer needs reference embeddings "
+                "(raw-norm fallback removed — audit item 25)"
+            )
         ref_norm = ref_embeddings / np.maximum(np.linalg.norm(ref_embeddings, axis=1, keepdims=True), 1e-8)
         cos_dist = 1.0 - (ref_norm @ e_norm)
         cos_s = np.sort(cos_dist)
@@ -519,7 +525,11 @@ class Time2AgriModel(nn.Module):
         """Compute anomaly score based on cosine divergence in contrastive space."""
         z, _ = self.forward(x, key_padding_mask=key_padding_mask)
         if ref_embeddings is None:
-            return 1.0 - (z * z).sum(dim=-1)
+            # audit 2026-11-21 item 25: no silent constant fallback.
+            raise ValueError(
+                "contrastive scorer needs reference embeddings "
+                "(constant fallback removed — audit item 25)"
+            )
         ref_norm = F.normalize(ref_embeddings, dim=-1)
         sim = z @ ref_norm.T
         max_sim, _ = sim.max(dim=-1)

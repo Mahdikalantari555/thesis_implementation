@@ -386,7 +386,9 @@ def inject_patch_drop(
             n_floored += int(np.sum(floored != target))
             n_touched += int(sel.sum())
             values[b, ch][sel] = floored
-            realized.append(float(delta * mult))
+            # audit 2026-11-21 item 22: record the REALIZED drop — clipping at
+            # the NDVI floor near S5/S6 previously reported the requested one.
+            realized.append(float(np.mean(delta * mult - (floored - target))))
     else:
         # index_only legacy savi: the solver writes Red/NIR and the stored
         # NDVI channel is intentionally left stale (the audited inconsistency).
