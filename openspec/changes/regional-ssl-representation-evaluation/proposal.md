@@ -186,24 +186,43 @@ reasons and is recorded as a claim ceiling, not as a result.
 6. **T3 retrieval — both tracks included, plus a descriptive natural-data
    near-match listing** (top-10 neighbours per query, explicitly descriptive,
    never gate input) for manual owner inspection.
+7. **Advisor's closing question 1 — expected main advantage: UNDECIDED
+   (owner decision 2026-11-23).** No single advantage is pre-asserted; H1–H5
+   remain fully pre-registered and the capstone gates (G-A…G-E) are the
+   mechanism that decides which advantage the evidence supports. The thesis
+   narrative is scoped only after the results exist — no motivated direction.
+8. **Advisor's closing question 2 — priority: BOTH frames, plus a registered
+   applied ambition (owner decision 2026-11-23; owner's words, English gloss
+   verbatim):** «پژوهش علمی معتبر و همچنین دقت بالا در حل مسائل کشاورزی،
+   مثل تشخیص تنش زودهنگام، دادن راهکار، تبدیل شدن به مدل مرکزی یک سیستم هوش
+   مصنوعی برای آبیاری هوشمند و کشاورزی دقیق» — scientifically valid research
+   AND high accuracy on real agricultural problems: early stress detection,
+   giving recommendations, and becoming the central model of an AI system for
+   smart irrigation and precision agriculture. Registered as aspiration with
+   hard ceilings:
+   (i) *Early stress detection* is an unmet claim today — finding 25 records
+   detection only from onset and only at S6; it stays a gate outcome, never a
+   promise, until the capstone evidence says otherwise.
+   (ii) *Recommendations («دادن راهکار»)*, *decision support* and *being the
+   central AI of an irrigation system* are vision-stage capabilities recorded
+   in `docs/vision.md` as later-stage items; they require agronomic
+   validation (L4) and a product/decision-support contract; no artifact of
+   this change is presented as irrigation advice, and no platform copy may
+   imply it.
+   (iii) The scientific frame keeps full force: negative results are published
+   with equal prominence (G-E); competitive performance claims still need
+   L5 evidence.
+9. **Madeline's path (external early-season yield-forecasting-model embeddings
+   as initialization) — tracked as a FUTURE separate change (owner decision
+   2026-11-23).** Not implemented here: no such artifact exists in-repo, no
+   yield labels exist, and any external weights need their own data, licence
+   and provenance contract before an openspec change is even written. Added
+   to `todo.md` as tracked-not-created.
 
 ## Open Questions (still open)
 
 5. **L4 evidence path** — company harvest records / expert review: timeline and
-   willingness to provide labels? Required for any L4 claim (not for this change).
+   willingness to provide labels? Required for any L4 claim (and therefore for
+   every part of the registered applied ambition above).
 6. **Whether T5 clustering/near-match outputs should feed the platform later**
    (out of scope here).
-7. **The advisor's two closing decision questions remain UNANSWERED** (the
-   relayed conversation never records the owner's pick — do not guess):
-   (a) Which is the model's expected main advantage? — (i) learning each
-   farm's natural temporal behaviour and detecting deviation; (ii) discovering
-   complex multivariate patterns; (iii) generalization to unseen years/growth
-   conditions; (iv) early detection before a severe NDVI collapse; (v) undecided
-   — find the best hypothesis scientifically.
-   (b) Which is the thesis's main priority? — (i) scientifically valid research,
-   even with a negative result; (ii) the best possible algorithm, even if SSL
-   is dropped; (iii) both (methodological novelty + competitive performance).
-   All H1–H5 stay pre-registered regardless; this answer scopes the thesis
-   narrative, the advisor-pack framing and which gate is elevated to the
-   headline. Note this also gates the "registered decision" (ثبت تصمیم) the
-   advisor asked for at the end of the analysis.

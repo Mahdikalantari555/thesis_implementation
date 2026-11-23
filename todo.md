@@ -183,6 +183,7 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
   GRU/Mamba (A1–A10) × suppression (S0–S3) × 5 synthetic anomaly families × 3 severities
   × 3 validation protocols; AUPRC primary; budget-aware execution with Deferred
   visibility; three winner reports; feeds the capstone but no capstone gate depends on it.
+- **`madeline-yield-embeddings-init`** (TRACKED, not created 2026-11-23; owner decision) — Madeline's path: initialise/fine-tune the region base model from external early-season yield-forecasting-model embeddings. Self-supervised trajectory use needs no yield labels, but the external artifact itself needs a data, licence and provenance contract before an openspec change is written. Not implemented; not scheduled.
 0. **`code-audit-2026-11-21-deferred`** — the deferred defect list from the post-bd65829
    audit (`docs/audits/code_audit_2026-11-21.md`): the 3 result-corrupting bugs are FIXED
    (99709b0 / ea74a0c / d4b3cb8, σ refit + severity re-run required); the remaining

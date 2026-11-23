@@ -304,9 +304,17 @@ existing cells and recorded in the capstone's final findings document.
 
 ## Open questions for the owner (mirror of proposal)
 
-L4 evidence timeline (company harvest records / expert review) · whether T5
-clustering outputs should feed the platform later (out of scope here).
+L4 evidence timeline (company harvest records / expert review — also the
+gate for the registered applied ambition) · whether T5 clustering outputs
+should feed the platform later (out of scope here).
 (Resolved 2026-11-23: five-level ladders all kept; screening gate kept for
 region model v0; A1–A10 draft created as a separate change; 22 existing
 changes triaged superseded with `INDEX.md`; T3 ships both tracks plus the
-descriptive near-match listing.)
+descriptive near-match listing; advisor question 1 — main advantage —
+UNDECIDED by owner, H1–H5 stay open and the gates decide; advisor question
+2 — priority — BOTH frames, plus the applied ambition «scientifically valid
+research + high agricultural accuracy → early detection, recommendations,
+central model of a smart-irrigation/precision-agriculture AI system»,
+registered as vision-stage aspiration with hard claim ceilings; Madeline's
+external yield-forecasting-embedding path tracked as a future separate
+change, not created.)
