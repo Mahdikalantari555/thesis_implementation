@@ -1033,3 +1033,22 @@ __all__ = [
     "validate_patch_norm_binding",
     "validate_store",
 ]
+
+# >>> fast-anything: ssl_anomaly.io.patches.aggregate_bin >>>
+# Uses the verified Rust port. FAST_ANYTHING_DISABLE=1 runs the Python above instead.
+# Undo with:  fast-anything disable ssl_anomaly.io.patches.aggregate_bin
+def _fast_anything_load():
+    import os, sys
+    if os.environ.get("FAST_ANYTHING_DISABLE"):
+        return None
+    lib = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../.fast/lib"))
+    if lib not in sys.path:
+        sys.path.append(lib)
+    try:
+        from fa_ssl_anomaly_io_patches_aggregate_bin import aggregate_bin
+    except ImportError:
+        return None
+    return aggregate_bin
+aggregate_bin = _fast_anything_load() or aggregate_bin
+del _fast_anything_load
+# <<< fast-anything: ssl_anomaly.io.patches.aggregate_bin <<<

@@ -1,0 +1,454 @@
+{
+  "version": 1,
+  "command": [
+    "/home/asus/miniforge3/envs/geospatial/bin/python",
+    "_fa_bench_driver.py",
+    "--part",
+    "detectors",
+    "--loops",
+    "20"
+  ],
+  "lang": "python",
+  "runtime": "/home/asus/miniforge3/envs/geospatial/bin/python",
+  "base": ".",
+  "wall": 7.422712231999867,
+  "hotspots": [
+    {
+      "id": "_fa_bench_driver.py:run_detectors",
+      "file": "_fa_bench_driver.py",
+      "line": 191,
+      "end_line": 202,
+      "name": "run_detectors",
+      "qualname": "run_detectors",
+      "module": "__main__",
+      "kind": "function",
+      "ncalls": 1,
+      "tottime": 0.23305496,
+      "cumtime": 2.7234288720000004,
+      "share": 0.366904816848361,
+      "portability": 0.36000000000000004,
+      "score": 0.13208573406541,
+      "blockers": [],
+      "warnings": [
+        "already uses np, less to gain",
+        "calls _rng, they get ported together with it",
+        "missing type hints, types are inferred from recorded calls"
+      ],
+      "params": [
+        {
+          "name": "loops",
+          "annotation": "int",
+          "default": null,
+          "kwonly": false
+        }
+      ],
+      "returns": null,
+      "source": "def run_detectors(loops: int):\n    r = _rng()\n    BINS = 36\n    s = r.normal(0, 1, size=BINS)\n    t0 = perf_counter()\n    for i in range(4000 * loops):\n        x = s * (1.0 + 0.001 * (i % 7))\n        cusum_detector(x, drift_k=1.0, decision_h=4.5)\n        ewma_detector(x, alpha=0.35, L_sigma=2.8)\n        flag_runs(x, threshold=3.5, min_run_bins=2)\n        contiguous_runs(np.isfinite(x), min_length=2)\n    return perf_counter() - t0",
+      "calls": [
+        "_rng"
+      ],
+      "covered_by": null,
+      "owner": null,
+      "records": {}
+    },
+    {
+      "id": "ssl_anomaly.baseline.score.flag_runs",
+      "file": "ssl_anomaly/baseline/score.py",
+      "line": 79,
+      "end_line": 101,
+      "name": "flag_runs",
+      "qualname": "flag_runs",
+      "module": "ssl_anomaly.baseline.score",
+      "kind": "function",
+      "ncalls": 80000,
+      "tottime": 0.32803691700000004,
+      "cumtime": 0.969303045,
+      "share": 0.1305861004312227,
+      "portability": 0.4,
+      "score": 0.052234440172489086,
+      "blockers": [],
+      "warnings": [
+        "already uses np, less to gain"
+      ],
+      "params": [
+        {
+          "name": "s",
+          "annotation": "np.ndarray",
+          "default": null,
+          "kwonly": false
+        },
+        {
+          "name": "threshold",
+          "annotation": "float",
+          "default": "3.5",
+          "kwonly": true
+        },
+        {
+          "name": "min_run_bins",
+          "annotation": "int",
+          "default": "2",
+          "kwonly": true
+        }
+      ],
+      "returns": "tuple[np.ndarray, list[tuple[int, int]]]",
+      "source": "def flag_runs(\n    s: np.ndarray,\n    *,\n    threshold: float = 3.5,\n    min_run_bins: int = 2,\n) -> tuple[np.ndarray, list[tuple[int, int]]]:\n    \"\"\"Flag contiguous bins where |S| > threshold for >= min_run_bins observed bins.\n\n    Returns\n    -------\n    flag : np.ndarray[bool] (bins,)\n    runs : list of (start, end) index pairs (end exclusive)\n    \"\"\"\n    s = np.asarray(s, dtype=np.float64)\n    obs = np.isfinite(s)\n    hit = obs & (np.abs(s) > threshold)\n    runs = contiguous_runs(hit, min_length=min_run_bins)\n    flag = np.zeros_like(s, dtype=bool)\n    for a, b in runs:\n        flag[a:b] = True\n    # Clear flags for bins that weren't observed\n    flag &= obs\n    return flag, runs",
+      "calls": [],
+      "covered_by": null,
+      "owner": null,
+      "records": {}
+    },
+    {
+      "id": "ssl_anomaly.utils.arrays.contiguous_runs",
+      "file": "ssl_anomaly/utils/arrays.py",
+      "line": 63,
+      "end_line": 80,
+      "name": "contiguous_runs",
+      "qualname": "contiguous_runs",
+      "module": "ssl_anomaly.utils.arrays",
+      "kind": "function",
+      "ncalls": 160000,
+      "tottime": 0.511092262,
+      "cumtime": 0.961836377,
+      "share": 0.12958017863786386,
+      "portability": 0.4,
+      "score": 0.05183207145514555,
+      "blockers": [],
+      "warnings": [
+        "already uses np, less to gain"
+      ],
+      "params": [
+        {
+          "name": "mask",
+          "annotation": "np.ndarray",
+          "default": null,
+          "kwonly": false
+        },
+        {
+          "name": "min_length",
+          "annotation": "int",
+          "default": "2",
+          "kwonly": false
+        }
+      ],
+      "returns": "list[tuple[int, int]]",
+      "source": "def contiguous_runs(mask: np.ndarray, min_length: int = 2) -> list[tuple[int, int]]:\n    \"\"\"Return (start, end) index pairs of contiguous True runs of length >= min_length.\n\n    End index is exclusive (Python slicing convention). NaN gaps in *mask* are\n    treated as False and break runs.\n    \"\"\"\n    m = np.asarray(mask, dtype=bool).copy()\n    m[~np.isfinite(mask) if mask.dtype.kind == \"f\" else np.zeros_like(m, dtype=bool)] = False\n    runs: list[tuple[int, int]] = []\n    start = None\n    for i, v in enumerate(m.tolist() + [False]):\n        if v and start is None:\n            start = i\n        elif not v and start is not None:\n            if i - start >= min_length:\n                runs.append((start, i))\n            start = None\n    return runs",
+      "calls": [],
+      "covered_by": null,
+      "owner": null,
+      "records": {}
+    },
+    {
+      "id": "ssl_anomaly.monitor.severity_table._derived",
+      "file": "ssl_anomaly/monitor/severity_table.py",
+      "line": 93,
+      "end_line": 97,
+      "name": "_derived",
+      "qualname": "_derived",
+      "module": "ssl_anomaly.monitor.severity_table",
+      "kind": "function",
+      "ncalls": 6,
+      "tottime": 5.766e-6,
+      "cumtime": 0.000020536,
+      "share": 2.766643695476671e-6,
+      "portability": 1.0,
+      "score": 2.766643695476671e-6,
+      "blockers": [],
+      "warnings": [],
+      "params": [
+        {
+          "name": "delta",
+          "annotation": "float",
+          "default": null,
+          "kwonly": false
+        }
+      ],
+      "returns": "tuple[float, float]",
+      "source": "def _derived(delta: float) -> tuple[float, float]:\n    return (\n        round(100.0 * delta / GRAND_GROWTH_MEDIAN_NDVI, 1),\n        round(delta / ACROSS_FIELD_MAD_NDVI, 3),\n    )",
+      "calls": [],
+      "covered_by": null,
+      "owner": null,
+      "records": {}
+    },
+    {
+      "id": "_fa_bench_driver.py:main",
+      "file": "_fa_bench_driver.py",
+      "line": 263,
+      "end_line": 271,
+      "name": "main",
+      "qualname": "main",
+      "module": "__main__",
+      "kind": "function",
+      "ncalls": 1,
+      "tottime": 0.00003813400000000001,
+      "cumtime": 2.726296858,
+      "share": 0.367291196639246,
+      "portability": 0.0,
+      "score": 0.0,
+      "blockers": [
+        "does I/O: print"
+      ],
+      "warnings": [
+        "missing type hints, types are inferred from recorded calls"
+      ],
+      "params": [],
+      "returns": null,
+      "source": "def main():\n    ap = argparse.ArgumentParser()\n    ap.add_argument(\"--part\", choices=(\"all\",) + PARTS, default=\"all\")\n    ap.add_argument(\"--loops\", type=int, default=3)\n    args = ap.parse_args()\n    parts = PARTS if args.part == \"all\" else (args.part,)\n    for part in parts:\n        secs = RUNNERS[part](args.loops)\n        print(f\"[fa-bench] part={part} loops={args.loops} wall={secs:.3f}s\", flush=True)",
+      "calls": [],
+      "covered_by": null,
+      "owner": null,
+      "records": {}
+    },
+    {
+      "id": "ssl_anomaly.io.patches._fast_anything_load",
+      "file": "ssl_anomaly/io/patches.py",
+      "line": 1040,
+      "end_line": 1051,
+      "name": "_fast_anything_load",
+      "qualname": "_fast_anything_load",
+      "module": "ssl_anomaly.io.patches",
+      "kind": "function",
+      "ncalls": 1,
+      "tottime": 0.000014340000000000002,
+      "cumtime": 0.000720454,
+      "share": 0.00009706074780779848,
+      "portability": 0.0,
+      "score": 0.0,
+      "blockers": [
+        "does I/O: os.environ.get, os.path.abspath, os.path.dirname"
+      ],
+      "warnings": [
+        "missing type hints, types are inferred from recorded calls"
+      ],
+      "params": [],
+      "returns": null,
+      "source": "def _fast_anything_load():\n    import os, sys\n    if os.environ.get(\"FAST_ANYTHING_DISABLE\"):\n        return None\n    lib = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), \"../../.fast/lib\"))\n    if lib not in sys.path:\n        sys.path.append(lib)\n    try:\n        from fa_ssl_anomaly_io_patches_aggregate_bin import aggregate_bin\n    except ImportError:\n        return None\n    return aggregate_bin",
+      "calls": [],
+      "covered_by": null,
+      "owner": null,
+      "records": {}
+    },
+    {
+      "id": "ssl_anomaly.baseline.score._fast_anything_load",
+      "file": "ssl_anomaly/baseline/score.py",
+      "line": 224,
+      "end_line": 235,
+      "name": "_fast_anything_load",
+      "qualname": "_fast_anything_load",
+      "module": "ssl_anomaly.baseline.score",
+      "kind": "function",
+      "ncalls": 1,
+      "tottime": 0.000014366,
+      "cumtime": 0.0006813300000000001,
+      "share": 0.00009178989818071292,
+      "portability": 0.0,
+      "score": 0.0,
+      "blockers": [
+        "does I/O: os.environ.get, os.path.abspath, os.path.dirname"
+      ],
+      "warnings": [
+        "missing type hints, types are inferred from recorded calls"
+      ],
+      "params": [],
+      "returns": null,
+      "source": "def _fast_anything_load():\n    import os, sys\n    if os.environ.get(\"FAST_ANYTHING_DISABLE\"):\n        return None\n    lib = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), \"../../.fast/lib\"))\n    if lib not in sys.path:\n        sys.path.append(lib)\n    try:\n        from fa_ssl_anomaly_baseline_score_ewma_detector import ewma_detector\n    except ImportError:\n        return None\n    return ewma_detector",
+      "calls": [],
+      "covered_by": null,
+      "owner": null,
+      "records": {}
+    },
+    {
+      "id": "ssl_anomaly.baseline.score._fast_anything_load",
+      "file": "ssl_anomaly/baseline/score.py",
+      "line": 243,
+      "end_line": 254,
+      "name": "_fast_anything_load",
+      "qualname": "_fast_anything_load",
+      "module": "ssl_anomaly.baseline.score",
+      "kind": "function",
+      "ncalls": 1,
+      "tottime": 0.000011748,
+      "cumtime": 0.0004947700000000001,
+      "share": 0.00006665622814623065,
+      "portability": 0.0,
+      "score": 0.0,
+      "blockers": [
+        "does I/O: os.environ.get, os.path.abspath, os.path.dirname"
+      ],
+      "warnings": [
+        "missing type hints, types are inferred from recorded calls"
+      ],
+      "params": [],
+      "returns": null,
+      "source": "def _fast_anything_load():\n    import os, sys\n    if os.environ.get(\"FAST_ANYTHING_DISABLE\"):\n        return None\n    lib = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), \"../../.fast/lib\"))\n    if lib not in sys.path:\n        sys.path.append(lib)\n    try:\n        from fa_ssl_anomaly_baseline_score_cusum_detector import cusum_detector\n    except ImportError:\n        return None\n    return cusum_detector",
+      "calls": [],
+      "covered_by": null,
+      "owner": null,
+      "records": {}
+    },
+    {
+      "id": "_fa_bench_driver.py:_rng",
+      "file": "_fa_bench_driver.py",
+      "line": 54,
+      "end_line": 55,
+      "name": "_rng",
+      "qualname": "_rng",
+      "module": "__main__",
+      "kind": "function",
+      "ncalls": 1,
+      "tottime": 0.0001321,
+      "cumtime": 0.00027075600000000003,
+      "share": 0.000036476693631305104,
+      "portability": 0.36000000000000004,
+      "score": 0.0,
+      "blockers": [],
+      "warnings": [
+        "already uses np, less to gain",
+        "missing type hints, types are inferred from recorded calls"
+      ],
+      "params": [],
+      "returns": null,
+      "source": "def _rng():\n    return np.random.default_rng(20261123)",
+      "calls": [],
+      "covered_by": "_fa_bench_driver.py:run_detectors",
+      "owner": null,
+      "records": {}
+    }
+  ],
+  "ports": {
+    "ssl_anomaly.baseline.score.cusum_detector": {
+      "id": "ssl_anomaly.baseline.score.cusum_detector",
+      "file": "ssl_anomaly/baseline/score.py",
+      "module": "ssl_anomaly.baseline.score",
+      "func": "cusum_detector",
+      "ext": "fa_ssl_anomaly_baseline_score_cusum_detector",
+      "crate_dir": ".fast/ports/ssl_anomaly.baseline.score.cusum_detector",
+      "recorded": 200,
+      "calls_seen": 80000,
+      "verify": {
+        "built": true,
+        "build_log": null,
+        "total": 500,
+        "derived": 300,
+        "edges": 100,
+        "passed": 500,
+        "failed": 0,
+        "failures": [],
+        "micro": {
+          "original_ns": 40369.63499856938,
+          "rust_ns": 6870.524994155858,
+          "speedup": 5.87577150696755
+        },
+        "lang": "python",
+        "source_hash": "cb5cf8821c2a8a14"
+      },
+      "enabled": true,
+      "lang": "python",
+      "owner": null,
+      "line": 116,
+      "sources": [
+        "def cusum_detector(\n    s: np.ndarray,\n    *,\n    drift_k: float = 1.0,\n    decision_h: float = 4.5,\n) -> tuple[np.ndarray, np.ndarray]:\n    \"\"\"Page's tabular CUSUM along observed phase bins for gradual slow-drift detection.\n\n    Accumulates ``C_t = max(0, C_{t-1} + |s_t| - drift_k)`` solely across finite\n    observed bins so unobserved NaN bins neither accumulate nor reset the statistic.\n    Returns ``(flag_bool, cusum_stat)`` of shape ``(bins,)``, where unobserved bins\n    have ``flag_bool=False`` and ``cusum_stat=NaN``.\n    \"\"\"\n    arr = np.asarray(s, dtype=np.float64)\n    stat = np.full_like(arr, np.nan, dtype=np.float64)\n    flag = np.zeros(arr.shape, dtype=bool)\n    c_pos = 0.0\n    for idx in range(arr.size):\n        val = arr[idx]\n        if not np.isfinite(val):\n            continue\n        c_pos = max(0.0, c_pos + abs(float(val)) - float(drift_k))\n        stat[idx] = c_pos\n        if c_pos > decision_h:\n            flag[idx] = True\n    return flag, stat"
+      ]
+    },
+    "ssl_anomaly.baseline.score.ewma_detector": {
+      "id": "ssl_anomaly.baseline.score.ewma_detector",
+      "file": "ssl_anomaly/baseline/score.py",
+      "module": "ssl_anomaly.baseline.score",
+      "func": "ewma_detector",
+      "ext": "fa_ssl_anomaly_baseline_score_ewma_detector",
+      "crate_dir": ".fast/ports/ssl_anomaly.baseline.score.ewma_detector",
+      "recorded": 200,
+      "calls_seen": 80000,
+      "verify": {
+        "built": true,
+        "build_log": null,
+        "total": 500,
+        "derived": 300,
+        "edges": 100,
+        "passed": 500,
+        "failed": 0,
+        "failures": [],
+        "micro": {
+          "original_ns": 60815.66500142799,
+          "rust_ns": 7266.559996423894,
+          "speedup": 8.369251066716206
+        },
+        "lang": "python",
+        "source_hash": "b1509b667d33c90e"
+      },
+      "enabled": true,
+      "lang": "python",
+      "owner": null,
+      "line": 144,
+      "sources": [
+        "def ewma_detector(\n    s: np.ndarray,\n    *,\n    alpha: float = 0.35,\n    L_sigma: float = 2.8,\n    baseline_mu: float = 1.0,\n    baseline_sigma: float = 0.65,\n) -> tuple[np.ndarray, np.ndarray]:\n    \"\"\"EWMA control-chart slow-drift detector over observed phase bins.\n\n    Updates ``E_t = alpha * |s_t| + (1 - alpha) * E_{t-1}`` across observed bins and\n    flags bins exceeding exact finite-step upper control limit\n    ``mu + L_sigma * sigma * sqrt((alpha / (2 - alpha)) * (1 - (1 - alpha)**(2*m)))``.\n    \"\"\"\n    arr = np.asarray(s, dtype=np.float64)\n    ewma = np.full_like(arr, np.nan, dtype=np.float64)\n    flag = np.zeros(arr.shape, dtype=bool)\n    a = float(np.clip(alpha, 0.05, 0.95))\n    e_val = float(baseline_mu)\n    step_m = 0\n    for idx in range(arr.size):\n        val = arr[idx]\n        if not np.isfinite(val):\n            continue\n        step_m += 1\n        e_val = a * abs(float(val)) + (1.0 - a) * e_val\n        ewma[idx] = e_val\n        asymp = (a / (2.0 - a)) * (1.0 - (1.0 - a) ** (2 * step_m))\n        ucl = float(baseline_mu) + float(L_sigma) * float(baseline_sigma) * float(np.sqrt(max(asymp, 1e-8)))\n        if e_val > ucl:\n            flag[idx] = True\n    return flag, ewma"
+      ]
+    },
+    "ssl_anomaly.io.patches.aggregate_bin": {
+      "id": "ssl_anomaly.io.patches.aggregate_bin",
+      "file": "ssl_anomaly/io/patches.py",
+      "module": "ssl_anomaly.io.patches",
+      "func": "aggregate_bin",
+      "ext": "fa_ssl_anomaly_io_patches_aggregate_bin",
+      "crate_dir": ".fast/ports/ssl_anomaly.io.patches.aggregate_bin",
+      "recorded": 200,
+      "calls_seen": 1200,
+      "verify": {
+        "built": true,
+        "build_log": null,
+        "total": 204,
+        "derived": 4,
+        "edges": 1,
+        "passed": 204,
+        "failed": 0,
+        "failures": [],
+        "micro": {
+          "original_ns": 6304937.329996391,
+          "rust_ns": 1168199.3549973413,
+          "speedup": 5.397141594904186
+        },
+        "lang": "python",
+        "source_hash": "5111bd785c0966f0"
+      },
+      "enabled": true,
+      "lang": "python",
+      "owner": null,
+      "line": 234,
+      "sources": [
+        "def aggregate_bin(\n    scenes: Sequence[np.ndarray],\n    valid_masks: Sequence[np.ndarray],\n    *,\n    in_field: np.ndarray | None = None,\n    dtype: np.dtype | str = np.float16,\n) -> BinAggregate:\n    \"\"\"Per-pixel median over the valid acquisitions inside one bin.\n\n    Parameters\n    ----------\n    scenes\n        One ``(C, S, S)`` float array per acquisition in the bin (already\n        cropped/padded by the caller). NaN marks an invalid pixel value.\n    valid_masks\n        One boolean ``(S, S)`` array per acquisition — the QA mask.\n    in_field\n        Optional ``(S, S)`` 0/1 polygon mask. When given, pixels outside the\n        field are forced invalid (they are never asserted as observed).\n\n    Semantics (mirrors the field-level median convention in\n    ``monitor/inputs.py``): a pixel-bin is valid iff at least one acquisition\n    has QA-valid, finite values; the value is the median of those. No\n    interpolation, no zero-fill. ``n_obs`` counts acquisitions with at least\n    one valid in-field pixel.\n    \"\"\"\n    if len(scenes) != len(valid_masks):\n        raise ValueError(\n            f\"{len(scenes)} scenes but {len(valid_masks)} validity masks\"\n        )\n    if not scenes:\n        s = in_field.shape[0] if in_field is not None else 0\n        return BinAggregate(\n            values=np.full((N_CHANNELS, s, s), np.nan, dtype=dtype),\n            pixel_valid=np.zeros((s, s), dtype=np.uint8),\n            n_obs=0, sensor_id=SENSOR_IDS[\"unknown\"],\n        )\n\n    first = np.asarray(scenes[0])\n    if first.ndim != 3:\n        raise ValueError(f\"scene arrays must be (C, S, S), got {first.shape}\")\n    c, size, _ = first.shape\n    stack = np.full((len(scenes), c, size, size), np.nan, dtype=np.float64)\n    valid = np.zeros((len(scenes), size, size), dtype=bool)\n    for i, (sc, vm) in enumerate(zip(scenes, valid_masks)):\n        arr = np.asarray(sc, dtype=np.float64)\n        if arr.shape != (c, size, size):\n            raise ValueError(f\"scene {i} has shape {arr.shape}, expected {(c, size, size)}\")\n        stack[i] = arr\n        v = np.asarray(vm, dtype=bool)\n        if v.shape != (size, size):\n            raise ValueError(f\"mask {i} has shape {v.shape}, expected {(size, size)}\")\n        valid[i] = v\n\n    if in_field is not None:\n        inside = np.asarray(in_field, dtype=bool)\n        if inside.shape != (size, size):\n            raise ValueError(f\"in_field has shape {inside.shape}, expected {(size, size)}\")\n        valid &= inside[None, :, :]\n\n    # A pixel is observed in an acquisition when it is QA-valid AND finite.\n    observed = valid[:, None, :, :] & np.isfinite(stack)\n    any_obs = observed.any(axis=0)                      # (C, S, S)\n    with np.errstate(all=\"ignore\"), warnings.catch_warnings():\n        # All-NaN slices (whole pixels with no observation) are expected here and\n        # stay NaN by design — silence the specific numpy warning, not all of them.\n        warnings.filterwarnings(\"ignore\", message=\"All-NaN slice encountered\",\n                                category=RuntimeWarning)\n        values = np.nanmedian(np.where(observed, stack, np.nan), axis=0)\n    values[~any_obs] = np.nan\n\n    pixel_valid = observed.any(axis=0).any(axis=0)       # (S, S) any channel observed\n    n_obs = int(observed.any(axis=(1, 2, 3)).sum())\n\n    return BinAggregate(\n        values=values.astype(dtype),\n        pixel_valid=pixel_valid.astype(np.uint8),\n        n_obs=n_obs,\n        sensor_id=SENSOR_IDS[\"unknown\"],\n    )"
+      ]
+    }
+  },
+  "bench": {
+    "lang": "python",
+    "command": [
+      "/home/asus/miniforge3/envs/geospatial/bin/python",
+      "../scripts/bench_fast_anything_parts.py",
+      "--part",
+      "detectors",
+      "--loops",
+      "5"
+    ],
+    "runs": 2,
+    "ports": [
+      "ssl_anomaly.baseline.score.cusum_detector",
+      "ssl_anomaly.baseline.score.ewma_detector",
+      "ssl_anomaly.io.patches.aggregate_bin"
+    ],
+    "before": {
+      "median": 5.186243971,
+      "mean": 5.186243971,
+      "min": 5.151821913,
+      "max": 5.220666029,
+      "stddev": 0.03442205800000009
+    },
+    "after": {
+      "median": 3.7897447205,
+      "mean": 3.7897447205,
+      "min": 3.761442652,
+      "max": 3.818046789,
+      "stddev": 0.02830206850000017
+    },
+    "speedup": 1.368494279560802,
+    "output_diff": "line 1: \"[fa-bench] part=detectors loops=5 wall=1.959s\" became \"[fa-bench] part=detectors loops=5 wall=0.487s\""
+  }
+}

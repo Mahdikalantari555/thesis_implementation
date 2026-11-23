@@ -217,3 +217,41 @@ def score_all_cycles(
         out["flags"][key] = flags
         out["runs"][key] = runs_list
     return out
+
+# >>> fast-anything: ssl_anomaly.baseline.score.ewma_detector >>>
+# Uses the verified Rust port. FAST_ANYTHING_DISABLE=1 runs the Python above instead.
+# Undo with:  fast-anything disable ssl_anomaly.baseline.score.ewma_detector
+def _fast_anything_load():
+    import os, sys
+    if os.environ.get("FAST_ANYTHING_DISABLE"):
+        return None
+    lib = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../.fast/lib"))
+    if lib not in sys.path:
+        sys.path.append(lib)
+    try:
+        from fa_ssl_anomaly_baseline_score_ewma_detector import ewma_detector
+    except ImportError:
+        return None
+    return ewma_detector
+ewma_detector = _fast_anything_load() or ewma_detector
+del _fast_anything_load
+# <<< fast-anything: ssl_anomaly.baseline.score.ewma_detector <<<
+
+# >>> fast-anything: ssl_anomaly.baseline.score.cusum_detector >>>
+# Uses the verified Rust port. FAST_ANYTHING_DISABLE=1 runs the Python above instead.
+# Undo with:  fast-anything disable ssl_anomaly.baseline.score.cusum_detector
+def _fast_anything_load():
+    import os, sys
+    if os.environ.get("FAST_ANYTHING_DISABLE"):
+        return None
+    lib = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../.fast/lib"))
+    if lib not in sys.path:
+        sys.path.append(lib)
+    try:
+        from fa_ssl_anomaly_baseline_score_cusum_detector import cusum_detector
+    except ImportError:
+        return None
+    return cusum_detector
+cusum_detector = _fast_anything_load() or cusum_detector
+del _fast_anything_load
+# <<< fast-anything: ssl_anomaly.baseline.score.cusum_detector <<<
