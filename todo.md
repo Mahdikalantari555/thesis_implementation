@@ -165,6 +165,24 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
 
 ## Queued — openspec candidates (one change each, user-approved direction)
 
+- **2026-11-23 triage (owner decision):** the v1-era patch line and the GRU-prediction
+  line are SUPERSEDED by the v2 chain + finding 25; `openspec/changes/INDEX.md` added;
+  superseded folders marked (not archived); `oracle-floor-audit` and
+  `patch-alarm-statistic-e1` left DORMANT for owner review. Archive candidates
+  (not archived yet): `decomposition-aware-ssl-study`, `training-holdout-invariant`,
+  `separate-verification-gates`.
+- **`regional-ssl-representation-evaluation`** (PROPOSED 2026-11-23) — the capstone:
+  Level-1 pretraining quality + Level-2 downstream transferability of a light
+  **regional** SSL representation of field dynamics (B1–B5 input ladder, 5/10/25/50/100%
+  label fractions, T1–T5 tasks, temporal rolls + leave-block-out generalization,
+  pre-registered gates G-A…G-E). Architecture (incl. Barlow Twins candidate) is NOT
+  pre-approved — pre-registered screening decides. Semantics: anomaly ≠ stress
+  candidate ≠ stress; synthetic = controlled evidence only; geographic scope out.
+- **`benchmark-latent-reconstruction-prediction-architectures`** (PROPOSED 2026-11-23,
+  owner decision) — heavy counterpart, standalone Colab T4 benchmark: 5 paradigms ×
+  GRU/Mamba (A1–A10) × suppression (S0–S3) × 5 synthetic anomaly families × 3 severities
+  × 3 validation protocols; AUPRC primary; budget-aware execution with Deferred
+  visibility; three winner reports; feeds the capstone but no capstone gate depends on it.
 0. **`code-audit-2026-11-21-deferred`** — the deferred defect list from the post-bd65829
    audit (`docs/audits/code_audit_2026-11-21.md`): the 3 result-corrupting bugs are FIXED
    (99709b0 / ea74a0c / d4b3cb8, σ refit + severity re-run required); the remaining
