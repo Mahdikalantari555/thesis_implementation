@@ -251,3 +251,102 @@ def test_gru_embeddings_eval_mode_deterministic() -> None:
     # Identical repeated outputs prove eval mode during the forward (the
     # wrapper restores the caller's training state afterwards by design).
     assert np.array_equal(e1, e2)
+
+
+# ---------------------------------------------------------------------------
+# PERF-7 — score_batch must stay bit-identical to the per-bin loop
+# ---------------------------------------------------------------------------
+def _reference_score_batch(bank, embeddings, masks):
+    """The pre-PERF-7 body, verbatim: one resolution + one distance per bin."""
+    N, T, _ = embeddings.shape
+    scores = np.full((N, T), np.nan)
+    fallback = np.empty((N, T), dtype=object)
+    fallback[:, :] = "absent"
+    if bank._global is None:
+        bank._global = np.arange(bank.vectors.shape[0], dtype=np.int64)
+    for n in range(N):
+        for b in range(T):
+            if not masks[n, b].any():
+                continue
+            sig = nbank.mask_signature(masks[n, b])
+            rows, fb, key = bank._resolve(b, sig)
+            if rows is None:
+                continue
+            dist = bank._distance(embeddings[n, b], rows, key)
+            scores[n, b] = dist / bank._q95_for(key, rows)
+            fallback[n, b] = fb
+    return scores, {"fallback": fallback}
+
+
+def _random_bank(seed=0, *, distance="knn", k=5, n_cycles=40, T=36, d=6,
+                 min_class_count=8):
+    rng = np.random.default_rng(seed)
+    N, Td = n_cycles, T
+    emb = rng.normal(0.0, 1.0, size=(N, Td, d)).astype(np.float32)
+    masks = np.ones((N, Td, 4), dtype=bool)
+    # vary the signature across bins so all three tiers (direct/pooled/absent)
+    # are exercised, and leave whole bins unobserved
+    masks[:, :, 2] = rng.random((N, Td)) > 0.5
+    masks[:, 0, :] = False
+    masks[0, 5, :] = False
+    manifest = {"cycles": {"train": [f"{i}:{c}" for i in range(4) for c in range(n_cycles)],
+                           "dev": [], "test": []}}
+    return nbank.build_bank(emb, masks, [f"{i}:{c}" for i in range(4) for c in range(n_cycles)],
+                      manifest, min_class_count=min_class_count, k=k, distance=distance)
+
+
+@pytest.mark.parametrize(("distance", "k"), [("knn", 5), ("knn", 1), ("mahalanobis", 5)])
+def test_score_batch_matches_the_per_bin_loop(distance, k) -> None:
+    bank = _random_bank(seed=3, distance=distance, k=k)
+    rng = np.random.default_rng(4)
+    N, T, d = 7, 36, bank.vectors.shape[1]
+    q_emb = rng.normal(0.0, 1.0, size=(N, T, d)).astype(np.float32)
+    q_masks = np.ones((N, T, 4), dtype=bool)
+    q_masks[:, :, 2] = rng.random((N, T)) > 0.5
+    q_masks[:, 2, :] = False
+    got, meta = bank.score_batch(q_emb, q_masks)
+    ref, ref_meta = _reference_score_batch(bank, q_emb, q_masks)
+    assert np.array_equal(np.isnan(got), np.isnan(ref)), "NaN positions differ"
+    fin = np.isfinite(ref)
+    assert np.array_equal(got[fin], ref[fin]), (
+        f"values differ at {int((got[fin] != ref[fin]).sum())} positions")
+    assert np.array_equal(meta["fallback"], ref_meta["fallback"])
+
+
+def test_score_batch_is_faster_than_the_per_bin_loop() -> None:
+    """PERF-7 targets the per-bin SCORING loop.
+
+    The first call also pays the one-off leave-one-out q95 fit, which both
+    implementations share (``_q95_for`` memoizes per cell), so the measurement
+    runs each path twice and times the warm call. Comparing cold call vs cold
+    call would mostly measure that shared fit.
+    """
+    import time
+
+    rng = np.random.default_rng(6)
+    T = 36
+    N = 120
+
+    def fresh():
+        return _random_bank(seed=5, n_cycles=120)
+
+    d = fresh().vectors.shape[1]
+
+    q_emb = rng.normal(0.0, 1.0, size=(N, T, d)).astype(np.float32)
+    q_masks = np.ones((N, T, 4), dtype=bool)
+
+    vec_bank = fresh()
+    vec_bank.score_batch(q_emb, q_masks)                       # warm the q95 cache
+    t0 = time.perf_counter()
+    vec_bank.score_batch(q_emb, q_masks)
+    t_new = time.perf_counter() - t0
+
+    loop_bank = fresh()
+    _reference_score_batch(loop_bank, q_emb, q_masks)          # warm the q95 cache
+    t0 = time.perf_counter()
+    _reference_score_batch(loop_bank, q_emb, q_masks)
+    t_ref = time.perf_counter() - t0
+
+    # ~2.8x measured on this shape; 1.3x is a conservative regression bound
+    # (the test machine is shared, so a tight bound would be flaky).
+    assert t_new < t_ref / 1.3, f"vectorized {t_new:.3f}s vs loop {t_ref:.3f}s"

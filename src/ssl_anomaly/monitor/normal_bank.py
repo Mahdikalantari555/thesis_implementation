@@ -198,6 +198,42 @@ class NormalBank:
         zs = (q.astype(np.float64) - med) / scale
         return float(np.sqrt(np.mean(zs * zs)))
 
+    def _distance_many(self, qs: np.ndarray, rows: np.ndarray, key: CellKey) -> np.ndarray:
+        """Vectorized :meth:`_distance` over a (Q, d) block of queries.
+
+        Same arithmetic per query: k nearest of the SAME row set, mean of their
+        squared distances, sqrt. k-NN keeps a per-query ``argpartition`` (the k-th
+        selection is data-dependent) but does it on the whole (Q, R) distance
+        matrix at once; Mahalanobis is a plain row-wise broadcast.
+        """
+        Q = qs.shape[0]
+        if self.distance == "knn":
+            V = self.vectors[rows]
+            q_cast = qs.astype(V.dtype)
+            # Flatten the (Q, R, d) broadcast to (Q*R, d) before the reduction:
+            # np.sum(..., axis=2) on a 3-D block uses a different inner-loop
+            # blocking than the 2-D (R, d) reduction `_distance` performs, and
+            # the two differ in the last ULP. The 2-D reshape reproduces the
+            # per-query reduction exactly (parity test pins it).
+            flat = (V[None, :, :] - q_cast[:, None, :]).reshape(-1, V.shape[1])
+            d2 = np.sum(flat * flat, axis=1).reshape(Q, V.shape[0])
+            kk = min(self.k, V.shape[0])
+            if kk == 0:
+                return np.full(Q, np.nan)
+            if V.shape[0] > kk:
+                part = np.argpartition(d2, kk - 1, axis=1)[:, :kk]
+                picked = np.take_along_axis(d2, part, axis=1)   # (Q, kk) block
+            else:
+                picked = d2
+            # `_distance` returns float(np.sqrt(np.mean(d2p))): BOTH the mean
+            # and the sqrt run in the squared-distance dtype, and only the final
+            # float64-widening happens afterwards. Widening before the sqrt
+            # would compute a more precise root and differ in the last ULP.
+            return np.sqrt(picked.mean(axis=1)).astype(np.float64)
+        med, scale = self._stats_for(key, rows)
+        zs = (qs.astype(np.float64) - med[None, :]) / scale[None, :]
+        return np.sqrt(np.mean(zs * zs, axis=1))
+
     def _loo_q95(self, key: CellKey, rows: np.ndarray) -> float:
         """q95 of the members' leave-one-out distances to their own row set —
         the common-null basis of the normalization (k-NN: self excluded;
@@ -249,17 +285,38 @@ class NormalBank:
         fallback[:, :] = "absent"
         if self._global is None:
             self._global = np.arange(self.vectors.shape[0], dtype=np.int64)
+        # Audit PERF-7: cell resolution is a function of (BIN, SIGNATURE), not of
+        # the cycle, so it is done once per (bin, signature) instead of once per
+        # (n, b); the distance is then computed per CELL over all the queries
+        # that land in it, which turns the per-bin Python loop into a handful of
+        # vectorized passes. Per-bin arithmetic is unchanged — same rows, same
+        # k-th selection, same divide — so the scores are bit-identical (pinned
+        # by tests/unit/test_normal_bank.py::test_score_batch_matches_the_per_bin_loop).
+        resolved: dict[tuple[int, str], tuple[np.ndarray | None, str, CellKey]] = {}
+        cell_queries: dict[CellKey, list[tuple[int, int]]] = {}
+        cell_hits: dict[CellKey, tuple[np.ndarray, str]] = {}
         for n in range(N):
             for b in range(T):
                 if not masks[n, b].any():
-                    continue  # absent (NaN score, "absent" flag)
-                sig = mask_signature(masks[n, b])
-                rows, fb, key = self._resolve(b, sig)
+                    continue                                # absent (NaN score)
+                rk = (b, mask_signature(masks[n, b]))
+                hit = resolved.get(rk)
+                if hit is None:
+                    hit = resolved[rk] = self._resolve(b, rk[1])
+                rows, fb, key = hit
                 if rows is None:
                     continue
-                dist = self._distance(embeddings[n, b], rows, key)
-                scores[n, b] = dist / self._q95_for(key, rows)
-                fallback[n, b] = fb
+                cell_queries.setdefault(key, []).append((n, b))
+                cell_hits[key] = (rows, fb)
+        for key, positions in cell_queries.items():
+            rows, fb = cell_hits[key]
+            idx = np.asarray(positions, dtype=np.int64)
+            qs = embeddings[idx[:, 0], idx[:, 1]]            # (Q, d)
+            dists = self._distance_many(qs, rows, key)
+            q95 = self._q95_for(key, rows)
+            with np.errstate(invalid="ignore", divide="ignore"):
+                scores[idx[:, 0], idx[:, 1]] = dists / q95
+            fallback[idx[:, 0], idx[:, 1]] = fb
         return scores, {"fallback": fallback}
 
 

@@ -650,18 +650,47 @@ def build_patch_norm(*, root, splits_manifest: dict, holdout_manifest: dict,
     cycles, _ = select_patch_train_cycles(
         root, splits_manifest=splits_manifest, holdout_manifest=holdout_manifest,
     )
-    flat_vals, flat_sensors = [], []
-    for cycle in progress(cycles) if progress is not None else cycles:
+    # Audit PERF-6. The old body accumulated one (pixels, C) float64 block per
+    # field-cycle-bin in a list and then concatenated the list — every value
+    # existed TWICE at peak (list + concatenated copy), the largest memory
+    # spike of the norm build. Both passes below produce the SAME float64
+    # values in the SAME order, so the fitted artifact stays bit-for-bit
+    # reproducible (pinned by tests/unit/test_patch_norm_parity.py):
+    #   pass 1 — count the rows (cheap: it only reads the masks), allocate the
+    #            two arrays once, then
+    #   pass 2 — re-read the cycles and fill the pre-allocated arrays.
+    # The accumulation dtype is deliberately unchanged: float64 in, float64
+    # median/percentile out.
+    def _rows_for(cycle):
         values, obs, sensors, _ = read_patch_observations(root, cycle)
+        out = []
         for b, sensor in enumerate(sensors):
             pixels = obs[b].any(axis=0)
             if pixels.any():
-                flat_vals.append(np.where(obs[b][:, pixels], values[b][:, pixels], np.nan).T)
-                flat_sensors.append(np.full(pixels.sum(), sensor, dtype=np.uint8))
-    if not flat_vals:
+                out.append((
+                    np.where(obs[b][:, pixels], values[b][:, pixels], np.nan).T,
+                    int(sensor),
+                ))
+        return out
+
+    n_rows = 0
+    for cycle in progress(cycles) if progress is not None else cycles:
+        n_rows += sum(block.shape[0] for block, _ in _rows_for(cycle))
+    if n_rows == 0:
         raise ValueError("no finite in-field train pixel observations — refusing to fit norm stats")
 
-    stats = fit_patch_norm(np.concatenate(flat_vals), np.concatenate(flat_sensors))
+    flat_vals = np.empty((n_rows, N_CHANNELS), dtype=np.float64)
+    flat_sensors = np.empty(n_rows, dtype=np.uint8)
+    at = 0
+    for cycle in progress(cycles) if progress is not None else cycles:
+        for block, sensor in _rows_for(cycle):
+            n = block.shape[0]
+            flat_vals[at:at + n] = block
+            flat_sensors[at:at + n] = sensor
+            at += n
+    assert at == n_rows
+
+    stats = fit_patch_norm(flat_vals, flat_sensors)
     fields = sorted({cycle.field_id for cycle in cycles})
     return {
         "stats": stats,
@@ -839,22 +868,60 @@ class Provenance:
             raise ValueError("provenance n_fields must be positive")
 
 
-def output_sha256(root, *, sample: int = 512) -> str:
-    """Cheap content hash of the store: shapes + a deterministic value sample."""
+def output_sha256(root, *, sample: int = 512, slab: int = 16) -> str:
+    """Cheap content hash of the store: shapes + a deterministic value sample.
+
+    Audit PERF-1: this used to materialize the WHOLE ``values`` array
+    (``root["values"][:]``, ~1 GB fp16 at full extent) just to take a 512-value
+    sample — the largest export memory spike in the pipeline. It now streams
+    the store in row-slabs along the first axis. The digest is byte-identical
+    because the pick rule is expressed on FLAT indices: pass 1 counts the
+    finite values per slab (cheap, no full materialization), the same
+    ``finite_idx[::step][:sample]`` ordinals are computed from the total, and
+    pass 2 re-reads only the slabs that actually hold a pick.
+    """
     h = hashlib.sha256()
     for name in sorted(store_schema(1, 1)):
         arr = root[name]
         h.update(name.encode())
         h.update(str(arr.shape).encode())
         h.update(str(arr.dtype).encode())
-    vals = np.asarray(root["values"][:], dtype=np.float32)
-    flat = vals.reshape(-1)
-    finite_idx = np.flatnonzero(np.isfinite(flat))
-    if finite_idx.size:
-        step = max(1, finite_idx.size // sample)
-        pick = finite_idx[::step][:sample]
-        h.update(np.round(flat[pick], 4).astype(np.float32).tobytes())
-    h.update(str(int(np.isfinite(vals).sum())).encode())
+    values = root["values"]
+    n_rows = int(values.shape[0])
+    row_len = int(np.prod(values.shape[1:], dtype=np.int64))
+    step_rows = max(1, int(slab))
+    bounds = [(lo, min(n_rows, lo + step_rows)) for lo in range(0, n_rows, step_rows)]
+
+    def _slab(lo: int, hi: int) -> np.ndarray:
+        return np.asarray(values[lo:hi], dtype=np.float32).reshape(-1)
+
+    # Pass 1 — how many finite values does each slab hold (and thus the total)?
+    counts = np.array([int(np.isfinite(_slab(lo, hi)).sum()) for lo, hi in bounds],
+                      dtype=np.int64)
+    n_finite = int(counts.sum())
+    if not n_finite:
+        h.update(str(n_finite).encode())
+        return h.hexdigest()
+    step = max(1, n_finite // sample)
+    ordinals = np.arange(0, n_finite, step)[:sample]          # the original picks
+    # Pass 2 — locate those ordinals and re-read only their slabs. Ordinals are
+    # ascending and slabs are contiguous in flat order, so a cumulative-count
+    # mapping reproduces `flat[pick]` exactly.
+    cum = np.concatenate([[0], np.cumsum(counts)])
+    slab_of = np.searchsorted(cum, ordinals, side="right") - 1
+    local = ordinals - cum[slab_of]
+    picked: list[np.ndarray] = []
+    for si, (lo, hi) in enumerate(bounds):
+        sel = slab_of == si
+        if not sel.any():
+            continue
+        block = _slab(lo, hi)
+        idx = np.flatnonzero(np.isfinite(block))[local[sel]]
+        picked.append(block[idx])
+        del block
+    h.update(np.round(np.concatenate(picked), 4).astype(np.float32).tobytes())
+    # Order matters: the original wrote the finite COUNT after the pick bytes.
+    h.update(str(n_finite).encode())
     return h.hexdigest()
 
 
