@@ -339,3 +339,47 @@ def test_rule_refuses_when_concentration_increases():
     )
     assert out["checks"]["concentration_not_worse"] is False
     assert out["adopt_farm_local"] is False
+
+
+# --- audit item 4: the gate must be able to FAIL -------------------------
+def _peeking_scorer(x):
+    """A scorer with hidden cross-farm state: it reads another farm if given one."""
+    others = getattr(_peeking_scorer, "_visible_other_fields", None)
+    bump = 0.0
+    if others:
+        bump = float(np.mean(np.abs(np.asarray(others[next(iter(others))]))))
+    return np.array([float(np.mean(np.abs(x))) + bump])
+
+
+def test_other_farm_perturbation_invariance_FAILS_for_a_cross_farm_scorer():
+    """Negative control: a scorer that reads the population must be rejected.
+
+    The pre-audit body compared ``base`` with itself, so this returned True for
+    ANY scorer — the gate was dead. It now hands the scorer a real population
+    through a read-logging proxy.
+    """
+    values = np.random.default_rng(0).normal(size=(36, 8))
+    assert FL.other_farm_perturbation_is_invariant(values, scorer=_peeking_scorer) is False
+
+
+def test_other_farm_perturbation_invariance_is_deterministic_for_a_local_scorer():
+    """A local scorer passes on repeated calls (the gate is not flaky)."""
+    values = np.random.default_rng(3).normal(size=(36, 8))
+    for _ in range(3):
+        assert FL.other_farm_perturbation_is_invariant(
+            values, scorer=_scorer, rng=np.random.default_rng(1)) is True
+
+
+def test_the_population_is_actually_offered_to_the_scorer():
+    """The gate is meaningful only if another farm was reachable."""
+    values = np.random.default_rng(0).normal(size=(36, 8))
+    seen: list[int] = []
+
+    def recorder(x):
+        reader = getattr(recorder, "_visible_other_fields", None)
+        if reader is not None:
+            seen.extend(list(reader.keys()))   # names only: does not log a read
+        return np.array([float(np.mean(np.abs(x)))])
+
+    assert FL.other_farm_perturbation_is_invariant(values, scorer=recorder) is True
+    assert len(set(seen)) == 3, f"expected 3 visible other farms, saw {sorted(set(seen))}"

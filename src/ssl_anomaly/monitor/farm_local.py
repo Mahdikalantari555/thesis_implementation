@@ -28,6 +28,7 @@ to make it decidable.
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -138,14 +139,69 @@ class InstrumentedScores:
     pooled_constants_used: set[str] = field(default_factory=set)
 
 
+class _Reader(dict):
+    """A dict that records which keys were READ (audit item 4).
+
+    ``other_farm_perturbation_is_invariant`` has to prove that a locally
+    anchored scorer never touches another farm, not merely that it was handed
+    none. Handing it a real population through this proxy makes any touch
+    observable: ``__getitem__``, ``values()``, ``items()`` and iteration all
+    log the field ids they expose.
+    """
+
+    def __init__(self, data: dict, log: set[int]):
+        super().__init__(data)
+        self._log = log
+
+    def __getitem__(self, key):
+        self._log.add(key)
+        return super().__getitem__(key)
+
+    def get(self, key, default=None):
+        self._log.add(key)
+        return super().get(key, default)
+
+    def values(self):
+        self._log.update(self.keys())
+        return super().values()
+
+    def items(self):
+        self._log.update(self.keys())
+        return super().items()
+
+
 def score_field_only(
     field_id: int,
     field_values: np.ndarray,
     *,
     scorer,
     pooled_constants: set[str] | None = None,
+    other_fields: dict[int, np.ndarray] | None = None,
+    read_log: set[int] | None = None,
 ) -> InstrumentedScores:
-    """Score one farm from its own values only (the locally anchored pattern)."""
+    """Score one farm from its own values only (the locally anchored pattern).
+
+    ``other_fields`` (+ ``read_log``) exist SOLELY to make the independence gate
+    testable (audit 2026-11-21 item 4): ``scorer`` still receives only this
+    farm's values, but when a population is supplied it is wrapped in a
+    ``_Reader`` proxy attached as ``scorer._visible_other_fields`` so a scorer
+    with hidden cross-farm state CAN reach it — and then the read log betrays
+    it. With no population the behaviour is exactly the pre-audit one.
+    """
+    if other_fields:
+        reader = _Reader({int(k): v for k, v in other_fields.items()},
+                         read_log if read_log is not None else set())
+        with contextlib.suppress(AttributeError, TypeError):
+            setattr(scorer, "_visible_other_fields", reader)  # noqa: B010 - test seam
+        try:
+            return InstrumentedScores(
+                scores=np.asarray(scorer(field_values)),
+                accessed_fields={int(field_id)},
+                pooled_constants_used=set(pooled_constants or ()),
+            )
+        finally:
+            with contextlib.suppress(AttributeError, TypeError):
+                delattr(scorer, "_visible_other_fields")
     return InstrumentedScores(
         scores=np.asarray(scorer(field_values)),
         accessed_fields={int(field_id)},
@@ -176,23 +232,40 @@ def other_farm_perturbation_is_invariant(
     scorer,
     field_id: int = 1,
     rng: np.random.Generator | None = None,
+    n_other_fields: int = 3,
+    other_scale: float = 1e6,
 ) -> bool:
-    """Independence gate for a locally anchored scorer (audit item 4).
+    """Bitwise invariance of this farm's score under a perturbed OTHER farm.
 
-    ``scorer`` takes the field's own values only; ``score_field_only`` never
-    hands it another farm, and its access record is fabricated by
-    construction. The real assertions here are: (a) the access record names
-    exactly this field, and (b) an exact re-score is bitwise deterministic —
-    a scorer carrying hidden cross-farm/global state would fail (b). The
-    previous tail compared ``base`` with itself, which asserted nothing
-    (audit 2026-11-21 item 4). ``rng`` is kept for signature compatibility.
+    AUDIT FIX (2026-11-21 item 4): this used to be ``np.array_equal(base,
+    base)`` — a tautology that could never fail, wrapped around an access
+    record that ``score_field_only`` fabricates, so the independence gate was
+    dead. It now builds a real population (``n_other_fields`` farms whose
+    values are perturbed by ``other_scale`` x their own spread), hands it to
+    the scorer through ``score_field_only(other_fields=...)`` and requires:
+    (1) the base score is byte-identical with and without that population,
+    (2) the population was actually reachable but never READ (``read_log``
+    empty), and (3) the score is bitwise identical after the perturbation.
     """
+    rng = rng or np.random.default_rng(0)
     base = score_field_only(field_id, field_values, scorer=scorer).scores
-    rec = score_field_only(field_id, field_values, scorer=scorer)
+    shape = np.shape(field_values)
+    spread = float(np.nanstd(np.asarray(field_values, dtype=np.float64))) or 1.0
+    others = {field_id + 1 + i: rng.normal(0.0, spread, size=shape) for i in range(n_other_fields)}
+    read_log: set[int] = set()
+    rec = score_field_only(field_id, field_values, scorer=scorer,
+                           other_fields=others, read_log=read_log)
     if rec.accessed_fields != {field_id}:
         return False
-    again = score_field_only(field_id, field_values, scorer=scorer).scores
-    return bool(np.array_equal(base, again)) and again.shape == base.shape
+    if not np.array_equal(rec.scores, base):
+        return False                 # the population itself moved the score
+    if read_log:
+        return False                 # another farm's values were touched
+    perturbed = {k: v + rng.normal(0.0, abs(other_scale) * spread, size=shape)
+                 for k, v in others.items()}
+    again = score_field_only(field_id, field_values, scorer=scorer,
+                            other_fields=perturbed).scores
+    return bool(np.array_equal(again, base)) and again.shape == base.shape
 
 
 def field_id_permutation_is_invariant(
