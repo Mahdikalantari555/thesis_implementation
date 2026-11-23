@@ -111,26 +111,62 @@ class PatchSigmaTable:
     sha256: str = ""
 
     def lookup(self, bins: np.ndarray, sids: np.ndarray) -> np.ndarray:
-        """(T, C) scale to divide residuals by; falls back per channel."""
-        G, C, _ = self.sigma.shape
+        """(T, C) scale to divide residuals by; falls back per channel.
+
+        Audit 2026-11-21 item 8: an out-of-range sensor id raises instead of
+        being silently mapped onto sensor 0's scale (a store whose ids drifted
+        would otherwise score against the wrong scale with no trace). The v2
+        store is all-sensor-0 by construction, so its coverage is unaffected.
+
+        Vectorized (audit PERF-3): one fancy-index gather over the (G, C, S)
+        table; the gathered cells are the same ones the per-bin loop copied.
+        """
+        G, C, n_sensors = self.sigma.shape
         groups = np.clip(np.asarray(bins, dtype=np.int64) // PHASE_BIN, 0, G - 1)
-        sids = np.asarray(sids, dtype=np.int64)
-        out = np.full((len(bins), C), np.nan)
-        for t, (g, s) in enumerate(zip(groups, sids)):
-            s = int(s)
-            if not (0 <= s < self.sigma.shape[2]):
-                # audit 2026-11-21 item 8: silently substituting sensor 0's σ
-                # for an out-of-range sensor id hid store/scorer mismatches;
-                # fail loudly instead (the v2 store is all-sensor-0 by
-                # construction, so its coverage is unaffected).
-                raise ValueError(
-                    f"sensor id {s} outside the σ table's {self.sigma.shape[2]} "
-                    f"sensor slots — check the store's sensor-id coverage"
-                )
-            out[t] = self.sigma[g, :, s]
+        sid_arr = np.asarray(sids, dtype=np.int64).ravel()
+        if groups.shape != sid_arr.shape:
+            raise ValueError(
+                f"bins {groups.shape} and sensor ids {sid_arr.shape} must align")
+        bad_sid = (sid_arr < 0) | (sid_arr >= n_sensors)
+        if bad_sid.any():
+            offending = sorted({int(v) for v in sid_arr[bad_sid]})
+            raise ValueError(
+                f"sensor id(s) {offending} outside the sigma table's {n_sensors} "
+                f"sensor slots — check the store's sensor-id coverage"
+            )
+        out = self.sigma[groups, :, sid_arr]                   # (T, C)
         bad = ~np.isfinite(out) | (out <= 0)
         if bad.any():
             out = np.where(bad, np.broadcast_to(self.fallback, out.shape), out)
+        return out
+
+    def batch_lookup(self, sids: np.ndarray) -> np.ndarray:
+        """(N, T, C) scale for a whole batch in one gather (audit PERF-3).
+
+        ``pixel_scores`` used to call :meth:`lookup` once per sample,
+        rebuilding the identical (T, C) table N times. This is the same table
+        cell per (bin, channel, sensor) computed by one gather, so the
+        per-sample values are bit-identical (pinned by
+        ``tests/unit/test_patch_scores_parity.py``).
+        """
+        G, C, n_sensors = self.sigma.shape
+        sid_arr = np.asarray(sids, dtype=np.int64)
+        if sid_arr.ndim != 2:
+            raise ValueError(f"sensor ids must be (N, T), got {sid_arr.shape}")
+        N, T = sid_arr.shape
+        bad_sid = (sid_arr < 0) | (sid_arr >= n_sensors)
+        if bad_sid.any():
+            offending = sorted({int(v) for v in sid_arr[bad_sid]})
+            raise ValueError(
+                f"sensor id(s) {offending} outside the sigma table's {n_sensors} "
+                f"sensor slots — check the store's sensor-id coverage"
+            )
+        groups = np.clip(np.arange(T, dtype=np.int64) // PHASE_BIN, 0, G - 1)
+        out = self.sigma[groups[None, :, None], np.arange(C)[None, None, :], sid_arr[:, :, None]]
+        bad = ~np.isfinite(out) | (out <= 0)
+        if bad.any():
+            fb = np.broadcast_to(self.fallback[None, None, :], out.shape)
+            out = np.where(bad, fb, out)
         return out
 
 
@@ -225,14 +261,14 @@ def pixel_scores(
     r = np.asarray(resid, dtype=np.float64)
     o = np.asarray(obs, dtype=bool)
     N, T, C, S, _ = r.shape
-    out = np.full((N, T, S, S), np.nan)
-    for n in range(N):
-        scale = sigma.lookup(bins, np.asarray(sensor_ids[n]))      # (T, C)
-        z2 = np.where(o[n], (r[n] / scale[:, :, None, None]) ** 2, -np.inf)
-        with np.errstate(invalid="ignore"):
-            s = z2.max(axis=1)                                     # (T, S, S)
-        s[~o[n].any(axis=1)] = np.nan
-        out[n] = s
+    # PERF-3: one (N, T, C) scale gather for the whole batch instead of an
+    # N-sample lookup loop. The per-sample tables are the same cells, so the
+    # divide is identical.
+    scales = sigma.batch_lookup(np.asarray(sensor_ids, dtype=np.int64))  # (N, T, C)
+    with np.errstate(invalid="ignore", divide="ignore", over="ignore"):
+        z2 = np.where(o, (r / scales[:, :, :, None, None]) ** 2, -np.inf)
+    out = z2.max(axis=2)                                           # (N, T, S, S)
+    out[~o.any(axis=2)] = np.nan
     return out
 
 
@@ -248,6 +284,18 @@ def field_paths(
     Mean of the largest ``top_frac`` share of in-field pixel scores. Bins with
     fewer than ``min_pixels`` in-field observations are NaN (no alarm from
     almost-no-data), matching the ``min_history`` spirit of the alarm rule.
+
+    Vectorized (audit PERF-4): every cell's statistic is ``np.mean`` of the
+    ``k = max(1, ceil(top_frac * m))`` largest of its ``m`` finite in-field
+    values. Both steps are done GROUP-WISE over cells that share ``m`` (hence
+    ``k``) because that is the only formulation bit-equal to the per-cell loop:
+    ``np.partition`` with a SCALAR ``kth`` over a 2-D block reproduces the 1-D
+    partition of each row exactly, while a per-row ``kth`` ARRAY does not
+    (numpy dispatches to a different kernel), and the trailing-``k`` slice mean
+    is the same contiguous pairwise summation the loop performed. The top-k
+    share is clamped to ``m``: ``top_frac`` is a fraction (production uses
+    0.2), and the historical loop asked ``np.partition`` for an empty slice
+    above 1, which is a degenerate request rather than a defined statistic.
     """
     p = np.asarray(pixel_z2, dtype=np.float64)
     if p.ndim != 4:
@@ -267,16 +315,46 @@ def field_paths(
             f"in_field must be (S,S) or ({N},S,S) for {N} samples, got {in_field.shape}"
         )
 
-    out = np.full((N, T), np.nan)
-    for n in range(N):
-        for t in range(T):
-            vals = p[n, t][masks[n, t]]
-            vals = vals[np.isfinite(vals)]
-            if vals.size < min_pixels:
-                continue
-            k = max(1, int(np.ceil(top_frac * vals.size)))
-            out[n, t] = float(np.mean(np.partition(vals, vals.size - k)[vals.size - k:]))
-    return out
+    valid = (np.isfinite(p) & masks).reshape(N * T, -1)   # (N*T, S*S)
+    m = valid.sum(axis=1).astype(np.int64)
+    min_px = max(int(min_pixels), 1)
+    out = np.zeros(m.shape, dtype=np.float64)
+    usable = m >= min_px
+    if not usable.any():
+        return np.full((N, T), np.nan)
+    flat = p.reshape(N * T, -1)
+    # `np.partition` must see each cell's own m values in a row of width m: a
+    # padded full-width row is a different multiset for the trailing-k slice
+    # (the -inf padding occupies the leading positions, so `P - k` is not its
+    # cut). Cells are therefore grouped by m and each group's values gathered
+    # into a (rows, m) block. `flat[valid]` is already in cell order with each
+    # row's valid values contiguous, so a group's block is ONE fancy-index
+    # gather of that slab — no per-cell Python.
+    packed = flat[valid]
+    starts = np.concatenate([[0], np.cumsum(m)[:-1]])          # row start in `packed`
+    uniq = np.unique(m)
+    # Fast path: every usable cell shares one m (the production case — the
+    # in-field footprint is fixed, so m is constant). Then each group's block
+    # is the WHOLE compacted slab, already contiguous: no gather at all.
+    if uniq.size == 1 and int(uniq[0]) >= min_px:
+        mg = int(uniq[0])
+        kk = min(max(1, int(np.ceil(top_frac * mg))), mg)
+        block = packed.reshape(m.size, mg)
+        part = np.partition(block, mg - kk, axis=-1)
+        return part[:, mg - kk:].mean(axis=1).reshape(N, T)
+    # Mixed per-cell counts: group the cells by m and gather each group's
+    # values into a (rows, m) block through `starts`.
+    for mg in uniq:
+        mg = int(mg)
+        if mg < min_px:
+            continue                                       # under-sampled => NaN
+        rows = np.flatnonzero(m == mg)
+        block = packed[starts[rows][:, None] + np.arange(mg)[None, :]]
+        kk = min(max(1, int(np.ceil(top_frac * mg))), mg)
+        part = np.partition(block, mg - kk, axis=-1)
+        out[rows] = part[:, mg - kk:].mean(axis=1)
+    out[~usable] = np.nan
+    return out.reshape(N, T)
 
 
 # ---------------------------------------------------------------------------

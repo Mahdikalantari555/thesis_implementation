@@ -1,9 +1,5 @@
 """Causal scoring, alarm rule and FAR calibration (design D5, spec §Threshold).
 
-Audit 2026-11-21 item 29: ``channel_max_from_pred``, ``per_bin_q95_normalizer``
-and ``normalize_scores`` are staged (tested) with no production caller — wire
-up or annotate before first use.
-
 - Per-bin score: causal prediction error of the current bin from earlier bins
   (observed-mask-weighted MSE in z-space for deep models, mean z² for B1).
 - Alarm rule: ``suspected_stress`` when the score exceeds τ at k consecutive
@@ -14,11 +10,17 @@ up or annotate before first use.
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 
 import numpy as np
 
 FAR_TARGET = 0.05
+
+#: Finite stand-in for a +inf normalized residual inside the cumulative sums
+#: (see :func:`cumulative_channel_max`). Chosen so a full cycle of 36 bins
+#: over 8 channels still cannot overflow float64 (36*8*1e300 = 2.9e302).
+INF_SENTINEL = 1e300
 
 
 @dataclass
@@ -100,7 +102,7 @@ def normalize_scores(scores: np.ndarray, per_bin_q95: np.ndarray) -> np.ndarray:
 # Dev-loop change #2: causal cumulative channel-max statistic
 # ---------------------------------------------------------------------------
 def causal_offset_correct(
-    resid: np.ndarray,     # (N, T, C) signed z-space residuals (value − prediction)
+    resid: np.ndarray,     # (N, T, C) signed z-space residuals (value - prediction)
     mask: np.ndarray,      # (N, T, C) bool
     *,
     window: int = 6,
@@ -123,6 +125,94 @@ def causal_offset_correct(
     baseline after ~`window` observed bins — the detector intentionally
     measures the TRANSITION, not the level. Cells with no past observed bin
     keep r' = r (nothing to correct against).
+
+    NaN SEMANTICS (preserved verbatim from the loop formulation this replaces):
+    the running median is a plain ``np.median`` over the window, so a NaN
+    inside a window propagates and poisons the corrected value at every later
+    bin whose window still contains it. This is NOT ``np.nanmedian`` — that
+    would silently change results. The only production callers,
+    ``scripts/eval_dev.py`` (``score_cycles``) and
+    ``scripts/freeze_main_model.py``, guarantee NaN-free inputs: ``resid`` is
+    built as ``z − pred_z`` (either from ``apply_norm`` or from a B1 residual
+    masked to observed bins, both finite where observed) and ``mask`` selects
+    observed bins only. A NaN can still arrive from a +inf/−inf z (division by
+    a zero floor), which the parity test pins bin-for-bin.
+
+    Vectorized form (audit PERF-2): each (n, c) cell's observed series is
+    compressed to its observed bins and the windowed median is taken over a
+    ``sliding_window_view`` of the NaN-front-padded series. The arithmetic per
+    corrected value is the same ``np.median`` over the same multiset of up to
+    ``window`` values, so the result is bit-identical to the loop formulation
+    (pinned by ``tests/unit/test_scoring_parity.py``).
+    """
+    r = np.asarray(resid, dtype=np.float64)
+    m = np.asarray(mask, dtype=bool)
+    if r.shape != m.shape or r.ndim != 3:
+        raise ValueError(f"resid and mask must both be (N, T, C), got {r.shape} and {m.shape}")
+    N, T, C = r.shape
+    if T < 2 or N == 0 or C == 0:
+        return r.copy()
+    w = int(window)
+    # Per-(n, c) OBSERVED series, compressed along the bin axis: the loop's
+    # window is "the last `window` observed bins", i.e. positions in this
+    # compressed series, not calendar bins.
+    idx = np.argsort(~m, axis=1, kind="stable")           # observed first, order kept
+    r_obs = np.take_along_axis(r, idx, axis=1)            # (N, T, C)
+    valid = np.take_along_axis(m, idx, axis=1)            # True for the first n_obs rows
+    if w <= 0:
+        # Degenerate contract preserved from the loop: `vals[j:j]` is empty for
+        # every j ≥ 1, so `np.median` of an empty window is NaN and poisons the
+        # corrected value; position 0 still passes through.
+        med = np.full_like(r_obs, np.nan)
+    else:
+        # Median of vals[lo:j] with lo = max(0, j - window) over the compressed
+        # series: shift right by one so row j holds [j-window ... j-1], left-pad
+        # with NaN (skipped by nanmedian -- those are *absent* positions, not
+        # data), and separately count REAL NaNs in the window, which the loop's
+        # plain np.median propagates. The two effects are kept distinct on
+        # purpose: padding is absence, data NaN is evidence of a broken z.
+        rolled = np.full_like(r_obs, np.nan)
+        rolled[:, 1:, :] = np.where(valid[:, :-1, :], r_obs[:, :-1, :], np.nan)
+        nan_in = np.zeros_like(r_obs, dtype=np.int64)
+        nan_in[:, 1:, :] = np.where(
+            valid[:, :-1, :] & np.isnan(r_obs[:, :-1, :]), 1, 0,
+        )
+        by_bin = np.moveaxis(rolled, 1, -1)               # (N, C, T)
+        nan_by_bin = np.moveaxis(nan_in, 1, -1)
+        pad = np.full((N, C, w - 1), np.nan)
+        wins = np.lib.stride_tricks.sliding_window_view(
+            np.concatenate([pad, by_bin], axis=-1), w, axis=-1,
+        )                                                 # (N, C, T, w)
+        nan_win = np.lib.stride_tricks.sliding_window_view(
+            np.concatenate([np.zeros((N, C, w - 1), dtype=np.int64), nan_by_bin],
+                           axis=-1),
+            w, axis=-1,
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)  # all-NaN windows
+            med = np.nanmedian(wins, axis=-1)             # (N, C, T)
+        med = np.where(nan_win.sum(axis=-1) > 0, np.nan, med)
+        med = np.moveaxis(med, -1, 1)                     # (N, T, C)
+    # Position 0 of each cell (its first observed bin) has no history at all:
+    # the loop writes 0.0 there, i.e. the residual is passed through unchanged.
+    med[:, 0, :] = 0.0
+    corrected = np.where(valid, r_obs - med, 0.0)         # (N, T, C), compressed
+    inv = np.argsort(idx, axis=1, kind="stable")          # scatter back to bin order
+    out = np.take_along_axis(corrected, inv, axis=1)
+    return np.where(m, out, r)
+
+
+def causal_offset_correct_reference(
+    resid: np.ndarray,
+    mask: np.ndarray,
+    *,
+    window: int = 6,
+) -> np.ndarray:
+    """The original triple-loop ``causal_offset_correct`` (audit parity oracle).
+
+    Kept verbatim from the pre-PERF-2 implementation so the parity test can
+    assert bitwise equality of the vectorized path against the exact code it
+    replaced. Not called in production.
     """
     N, T, C = resid.shape
     out = resid.copy()
@@ -151,19 +241,35 @@ def cell_q95_normalizer(
 ) -> np.ndarray:
     """Per-(bin, channel) q95 of the clean-dev squared z residuals, floored at
     the per-channel cross-bin median (under-sampled cells must not become
-    over-permissive). Cells without enough observations get the floor."""
-    T, C = z2_clean.shape[1], z2_clean.shape[2]
+    over-permissive). Cells without enough observations get the floor.
+
+    Vectorized (audit PERF-5) over one masked percentile per channel column;
+    ``np.percentile`` is computed on the same per-cell value vectors as the
+    (channel, bin) loop it replaces, so the table is bit-identical (pinned by
+    ``tests/unit/test_scoring_parity.py``).
+    """
+    z = np.asarray(z2_clean, dtype=np.float64)
+    m = np.asarray(mask, dtype=bool)
+    if z.shape != m.shape:
+        raise ValueError(f"z2_clean and mask must share a shape, got {z.shape} and {m.shape}")
+    T, C = z.shape[1], z.shape[2]
     q = np.full((T, C), np.nan)
+    zm = np.where(m, z, np.nan)                            # (N, T, C)
     for c in range(C):
-        for b in range(T):
-            vals = z2_clean[:, b, c][mask[:, b, c]]
-            if vals.size >= min_cells:
-                q[b, c] = float(np.percentile(vals, 95))
+        col = zm[:, :, c]
+        counts = m[:, :, c].sum(axis=0)                    # (T,)
+        enough = counts >= min_cells
+        if enough.any():
+            # nanpercentile over axis 0 visits the same finite per-bin vectors;
+            # a column without any observed value is all-NaN and stays NaN.
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                q[enough, c] = np.nanpercentile(col[:, enough], 95, axis=0)
         med = np.nanmedian(q[:, c])
         if np.isfinite(med) and med > 0:
-            col = q[:, c]
-            col[~np.isfinite(col) | (col <= 0)] = med
-            q[:, c] = np.maximum(col, med)
+            colq = q[:, c]
+            colq[~np.isfinite(colq) | (colq <= 0)] = med
+            q[:, c] = np.maximum(colq, med)
         else:
             q[:, c] = 1.0
     return q
@@ -206,13 +312,15 @@ def cumulative_channel_max(
     # unobserved gap ("no data, no alarm"). NaN only: ±inf stays alarm-worthy.
     mask = mask & ~np.isnan(z2)
     zn = z2 / q95[None, :, :]
-    # audit 2026-11-21 item 6: +inf z² entering the cumsum turns trailing
-    # differences into inf − inf = NaN and kills the alarm path the comment
-    # above promises to keep ("±inf stays alarm-worthy"). Map +inf to a large
-    # finite sentinel before the cumsum — any real +inf z² is an extreme
-    # exceedance by definition (−inf cannot arise from observed z² ≥ 0).
-    zn = np.where(np.isposinf(zn), 1e12, zn)
     zn = np.where(mask, zn, 0.0)
+    # A +inf normalized residual (a z from a zero-floored scale) is the loudest
+    # possible evidence, but `inf - inf` in the trailing difference below is
+    # NaN and `S[isinf] = NaN` then erased the alarm — contradicting the line
+    # above. Map it to a large finite sentinel BEFORE the cumsum so the alarm
+    # survives as the largest finite score a cycle can carry (audit item 6).
+    # -inf is impossible here (z^2 >= 0) and is left alone by this clamp.
+    if not np.isfinite(zn).all():
+        zn = np.where(mask, np.minimum(zn, INF_SENTINEL), 0.0)
     mf = mask.astype(np.float64)
     csum = np.cumsum(zn, axis=1)          # (N, T, C)
     ccnt = np.cumsum(mf, axis=1)          # (N, T, C)
@@ -376,12 +484,18 @@ def partial_auc_pr(
     """AUC-PR (average precision) for the injected class from max-score ranking.
 
     Standard step-wise average precision: sort by score descending, then
-    AUC-PR = Σ_i (recall_i − recall_{i−1}) · precision_i. AUC-PR (not ROC) is
-    required by the dev protocol because injected:clean is class-imbalanced.
-    Ties break clean-before-injected (stable sort over the concatenated
-    [clean, injected] arrays) — slightly conservative AP versus sklearn's
-    group-tie handling; recorded as such (audit 2026-11-21 item 12). Align
-    with sklearn only if a consumer needs exact parity.
+    AUC-PR = Sum_i (recall_i - recall_{i-1}) * precision_i. AUC-PR (not ROC)
+    is required by the dev protocol because injected:clean is class-imbalanced.
+
+    TIE POLICY (audit 2026-11-21 item 12), deliberate and documented rather
+    than silently aligned: the sort is STABLE over ``[clean..., injected...]``,
+    so at an equal score every clean cycle is ranked before every injected
+    one. The tie group therefore contributes precision at its WORST ordering,
+    which makes the reported AP a slight LOWER bound of sklearn's
+    group-tie-handling value. Ties are real in this protocol — cycles whose
+    max path is NaN reduce to the same ``-inf`` sentinel — and a conservative
+    bound is the honest direction for a detection claim. Values are only
+    affected when injected and clean cycles share an exact score.
     """
     y = np.concatenate([np.zeros(len(clean_max_scores)), np.ones(len(injected_max_scores))])
     s = np.concatenate([clean_max_scores, injected_max_scores])
