@@ -77,10 +77,7 @@ The system SHALL implement the T3 benchmark: query k ∈ {1, 3, 5, 10} labelled
 (field, date) points; rank the archive by embedding similarity; report
 precision@{1, 5, 10}, mean average precision and, on Track 1, anomaly-family
 hit rate; compare against B1-score ranking, A-rule-score ranking, raw
-band-vector Euclidean distance and A-rand embeddings. The system SHALL also
-emit a descriptive natural-data near-match listing (top-10 unlabelled archive
-neighbours per query, with similarity scores and the query answered) for
-manual owner inspection (owner decision 2026-11-23).
+band-vector Euclidean distance and A-rand embeddings.
 
 #### Scenario: Two tracks reported separately
 - **WHEN** Track 1 (injection-labelled) and Track 2 (weak-proxy) results are
@@ -89,11 +86,13 @@ manual owner inspection (owner decision 2026-11-23).
   prevalence, and Track 2 carries the explicit note that proxy excursions are
   not ground-truth stress events
 
-#### Scenario: Near-match listing is descriptive only
-- **WHEN** the near-match listing is generated
-- **THEN** it is labelled `exploratory`, contains no ground-truth assertion,
-  and is rejected as an input to any decision gate, threshold, selection or
-  claim
+#### Scenario: Near-match listing for manual inspection
+- **WHEN** T3 runs under the owner decision of 2026-11-23
+- **THEN** the system also emits a descriptive natural-data near-match listing
+  (top-10 unlabelled archive neighbours per query, with similarity scores,
+  field/date and the query answered) for manual owner inspection, labelled
+  `exploratory`, containing no ground-truth assertion, and rejected as an
+  input to any decision gate, threshold, selection or claim
 
 ### Requirement: Metric reporting discipline
 
