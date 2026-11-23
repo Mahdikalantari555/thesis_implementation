@@ -182,7 +182,9 @@ owner-run training. Next actions (in order):
    → decision gates + findings 26 (Phase 6). Capstone claims nothing above L3; applied ambition (vision.md item 9) is vision-stage.
 - Blocked by: owner approval to run `/opsx:apply`; v2 store re-extraction/norm v2 for the patch-dependent parts stays out of scope here.
 
-**`benchmark-latent-reconstruction-prediction-architectures`** — PROPOSED, 0/37. Heavy counterpart (Colab T4). Next actions:
+**`benchmark-latent-reconstruction-prediction-architectures`** — PROPOSED, 0/37. Heavy counterpart (Colab T4).
+Session handover prompt: `docs/audits/session_prompt_benchmark_benchmark-latent-reconstruction.md`
+(read it first — it carries the branch/prereq traps and the phase-by-phase stop points). Next actions:
 1. Phase 0 inspection + freeze the committed experiment matrix (`configs/benchmarks/matrix.yaml`) and its hash;
    regression gate: existing unit battery green first.
 2. Phase 1–2: common interface, registry, then architectures A1–A10 behind the Mamba feasibility gate; suppression S0–S3
