@@ -391,3 +391,38 @@ def test_output_sha256_does_not_read_the_whole_values_array(tmp_path: Path) -> N
         f"largest slice was {max(reads)} of {n_rows} rows — the store was "
         "materialized instead of streamed"
     )
+
+
+# ---------------------------------------------------------------------------
+# PERF-9 — the read-only store handle and cycle index are memoized
+# ---------------------------------------------------------------------------
+def test_open_store_is_memoized_for_read_mode(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    fill_cycle(store, 0, 0, value=0.3)
+    path = tmp_path / "patches.zarr"
+    P.clear_store_caches()
+    a = P.open_store(path)
+    b = P.open_store(path)
+    assert a is b, "read-only opens of the same store must share one handle"
+    # a write-mode open is never cached
+    c = P.open_store(path, mode="a")
+    assert c is not a
+    assert P.open_store(path) is a, "the read handle must survive a write open"
+
+
+def test_cycle_index_is_memoized_but_never_stale(tmp_path: Path) -> None:
+    """A cached index is reused, yet an in-place metadata change invalidates it."""
+    store = make_store(tmp_path, field_ids=(301, 302), n_cycles=2)
+    fill_cycle(store, 0, 0, value=0.3)
+    fill_cycle(store, 0, 1, value=0.3)
+    P.clear_store_caches()
+    first = P.patch_cycle_index(store)
+    again = P.patch_cycle_index(store)
+    assert again == first
+    assert again is first, "an unchanged store must hit the cache"
+
+    # change the metadata in place: the index must follow, not go stale
+    store["cycle_ids"][0, 1] = 999
+    updated = P.patch_cycle_index(store)
+    assert "301:999" in updated
+    assert "301:101" not in updated

@@ -357,11 +357,33 @@ def estimate_store_bytes(n_fields: int, n_cycles: int, size: int = DEFAULT_PATCH
     )
 
 
+# PERF-9: patch_cycle_index/open_store were rebuilt from scratch several times
+# per eval run (eval_dev, patch_eval, the localization probes). Both are pure
+# functions of the store's CONTENT, which cannot change under a read-only
+# handle, so the read-only results are memoized per resolved path. A store
+# opened for writing ("w"/"a") is never cached, and the caches are keyed on the
+# resolved path so a rebuilt store at a new path is a new entry.
+_STORE_CACHE: dict[str, object] = {}
+_CYCLE_INDEX_CACHE: dict[str, dict] = {}
+
+
+def clear_store_caches() -> None:
+    """Drop the PERF-9 memoized read-only store handles and cycle indexes."""
+    _STORE_CACHE.clear()
+    _CYCLE_INDEX_CACHE.clear()
+
+
 def open_store(path: str | Path, *, mode: str = "r"):
     """Open (or create) a patches.zarr group. Imported lazily: zarr only here."""
     import zarr
 
-    return zarr.open_group(str(path), mode=mode)
+    key = str(Path(path).resolve())
+    if mode == "r" and key in _STORE_CACHE:
+        return _STORE_CACHE[key]
+    root = zarr.open_group(str(path), mode=mode)
+    if mode == "r":
+        _STORE_CACHE[key] = root
+    return root
 
 
 def create_store(
@@ -479,7 +501,19 @@ def patch_epoch(root) -> str:
 
 
 def patch_cycle_index(root) -> dict[str, PatchCycle]:
-    """Index valid store slots by stable field/cycle identity, not column number."""
+    """Index valid store slots by stable field/cycle identity, not column number.
+
+    Memoized per store path (audit PERF-9): the index is derived only from the
+    store's own arrays, so it cannot change while a read-only handle is open.
+    Callers that MUTATE a store's cycle metadata in place must call
+    :func:`clear_store_caches` (the exporter writes only to a fresh store).
+    """
+    key = _cache_key_for(root)
+    if key is not None:
+        fingerprint = _cycle_meta_fingerprint(root)
+        hit = _CYCLE_INDEX_CACHE.get(key)
+        if hit is not None and hit[0] == fingerprint:
+            return hit[1]
     fields = np.asarray(root["field_ids"][:], dtype=int)
     if np.any(fields <= 0) or len(set(fields)) != fields.size:
         raise ValueError("patch store field_ids must be positive and unique")
@@ -493,7 +527,36 @@ def patch_cycle_index(root) -> dict[str, PatchCycle]:
         if cycle.key in index:
             raise ValueError(f"duplicate patch cycle: {cycle.key}")
         index[cycle.key] = cycle
+    if key is not None:
+        _CYCLE_INDEX_CACHE[key] = (fingerprint, index)
     return index
+
+
+def _cycle_meta_fingerprint(root) -> str:
+    """Cheap digest of the arrays ``patch_cycle_index`` reads.
+
+    PERF-9 memoizes the index; the fingerprint makes the memoization SAFE
+    against callers that rewrite cycle metadata in place (the test fixtures and
+    the exporter's own writes do). It sums the same few arrays the index
+    derives from, so an unchanged store costs one small read per call while a
+    changed store misses the cache instead of returning a stale index.
+    """
+    import hashlib
+
+    h = hashlib.sha256()
+    for name in ("field_ids", "cycle_ids", "cycle_start_day", "cycle_end_day", "cycle_valid"):
+        arr = np.ascontiguousarray(np.asarray(root[name][:]))
+        h.update(str(arr.shape).encode())
+        h.update(arr.tobytes())
+    return h.hexdigest()
+
+
+def _cache_key_for(root) -> str | None:
+    """Resolved store path of a zarr group, or None when it has no path."""
+    path = getattr(root, "store_path", None) or getattr(root, "path", None)
+    if path is None:
+        return None
+    return str(Path(str(path)).resolve())
 
 
 def validate_locked_patch_store(root, splits_manifest: dict) -> str:
@@ -946,6 +1009,7 @@ __all__ = [
     "assert_patch_count_bounds",
     "assert_patch_train_cycles",
     "build_patch_norm",
+    "clear_store_caches",
     "create_store",
     "crop_and_pad",
     "estimate_store_bytes",
