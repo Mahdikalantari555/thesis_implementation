@@ -45,7 +45,7 @@ def _reference_build_patch_norm(*, root, splits_manifest, holdout_manifest):
     return stats
 
 
-@pytest.fixture()
+@pytest.fixture
 def synthetic_store(tmp_path):
     """A small bound store with varied per-bin footprints and NaNs."""
     size = 6
