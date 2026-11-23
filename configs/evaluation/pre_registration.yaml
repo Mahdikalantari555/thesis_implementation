@@ -1,0 +1,221 @@
+# Pre-registration — regional-ssl-representation-evaluation (capstone)
+#
+# FROZEN BEFORE ANY RESULT IS OBSERVED (change task 0.1).
+# Any later deviation MUST be added below under `amendments:` with its date and
+# reason; the gate aggregator marks a result `invalid-posthoc` when a gate in
+# this file differs from the one the report used.
+#
+# Hash of this document is recorded in every Level-1/Level-2 output manifest
+# (`preregistration_sha256`) and in the capstone findings document.
+
+version: 1
+created: "2026-11-23"
+change: regional-ssl-representation-evaluation
+
+# ---------------------------------------------------------------------------
+# Artifact ground truth (v2 chain). Paths are relative to the repository root;
+# the archive machine / Drive bundle resolves the same names.
+# ---------------------------------------------------------------------------
+artifacts:
+  cycles_490_v2:
+    path: data/processed/cycles_490_v2.parquet
+    sha256_prefix: null          # no byte hash recorded for the parquet itself;
+    record: "4,458 windows / 3,478 non-censored / 490 fields; median 366 d"
+    provenance_sidecar: data/processed/cycles_490_v2.provenance.json
+  splits_locked_v2:
+    path: data/processed/splits_locked_v2.json
+    sha256_prefix: "30ecbe10"
+    record: "train 2,105 / dev 340 / test 773 / monitoring 1,240"
+  holdout_manifest_v2:
+    path: data/processed/holdout_manifest_v2.json
+    sha256_prefix: "d501bf81"
+    record: "37 holdout-excluded test-block fields; archive end 2026-09-10"
+  norm_stats_full_v2:
+    path: data/processed/norm_stats_full_v2.json
+    sha256_prefix: "493f0395"
+    record: "2,105 locked train cycles; rebuilt for v2 (v1 PoC norm 3cb1ca60 is NOT used)"
+  patch_store_v3:
+    path: data/patch_runs/v3/patches.zarr
+    sha256_prefix: null
+    record: "(490,12,36,8,48,48); cycle_valid 3,478; not required by the field-mean path"
+    required_for: patch_level
+
+# Bindings whose hash is produced by CODE, not read from a file. The gate calls
+# the producer, so a code change that shifts the frozen object fails closed.
+code_derived:
+  severity_table:
+    producer: "ssl_anomaly.monitor.severity_table:severity_table_hash"
+    sha256_prefix: "9d720e3b"
+    record: "frozen S1-S6 literature-anchored table; hash pinned in finding 25"
+
+# ---------------------------------------------------------------------------
+# Seeds and label fractions (binding for every cell)
+# ---------------------------------------------------------------------------
+seeds: [13, 42, 2026]
+
+label_fractions: [0.05, 0.10, 0.25, 0.50, 1.00]
+label_fraction_repeats: 3          # three repeats per cell (spec: repeated under the seeds)
+
+# ---------------------------------------------------------------------------
+# The five hypotheses (advisor analysis 2026-11-23), made falsifiable
+# ---------------------------------------------------------------------------
+hypotheses:
+  H1:
+    statement: >-
+      SSL learns non-obvious temporal deviations that simple thresholds miss.
+    primary_metric: "T2 AUPRC vs B1 and versus the B1-B5 ladder at S4-S6"
+    gate: G-C
+  H2:
+    statement: >-
+      Multivariate spectral+thermal+weather fusion adds value over pairs.
+    primary_metric: "B3->B4->B5 deltas with paired bootstrap"
+    gate: G-B
+  H3:
+    statement: >-
+      Farm-specific modelling beats global thresholds.
+    primary_metric: "per-field vs pooled calibration FAR/AUC"
+    gate: G-C
+  H4:
+    statement: >-
+      SSL detects gradual/short-term/multivariate anomalies missed by rules.
+    primary_metric: "per-family cells (gradual, persistent, multivariate)"
+    gate: G-D
+  H5:
+    statement: >-
+      SSL generalizes more stably across unseen years/periods.
+    primary_metric: "temporal roll delta vs B1, seed spread"
+    gate: G-A
+
+# ---------------------------------------------------------------------------
+# Pre-registered decision gates. Criteria are copied verbatim from design.md.
+# A gate may NOT be weakened after results are seen.
+# ---------------------------------------------------------------------------
+gates:
+  G-A:
+    name: Pretraining quality
+    criterion: >-
+      SSL beats A-rand on >=2 of {farm-separability, phase probe, frozen-head
+      T1} AND no collapse criteria triggered.
+    fail_consequence: >-
+      Candidate disqualified; capstone reports diagnostics only.
+    inputs: [farm_separability, phase_probe, frozen_head_t1, collapse_diagnostics]
+  G-B:
+    name: Label efficiency
+    criterion: >-
+      A-ssl-frozen or A-ssl-ft matches A-scratch@100 % at <=50 % label fraction
+      on >=1 claim-bearing task.
+    fail_consequence: >-
+      "Sample efficiency" claim fails; recorded.
+    inputs: [transfer_curves]
+    #: Numeric reading of "at <=50 % label fraction" (the criterion names the
+    #: bound; these fields make it executable without re-reading prose).
+    ssl_fraction_max: 0.50
+    min_tasks: 1
+  G-C:
+    name: Transfer dominance
+    criterion: >-
+      A-ssl arms beat A-rule and A-rand on >=2 claim-bearing tasks at >=2 label
+      fractions each.
+    fail_consequence: >-
+      "SSL learns superior representations" unsupported on this data.
+    inputs: [transfer_curves, b1_to_b5_ladder]
+    #: ">=2 claim-bearing tasks at >=2 label fractions each".
+    min_tasks: 2
+    min_fractions: 2
+  G-D:
+    name: Retrieval usefulness
+    criterion: >-
+      A-ssl retrieval beats raw-distance, A-B1-score and A-rule-score ranking on
+      T3 Track 1 at >=3 of 4 k values.
+    fail_consequence: >-
+      Retrieval claim fails; SSL limited to "descriptive embeddings".
+    inputs: [retrieval_benchmark]
+    #: ">=3 of 4 k values" with k in {1,3,5,10}.
+    min_k_values: 3
+  G-E:
+    name: Claim discipline
+    criterion: >-
+      Every reported claim carries rung + provenance; negative results published
+      with equal prominence.
+    fail_consequence: >-
+      Report rejected at review; change not closable.
+    inputs: [capstone_report, decision_gates]
+
+# ---------------------------------------------------------------------------
+# Evaluation geometry
+# ---------------------------------------------------------------------------
+evaluation:
+  #: Level-1/Level-2 evidence comes from dev clean cycles only.
+  allowed_splits: [train, dev]
+  level1_split: dev
+  #: The locked test split is never read by any code path in this change.
+  forbidden_splits: [test]
+  #: Cycle-FAR budget shared by every rung and arm (FAR-matching requirement).
+  cycle_far_target: 0.05
+  #: Severity levels referenced by the controlled protocol (finding-18/25 set).
+  severity_levels: [S1, S2, S3, S4, S5, S6]
+  severity_families: [acute, persistent, gradual]
+  severity_indices: [ndvi, savi]
+  #: Retrieval parameters (T3).
+  retrieval_k: [1, 3, 5, 10]
+  retrieval_m: [1, 5, 10]
+  retrieval_near_match_top: 10
+  #: Region-model capacity band (owner constraint; laptop budget).
+  capacity_band: {min_ratio: 0.80, max_ratio: 1.20, max_params: 250000, target_params: 100000}
+  #: Temporal rolls inside train+dev (cut years frozen).
+  temporal_cut_years: [2016, 2018, 2020, 2022]
+  temporal_validation_months: [12, 24]
+  #: Spatial rolls use the locked blocks; holdout fields excluded everywhere.
+  spatial_protocol: leave-one-block-out
+  #: Pre-registered collapse thresholds (Level-1 disqualification).
+  collapse:
+    effective_rank_ratio_floor: 0.10     # effective rank / latent dim
+    min_per_dim_std: 0.01                # any dim below this is degenerate
+    max_zero_variance_dims_frac: 0.20
+    #: Dominance of the leading covariance eigenvector. The ratio-based floor
+    #: cannot catch a rank-1 representation in a small latent space (rank 1 of 8
+    #: is ratio 0.125 > 0.10), so a single dominant direction is disqualified
+    #: explicitly. Healthy random embeddings sit near 1/d.
+    max_top_eigenvalue_share: 0.99
+
+# ---------------------------------------------------------------------------
+# Arm definitions (comparator protocol)
+# ---------------------------------------------------------------------------
+arms:
+  A-rule: "FAR-matched NDVI+LST rule (B1 rung of the ladder)"
+  A-B1: "Incumbent b1_phasez_causal (phase-aware robust z-score)"
+  A-rand: "Random-init encoder, same trunk and capacity as the SSL candidate"
+  A-scratch: "Task-label-only small model, same trunk, fresh init"
+  A-ssl-frozen: "Pretrained SSL encoder frozen + linear head"
+  A-ssl-ft: "Pretrained SSL encoder fine-tuned, equal budget to A-scratch"
+
+# ---------------------------------------------------------------------------
+# The B1-B5 ladder (advisor ablation)
+# ---------------------------------------------------------------------------
+ladder:
+  B1: {inputs: [ndvi, lst], model: "rule: ndvi_lst_rule", learning: false}
+  B2: {inputs: [ndvi, lst, mask, doy], model: "ssl", learning: true}
+  B3: {inputs: [all_spectral_thermal, mask, doy], model: "ssl", learning: true}
+  B4: {inputs: [all_spectral_thermal, mask, doy, era5_daily], model: "ssl", learning: true}
+  B5: {inputs: [all_spectral_thermal, mask, doy, era5_daily, dsh, stl], model: "ssl", learning: true}
+
+# ---------------------------------------------------------------------------
+# Task classification — exploratory artifacts can never feed a gate
+# ---------------------------------------------------------------------------
+tasks:
+  T1: {name: phenology-stage estimation, claim_bearing: true}
+  T2: {name: limited-label anomaly detection, claim_bearing: true}
+  T3_track1: {name: few-shot retrieval (injection-labelled), claim_bearing: true}
+  T3_track2: {name: few-shot retrieval (weak proxy), claim_bearing: false, label: exploratory}
+  T3_near_matches: {name: natural-data near-match listing, claim_bearing: false, label: exploratory}
+  T4: {name: self-supervised trajectory quality, claim_bearing: true}
+  T5: {name: crop-condition / irrigation-pattern analysis, claim_bearing: false, label: exploratory}
+
+# ---------------------------------------------------------------------------
+# Amendments (empty at freeze time). Format:
+#   - date: YYYY-MM-DD
+#     target: <dotted path in this file>
+#     reason: <why>
+#     approved_by: owner
+# ---------------------------------------------------------------------------
+amendments: []
