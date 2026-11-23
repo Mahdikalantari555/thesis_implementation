@@ -1,5 +1,10 @@
 # Change: farm-local-anomaly-scoring
 
+> **Status (2026-11-23): SUPERSEDED.** Farm-specific patch scoring methodology developed against the PoC patch arms whose verdicts are void (finding 25). Not to be applied; a revived patch path requires fresh pre-registration.
+> See `openspec/changes/INDEX.md` (triage 2026-11-23). This change is kept as
+> historical record only; it SHALL NOT be applied, archived as complete, or
+> cited as current evidence.
+
 ## Why
 
 Owner requirement (2026-11-16, "Farm-Internal Spatial Anomaly Detection",

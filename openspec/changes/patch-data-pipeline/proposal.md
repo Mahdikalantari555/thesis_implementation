@@ -1,5 +1,10 @@
 # Change: patch-data-pipeline
 
+> **Status (2026-11-23): SUPERSEDED.** The v1 `patches.zarr` store it produced is superseded by the v2 re-extraction requirement (splits_locked_v2 / cycles_490_v2); the pipeline CODE remains valid and is the basis of the v2 re-extraction. Store artifacts must not be cited as current.
+> See `openspec/changes/INDEX.md` (triage 2026-11-23). This change is kept as
+> historical record only; it SHALL NOT be applied, archived as complete, or
+> cited as current evidence.
+
 ## Why
 
 Owner decision (notes.md, 2026-11-15): add **patch-level analysis**. The

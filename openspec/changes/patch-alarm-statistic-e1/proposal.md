@@ -1,5 +1,9 @@
 # Proposal: patch-alarm-statistic-e1
 
+> **Status (2026-11-23): DORMANT.** Unapplied (0/11) child of oracle-floor-audit on pool V (channel-max residual aggregation; empirical power 0.30–0.67 vs committed 0.06–0.46). Not voided by finding 25; blocked on an owner decision to revive any patch direction.
+> See `openspec/changes/INDEX.md` (triage 2026-11-23). Nothing here is
+> approved for application without an explicit owner decision.
+
 ## Why
 
 The oracle-floor-audit change (2026-11-22) measured, on the clean unassigned

@@ -1,5 +1,10 @@
 # Change: patch-generalization-suite
 
+> **Status (2026-11-23): SUPERSEDED.** Never completed (2/8); built on the v1 protocol and the voided patch arms. Generalization evaluation is re-specced in `regional-ssl-representation-evaluation` (temporal rolls, leave-block-out) and in the benchmark change (V1–V3 protocols).
+> See `openspec/changes/INDEX.md` (triage 2026-11-23). This change is kept as
+> historical record only; it SHALL NOT be applied, archived as complete, or
+> cited as current evidence.
+
 ## Why
 
 Owner feature 13 demands evaluation on unseen farms AND unseen periods; the

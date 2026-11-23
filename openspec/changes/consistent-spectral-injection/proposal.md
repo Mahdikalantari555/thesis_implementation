@@ -1,5 +1,10 @@
 # Change: consistent-spectral-injection
 
+> **Status (2026-11-23): SUPERSEDED.** The band/index-consistency injection fix remains valid code and is retained; the evidence context it audited (finding 24, S1=1.000) is void per finding 25, and the protocol was re-anchored on the v2 chain (eval hash 852e1ba3).
+> See `openspec/changes/INDEX.md` (triage 2026-11-23). This change is kept as
+> historical record only; it SHALL NOT be applied, archived as complete, or
+> cited as current evidence.
+
 ## Why
 
 The 8-channel patch input stores NDVI (channel 0) alongside the raw Red (channel 3)

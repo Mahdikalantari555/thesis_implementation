@@ -1,5 +1,10 @@
 # Change: patch-scoring-ensemble
 
+> **Status (2026-11-23): SUPERSEDED.** Scoring/ensemble methodology for the PoC arms; void with the patch verdict (finding 25). Not to be applied.
+> See `openspec/changes/INDEX.md` (triage 2026-11-23). This change is kept as
+> historical record only; it SHALL NOT be applied, archived as complete, or
+> cited as current evidence.
+
 ## Why
 
 The PoC trial (`patch-level-controlled-trial`) scores with the prediction

@@ -1,5 +1,10 @@
 # Change: anomaly-definition-path-b
 
+> **Status (2026-11-23): SUPERSEDED.** Absorbed into `benchmark-latent-reconstruction-prediction-architectures` (2026-11-23): the pre-registered trigger condition of this fallback (both path-C trials fail) has in fact been met (finding 23 negative; finding 25 >S6), and its multivariate/relational anomaly families are implemented there.
+> See `openspec/changes/INDEX.md` (triage 2026-11-23). This change is kept as
+> historical record only; it SHALL NOT be applied, archived as complete, or
+> cited as current evidence.
+
 ## Why
 
 todo.md §D1 verbatim: "re-examine the anomaly definition: multivariate/

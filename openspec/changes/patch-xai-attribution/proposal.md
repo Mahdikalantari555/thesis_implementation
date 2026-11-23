@@ -1,5 +1,10 @@
 # Change: patch-xai-attribution
 
+> **Status (2026-11-23): SUPERSEDED.** XAI methods for the patch models; the patch models are voided (finding 25). Resume only if the patch path is revived with a fresh pre-registration.
+> See `openspec/changes/INDEX.md` (triage 2026-11-23). This change is kept as
+> historical record only; it SHALL NOT be applied, archived as complete, or
+> cited as current evidence.
+
 ## Why
 
 Owner feature 11 demands explainability — band importance, feature
