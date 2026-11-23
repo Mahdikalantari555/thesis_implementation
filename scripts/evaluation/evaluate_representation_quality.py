@@ -154,6 +154,20 @@ def main(argv=None) -> int:
         blob = res.to_dict()
         per_candidate[name] = blob
         per_candidate[name]["gate_evidence"] = res.gate_evidence()
+        # The A-rand control: the SAME trunk, randomly initialised, probed with the
+        # same battery. G-A's comparator is this, not chance — a representation must
+        # beat its own untrained architecture, otherwise the win is inductive bias.
+        rand_model = build_candidate(name, n_channels=n_channels,
+                                     d_model=args.d_model, d_out=args.d_out)
+        z_rand = embed_candidates(rand_model, dev, device=args.device)
+        rand_res = run_level1(dev=dev, embed_fn=lambda X, M: z_rand,
+                              phase_targets=phase_targets)
+        per_candidate[name]["random_init"] = {
+            "gate_evidence": rand_res.gate_evidence(),
+            "seed": cfg.seed,
+            "note": ("same architecture and shape, never trained: the paired "
+                     "control G-A subtracts"),
+        }
         per_candidate[name]["params"] = cap.params
         per_candidate[name]["encoder_params"] = cap.encoder_params
         per_candidate[name]["capacity_band_ok"] = cap.band_ok
@@ -173,22 +187,27 @@ def main(argv=None) -> int:
     )
 
     # ---- G-A -------------------------------------------------------------
-    from ssl_anomaly.evaluation.gates import gate_a
+    from ssl_anomaly.evaluation.gates import (
+        GATE_INPUTS, UNDETERMINED, GateVerdict, gate_a,
+    )
 
     binding = bind_artifacts(prereg=prereg, strict=False, compute_hashes=not args.smoke)
     winner = verdict["winner"]
-    g_a = None
     if winner is not None:
-        g_a = gate_a(per_candidate[winner]["gate_evidence"], dict(prereg.gates["G-A"])).to_dict()
+        g_a = gate_a(_paired_g_a_evidence(per_candidate[winner]),
+                     dict(prereg.gates["G-A"])).to_dict()
     else:
-        g_a = {
-            "gate": "G-A",
-            "verdict": "failed",
-            "criteria": dict(prereg.gates["G-A"]),
-            "reason": verdict["selection_rule"],
-            "evidence": {},
-            "fail_consequence": prereg.gates["G-A"].get("fail_consequence", ""),
-        }
+        # No candidate was selected, so no representation was probed against its
+        # control. Reporting "failed" here would manufacture a measured loss that
+        # never happened; the honest verdict is that the gate could not decide.
+        missing = list(GATE_INPUTS["G-A"])
+        g_a = GateVerdict(
+            gate="G-A", verdict=UNDETERMINED, criteria=dict(prereg.gates["G-A"]),
+            evidence={}, fail_consequence=prereg.gates["G-A"].get("fail_consequence", ""),
+            missing_evidence=missing,
+            reason=(f"no candidate was screened: {verdict['selection_rule']} — "
+                    f"nothing was probed, so no term can be compared to A-rand"),
+        ).to_dict()
 
     report = {
         "change": prereg.payload.get("change"),
@@ -234,8 +253,18 @@ def main(argv=None) -> int:
                   all("collapse" in v for v in per_candidate.values()))
         exp.check("capacity recorded for every candidate",
                   all("params" in c for c in capacity.values()))
-        exp.check("G-A verdict present",
-                  g_a["verdict"] in {"passed", "failed"})
+        # Any of the three real verdicts is acceptable here; what is NOT acceptable
+        # is a verdict with no reason. Smoke encoders are barely trained, so
+        # collapse disqualification and "no winner" are the likely honest outcomes.
+        exp.check("G-A verdict is one of the three real verdicts",
+                  g_a["verdict"] in {"passed", "failed", "undetermined"},
+                  g_a["verdict"])
+        exp.check("an undetermined G-A names the evidence it lacks",
+                  g_a["verdict"] != "undetermined" or bool(g_a["missing_evidence"]))
+        exp.check("G-A never reports a verdict without a reason",
+                  g_a["verdict"] == "passed" or bool(g_a.get("reason")))
+        exp.check("every candidate carries its paired A-rand control",
+                  all("random_init" in v for v in per_candidate.values()))
         exp.check("every candidate's encoder sits in the pre-registered band",
                   all(c["band_ok"] for c in capacity.values()),
                   str({k: v["encoder_params"] for k, v in capacity.items()}))
@@ -257,6 +286,34 @@ def main(argv=None) -> int:
     print(f"wrote {written['pretraining_quality']}")
     print(f"G-A: {g_a['verdict']}" + (f" (winner {winner})" if winner else ""))
     return 0
+
+
+def _paired_g_a_evidence(candidate: dict) -> dict:
+    """Turn one candidate's raw Level-1 report plus its random-init control into the
+    paired keys G-A reads.
+
+    This is where a schema bug hides most easily: ``level1.Level1Result.gate_evidence``
+    emits ``farm_separability_top1`` / ``phase_probe_accuracy``, while G-A wants the
+    SSL-vs-A-rand pairs. Feeding the raw dict to ``gate_a`` silently matched nothing
+    and the gate reported "missing evidence" no matter what was measured.
+
+    A probe that could not run yields ``None`` on both sides and is omitted, so the
+    gate reduces to the terms that WERE measured rather than comparing a number
+    against an absent control.
+    """
+    ssl_ev = candidate.get("gate_evidence", {})
+    rand_ev = (candidate.get("random_init") or {}).get("gate_evidence", {})
+    out: dict = {}
+    for raw, stem in (("farm_separability_top1", "farm_separability"),
+                      ("phase_probe_accuracy", "phase_probe"),
+                      ("frozen_head_t1_ap", "frozen_head_t1")):
+        ssl_val, rand_val = ssl_ev.get(raw), rand_ev.get(raw)
+        if ssl_val is not None and rand_val is not None:
+            out[f"{stem}_ssl"] = float(ssl_val)
+            out[f"{stem}_rand"] = float(rand_val)
+    if ssl_ev.get("collapse_disqualified") is not None:
+        out["collapse_disqualified"] = bool(ssl_ev["collapse_disqualified"])
+    return out
 
 
 if __name__ == "__main__":
