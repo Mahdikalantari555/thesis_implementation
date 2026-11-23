@@ -43,8 +43,15 @@ def patch_batch_for_cycles(
     cycle_ids: np.ndarray,
     *,
     norm: dict,
+    cache=None,
 ) -> dict:
-    """Join by stable keys and keep raw inputs for physical-unit challenges."""
+    """Join by stable keys and keep raw inputs for physical-unit challenges.
+
+    ``cache`` is opt-in (``None`` follows ``EVAL_CACHE_*`` env flags, ``False``
+    forces the cold path). When enabled, L1 reuses a normalized batch keyed by
+    a fingerprint of the frozen store's provenance arrays and the requested
+    keys. The cold code below is unchanged and remains the source of truth.
+    """
     epoch = P.patch_epoch(root)
     index = P.patch_cycle_index(root)
     stats = P.patch_norm_stats(norm)
@@ -56,6 +63,16 @@ def patch_batch_for_cycles(
     missing = [key for key in keys if key not in index]
     if missing:
         raise ValueError(f"{len(missing)} requested patch cycles are not in the store: {missing[:5]}")
+
+    from ssl_anomaly.monitor import eval_cache as EC
+    handle = EC.resolve_cache(cache)
+    cache_key = None
+    if handle is not None:
+        cache_key = EC.l1_key(root, field_ids, cycle_ids, norm)
+        cached = handle.load_l1(cache_key)
+        if cached is not None:
+            return cached
+
     cycles = [index[key] for key in keys]
     P.assert_patch_count_bounds(root, cycles)
     # Allocate each output only once; retaining every cycle and then stacking
@@ -73,11 +90,14 @@ def patch_batch_for_cycles(
             if key not in arrays:
                 arrays[key] = np.empty((len(cycles), *value.shape), dtype=value.dtype)
             arrays[key][n] = value
-    return {
+    result = {
         **arrays, "unnormalized_channels": sorted(missing_scales),
         "pixel_valid": arrays["obs"].any(axis=2),
         "cycles_found": len(keys), "norm_stats": stats,
     }
+    if handle is not None and cache_key is not None:
+        handle.save_l1(cache_key, result)
+    return result
 
 
 def _scoring_inputs(batch: dict, rows=slice(None)) -> dict:
@@ -92,6 +112,7 @@ def patch_reference_paths(
     reference_idx: np.ndarray,
     field_row: np.ndarray | None = None,
     chunk: int = 32,
+    cache=None,
 ) -> np.ndarray:
     """Clean-calibration paths used by the empirical p-value.
 
@@ -103,6 +124,33 @@ def patch_reference_paths(
     idx = np.asarray(reference_idx, dtype=np.int64)
     if idx.size == 0:
         raise ValueError("no calibration cycles for the patch arm's reference paths")
+
+    from ssl_anomaly.monitor import eval_cache as EC
+    handle = EC.resolve_cache(cache)
+    key = None
+    if handle is not None:
+        # ``patch_reference_paths`` is called with a PatchDeepScorer in the
+        # sweep and with a minimal stand-in in tests; some callers wrap it in
+        # a PatchArmScorer. Resolve either shape to the scorer identity.
+        scorer = getattr(arm_scorer, "scorer", arm_scorer)
+        sigma = getattr(scorer, "sigma", None)
+        pixel_valid = batch.get("pixel_valid", batch.get("M"))
+        key = EC.l2_key(
+            model_id=getattr(scorer, "model_id", "unknown"),
+            sigma_sha256=getattr(sigma, "sha256", ""),
+            alignment=getattr(scorer, "alignment", ""),
+            idx=idx,
+            field_row=(None if field_row is None else np.asarray(field_row)[idx]),
+            chunk=chunk,
+            x=batch["X"][idx],
+            pixel_valid=pixel_valid[idx],
+            scoring_inputs={name: batch[name][idx]
+                            for name in ("sensor_id", "covariates", "obs") if name in batch},
+        )
+        cached = handle.load_l2(key)
+        if cached is not None:
+            return cached
+
     paths = np.full((idx.size, batch["X"].shape[1]), np.nan)
     for n0 in range(0, idx.size, max(1, chunk)):
         sl = idx[n0 : n0 + max(1, chunk)]
@@ -116,6 +164,8 @@ def patch_reference_paths(
             **extra, **_scoring_inputs(batch, sl),
         )
         paths[n0 : n0 + sl.size] = scores
+    if handle is not None and key is not None:
+        handle.save_l2(key, paths)
     return paths
 
 
@@ -131,6 +181,7 @@ def patch_arm_scores(
     field_row: np.ndarray | None = None,
     injection_basis: str = BASIS_INDEX_ONLY,
     chunk: int | None = None,
+    cache=None,
 ) -> dict:
     """Score one severity cell: inject in the PATCH tensor, then score.
 
@@ -144,9 +195,17 @@ def patch_arm_scores(
     and the gradual ramp length cycles ``GRADUAL_RAMP_BINS`` per round — the
     exact field-ladder protocol — so consecutive rounds are genuinely different
     treatments and the sweep's Wilson CI counts independent injections.
+
+    ``cache`` is opt-in (``None`` follows ``EVAL_CACHE_*`` env flags, ``False``
+    forces the cold path). L3 stores the injected tensor and the hash records;
+    a warm run skips injection and calls the same ``score_cycles`` path. A
+    caller-supplied ``rng`` bypasses the cache, because its state is not
+    reproducible from the cell id. The cold path is the source of truth.
     """
     from ssl_anomaly.monitor import patch_perturbations as ppert
     from ssl_anomaly.monitor import severity_table as sev
+    from ssl_anomaly.monitor import perturbations as mpert
+    from ssl_anomaly.monitor import eval_cache as EC
 
     levels = {lv.level_id: lv for lv in sev.load_table()}
     if level_id not in levels:
@@ -163,8 +222,20 @@ def patch_arm_scores(
     else:
         duration = levels[level_id].duration_bins
 
+    rng_was_given = rng is not None
     rng = rng if rng is not None else np.random.default_rng(round_idx)
-    injections = []
+
+    # --- opt-in L3 lookup (cold path below is unchanged in value) ---------
+    handle = EC.resolve_cache(cache)
+    can_cache = handle is not None and not rng_was_given
+    key = None
+    cached = None
+    if can_cache:
+        key = EC.l3_key(batch, level_id=level_id, family=family, index=index,
+                        round_idx=round_idx, basis=injection_basis,
+                        delta=delta, duration=duration)
+        cached = handle.load_l3(key)
+
     shape = batch["raw"].shape
     n_samples = shape[0]
     if chunk is not None and chunk <= 0:
@@ -173,20 +244,20 @@ def patch_arm_scores(
     # A caller may omit X after calibration; normalize_patch always emits
     # float32. Preserve an explicitly supplied X dtype for legacy callers.
     x_dtype = batch["X"].dtype if "X" in batch else np.float32
-    outputs = {key: [] for key in ("z2", "score", "p_value")}
-    Minj = batch["pixel_valid"]
-    for start in range(0, n_samples, chunk_size):
-        end = min(start + chunk_size, n_samples)
-        Xinj = np.empty((end - start, *shape[1:]), dtype=x_dtype)
+
+    if cached is not None:
+        Xinj_full, injections = cached
+    else:
+        Xinj_full = np.empty((n_samples, *shape[1:]), dtype=x_dtype)
+        injections = []
         # The same RNG is consumed once per sample, in global batch order.
-        for n in range(start, end):
+        for n in range(n_samples):
             # Onset phases rotate deterministically through early/mid/late
             # exactly like the field ladder (cycle i, round r → phase
             # (i + r) % 3). The pre-fix code pinned onset to bin 3, which made
             # every round of a cell a byte-identical injection (the Wilson CI
             # then counted pseudo-replicates) and measured detection from bin
             # 0 instead of the onset (audit 2026-11-21).
-            from ssl_anomaly.monitor import perturbations as mpert
             phase = mpert.PHASES[(n + round_idx) % len(mpert.PHASES)]
             onset = mpert.phase_start_bin(phase, shape[1])
             inj = ppert.inject_patch_drop(
@@ -195,15 +266,23 @@ def patch_arm_scores(
                 duration=int(duration), in_field=batch["in_field"][n],
                 level_id=level_id, rng=rng, injection_basis=injection_basis,
             )
-            Xinj[n - start], _ = P.normalize_patch(
+            Xinj_full[n], _ = P.normalize_patch(
                 inj.x, batch["obs"][n], batch["sensor_id"][n], batch["norm_stats"]
             )
             injections.append(inj.to_hash_record())
+        if cached is None and can_cache and handle.write:
+            handle.save_l3(key, Xinj_full, injections)
+
+    outputs = {key: [] for key in ("z2", "score", "p_value")}
+    Minj = batch["pixel_valid"]
+    for start in range(0, n_samples, chunk_size):
+        end = min(start + chunk_size, n_samples)
         sl = slice(start, end)
         extra = {} if field_row is None else {"idx": np.asarray(field_row)[sl]}
-        out = arm.score_cycles(Xinj, Minj[sl], None, None, **extra, **_scoring_inputs(batch, sl))
-        for key in outputs:
-            outputs[key].append(out[key])
+        out = arm.score_cycles(Xinj_full[sl], Minj[sl], None, None, **extra,
+                               **_scoring_inputs(batch, sl))
+        for out_key in outputs:
+            outputs[out_key].append(out[out_key])
     return {"z2": np.concatenate(outputs["z2"]), "paths": np.concatenate(outputs["score"]),
             "p_value": np.concatenate(outputs["p_value"]),
             "observed": Minj.any(axis=(2, 3)),

@@ -21,6 +21,8 @@ but blocked on an explicit owner decision before any application.
 | `regional-ssl-representation-evaluation` | 0/42 | PROPOSED — the capstone | Level-1/Level-2 evaluation of a light regional SSL representation; five-level ladders; pre-registered gates G-A…G-E; owner decisions registered 2026-11-23 (advantage = undecided; priority = both + applied ambition; Madeline path = tracked future change) |
 | `benchmark-latent-reconstruction-prediction-architectures` | 0/37 | PROPOSED — heavy counterpart | Architecture/suppression/synthetic breadth benchmark (Colab T4, budget-aware); feeds the capstone, no capstone gate depends on it |
 | `cycle-detection-v3-multindex` | 26/27 | ACTIVE — v2 producer; nearly closed | Only open item is an optional follow-up: the gate FAILED, so no switch; production path stays off; owner call whether to re-gate with `--sweep` after the v2 store completes |
+| `optional-rust-acceleration` | 9/12 | APPLIED — gating tasks done; 3 deferred | Pure Python stays canonical; Rust ports opt-in via `fast-anything build` + `enable`; opt-out `FAST_ANYTHING_DISABLE=1`; docs + smoke test in `docs/optional_rust_acceleration.md`; no scientific claim (L0) |
+| `eval-artifact-cache` | 12/14 | APPLIED — gating tasks done; 2 deferred | Opt-in fingerprinted L1/L2/L3 disk cache of normalized batch, clean reference paths and per-cell injected tensors; exact NaN-aware parity (72 cells); untracked `data/cache/eval/`; warm 1.46× at n=32 |
 
 ## Dormant — unapplied, await owner decision
 
