@@ -615,3 +615,52 @@ def test_score_chunk_cli_rejects_nonpositive():
     assert module.parse_args([*base, "--score-chunk", "4"]).score_chunk == 4
     with pytest.raises(SystemExit):
         module.parse_args([*base, "--score-chunk", "0"])
+
+
+# ---------------------------------------------------------------------------
+# PERF-10 — score_cycles exposes the z it already computed, and it is the SAME
+# z apply_norm would produce (the bank arms reuse it instead of re-normalizing)
+# ---------------------------------------------------------------------------
+def test_score_cycles_z_is_the_norm_z() -> None:
+    """``score_cycles[...]["z"]`` must equal ``apply_norm`` on the raw batch.
+
+    PERF-10 removed a second ``apply_norm`` pass from the bank arm path. If the
+    exposed array were even slightly different (or shared by reference with a
+    buffer the caller later mutates), the bank arms would score a different
+    input than the recon arms — a silent semantic change, not an optimization.
+    """
+    import importlib.util
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parents[2]
+    spec = importlib.util.spec_from_file_location("eval_dev_perf10", repo / "scripts/eval_dev.py")
+    E = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(E)
+    from ssl_anomaly.monitor import inputs as minputs
+
+    rng = np.random.default_rng(0)
+    N, T, C = 3, 36, 4
+    X = rng.normal(0.3, 0.2, size=(N, T, C)).astype(np.float32)
+    M = rng.random((N, T, C)) > 0.3
+    X = np.where(M, X, 0.0).astype(np.float32)
+    norm = {
+        "median": np.zeros((T, C), dtype=np.float32),
+        "scale": np.ones((T, C), dtype=np.float32),
+        "robust_range": np.full((T, C), 2.0, dtype=np.float32),
+    }
+    doy = minputs.doy_channels(np.array([10, 20, 30]), epoch="2013-03-30")
+
+    class ConstantScorer:
+        use_doy = False
+
+        def loo_batch(self, z, M, doy):
+            return np.zeros(z.shape[:2]), np.zeros_like(z)
+
+    out = E.score_cycles(ConstantScorer(), X, M, doy, norm)
+    assert "z" in out
+    expected = minputs.apply_norm(norm, X, M)
+    assert np.array_equal(out["z"], expected), "the exposed z must be apply_norm's z"
+    # the z2 the alarm path consumes is derived from THAT array, i.e. the
+    # exposed z is the one the score was actually computed from
+    resid = expected - np.zeros_like(expected)
+    assert np.array_equal(out["z2"], (E.mscoring.causal_offset_correct(resid, M) ** 2) * M)

@@ -247,6 +247,9 @@ def score_cycles(scorer, X_raw: np.ndarray, M: np.ndarray, doy: np.ndarray, norm
     - "mean": observed-mask-weighted MSE in z-space (D5 L1 statistic; secondary)
     - "z2": per-(bin, channel) squared z-space residuals (alarm-statistic input)
     - "pred_raw": withheld-bin predictions mapped back to raw units (NRMSE)
+    - "z": the z-space input the deep scorers consumed (or the B1 robust z), so
+      the bank arms can embed the SAME array instead of re-running apply_norm
+      on data this function already normalized (audit PERF-10)
 
     Deep scorers work in z-space; predictions are mapped back to raw units so
     NRMSE is comparable with B1. B1 predicts the train climatology directly.
@@ -255,6 +258,7 @@ def score_cycles(scorer, X_raw: np.ndarray, M: np.ndarray, doy: np.ndarray, norm
         N, T, C = X_raw.shape
         scores = np.full((N, T), np.nan)
         z2 = np.zeros((N, T, C))
+        z_space = np.zeros((N, T, C))
         pred_raw = np.zeros((N, T, C))
         for i in range(N):
             scores[i] = scorer.score_cycle(X_raw[i], M[i], doy[i, :, 0])
@@ -263,18 +267,19 @@ def score_cycles(scorer, X_raw: np.ndarray, M: np.ndarray, doy: np.ndarray, norm
             scale = scorer.scale[g, np.arange(T)]
             pred_raw[i] = med
             zc = np.where(M[i], (X_raw[i] - med) / scale, 0.0)
+            z_space[i] = zc
             # Signed robust-z residual vs the train climatology, then the
             # causal field-offset correction (dev-loop change #2, refined).
             resid_corr = mscoring.causal_offset_correct(zc[None], M[i][None])[0]
             z2[i] = resid_corr * resid_corr * M[i]
-        return {"mean": scores, "z2": z2, "pred_raw": pred_raw}
+        return {"mean": scores, "z2": z2, "pred_raw": pred_raw, "z": z_space}
     z = minputs.apply_norm(norm, X_raw, M)
     scores, pred_z = scorer.loo_batch(z, M, doy)
     pred_raw = pred_z * norm["scale"][None] + norm["median"][None]
     resid = z - pred_z  # signed: value − prediction
     resid_corr = mscoring.causal_offset_correct(resid, M)
     z2 = (resid_corr * resid_corr) * M  # zero where unobserved
-    return {"mean": scores, "z2": z2, "pred_raw": pred_raw}
+    return {"mean": scores, "z2": z2, "pred_raw": pred_raw, "z": z}
 
 
 # ---------------------------------------------------------------------------
@@ -492,12 +497,19 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
                   f"(manifest {bank_manifest_path.name})")
 
         def paths_for_batch(Xb: np.ndarray, Mb: np.ndarray, doyb: np.ndarray,
-                            z2b: np.ndarray) -> np.ndarray:
-            """Alarm paths of the selected arm for one scored batch."""
+                            z2b: np.ndarray, zb: np.ndarray | None = None) -> np.ndarray:
+            """Alarm paths of the selected arm for one scored batch.
+
+            ``zb`` is the z-space batch ``score_cycles`` already computed. The
+            bank arms used to normalize AGAIN here (audit PERF-10); passing the
+            existing array removes that duplicate pass. The B1 climatology z is
+            not the norm's z, so those call sites pass ``zb=None`` and the
+            arithmetic is unchanged.
+            """
             recon = mscoring.cumulative_channel_max(z2b, Mb, cell_q95)
             if args.scorer == "recon_only":
                 return recon
-            zb = minputs.apply_norm(norm, Xb, Mb)
+            zb = minputs.apply_norm(norm, Xb, Mb) if zb is None else zb
             emb_q = emb_fn(zb, Mb, doyb)
             bank_scores, _fb = bank.score_batch(emb_q, Mb)
             return arm_paths(args, recon, bank_scores)
@@ -507,7 +519,7 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
         # Per-cell normalizer from the CALIBRATION subset only — the
         # evaluation subset stays independent of every statistic input.
         cell_q95 = mscoring.cell_q95_normalizer(clean["z2"][calib_idx], M[calib_idx])
-        clean_paths_all = paths_for_batch(X, M, doy, clean["z2"])
+        clean_paths_all = paths_for_batch(X, M, doy, clean["z2"], zb=clean["z"])
 
         # ---- Threshold (τ, k) on the CALIBRATION subset ---------------------
         ksel = mpert.inject_index_drop_dataset(
@@ -518,7 +530,7 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
         Mk = np.stack([r.m for r in ksel])
         doyk = doy[calib_idx][[r.source_row for r in ksel]]
         ksel_scores = score_cycles(scorer, Xk, Mk, doyk, norm)
-        ksel_paths = paths_for_batch(Xk, Mk, doyk, ksel_scores["z2"])
+        ksel_paths = paths_for_batch(Xk, Mk, doyk, ksel_scores["z2"], zb=ksel_scores["z"])
         threshold, per_k = mscoring.choose_threshold(
             [clean_paths_all[i] for i in calib_idx],
             [ksel_paths[j] for j in range(len(ksel))],
@@ -552,7 +564,7 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
                         Minj = np.stack([r.m for r in results])
                         doy_inj = doye[[r.source_row for r in results]]
                         s_inj = score_cycles(scorer, Xinj, Minj, doy_inj, norm)
-                        inj_paths = paths_for_batch(Xinj, Minj, doy_inj, s_inj["z2"])
+                        inj_paths = paths_for_batch(Xinj, Minj, doy_inj, s_inj["z2"], zb=s_inj["z"])
                         for j, r in enumerate(results):
                             fb = mscoring.first_alarm_bin(inj_paths[j], tau, k, r.onset_bin)
                             det_flags.append(1 if fb >= 0 else 0)
@@ -657,12 +669,22 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
 
         # Per-phase breakdown pooled over the acute/ndvi cells (the primary
         # index/family) — onset phases rotate deterministically per round.
-        per_phase: dict[str, dict] = {}
-        phase_flags: dict[str, list[int]] = {}
-        for rnd in range(max(1, args.rounds)):
-            results = mpert.inject_index_drop_dataset(
+        #
+        # Both summaries below consume the SAME per-round injections, and a
+        # round's injection is a pure function of (Xe, Me, level, family,
+        # index, round_idx) — the perturbation RNG is seeded from those and the
+        # phase rotation is deterministic. They used to call
+        # inject_index_drop_dataset twice per round (audit PERF-8); it is
+        # computed once here and reused.
+        injections = [
+            mpert.inject_index_drop_dataset(
                 Xe, Me, level_id="S3", family=sev.ACUTE_FAMILY, index="ndvi", round_idx=rnd,
             )
+            for rnd in range(max(1, args.rounds))
+        ]
+        per_phase: dict[str, dict] = {}
+        phase_flags: dict[str, list[int]] = {}
+        for rnd, results in enumerate(injections):
             for j, r in enumerate(results):
                 phase_flags.setdefault(r.phase, []).append(det_pools[f"S3/{sev.ACUTE_FAMILY}/ndvi"][rnd * n_eval + j])
         for ph, flags in phase_flags.items():
@@ -673,10 +695,7 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
 
         # Injection % summary (of each field's own grand-growth median).
         pct_summary = {}
-        for rnd in range(max(1, args.rounds)):
-            results = mpert.inject_index_drop_dataset(
-                Xe, Me, level_id="S3", family=sev.ACUTE_FAMILY, index="ndvi", round_idx=rnd,
-            )
+        for results in injections:
             pcts = [r.meta["pct_of_field_median"] for r in results if r.meta["pct_of_field_median"] is not None]
             pct_summary = {"median_pct_of_field_grand_growth_median": float(np.median(pcts)) if pcts else None,
                            "n": len(pcts)}

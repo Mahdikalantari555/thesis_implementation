@@ -357,11 +357,33 @@ def estimate_store_bytes(n_fields: int, n_cycles: int, size: int = DEFAULT_PATCH
     )
 
 
+# PERF-9: patch_cycle_index/open_store were rebuilt from scratch several times
+# per eval run (eval_dev, patch_eval, the localization probes). Both are pure
+# functions of the store's CONTENT, which cannot change under a read-only
+# handle, so the read-only results are memoized per resolved path. A store
+# opened for writing ("w"/"a") is never cached, and the caches are keyed on the
+# resolved path so a rebuilt store at a new path is a new entry.
+_STORE_CACHE: dict[str, object] = {}
+_CYCLE_INDEX_CACHE: dict[str, dict] = {}
+
+
+def clear_store_caches() -> None:
+    """Drop the PERF-9 memoized read-only store handles and cycle indexes."""
+    _STORE_CACHE.clear()
+    _CYCLE_INDEX_CACHE.clear()
+
+
 def open_store(path: str | Path, *, mode: str = "r"):
     """Open (or create) a patches.zarr group. Imported lazily: zarr only here."""
     import zarr
 
-    return zarr.open_group(str(path), mode=mode)
+    key = str(Path(path).resolve())
+    if mode == "r" and key in _STORE_CACHE:
+        return _STORE_CACHE[key]
+    root = zarr.open_group(str(path), mode=mode)
+    if mode == "r":
+        _STORE_CACHE[key] = root
+    return root
 
 
 def create_store(
@@ -479,7 +501,19 @@ def patch_epoch(root) -> str:
 
 
 def patch_cycle_index(root) -> dict[str, PatchCycle]:
-    """Index valid store slots by stable field/cycle identity, not column number."""
+    """Index valid store slots by stable field/cycle identity, not column number.
+
+    Memoized per store path (audit PERF-9): the index is derived only from the
+    store's own arrays, so it cannot change while a read-only handle is open.
+    Callers that MUTATE a store's cycle metadata in place must call
+    :func:`clear_store_caches` (the exporter writes only to a fresh store).
+    """
+    key = _cache_key_for(root)
+    if key is not None:
+        fingerprint = _cycle_meta_fingerprint(root)
+        hit = _CYCLE_INDEX_CACHE.get(key)
+        if hit is not None and hit[0] == fingerprint:
+            return hit[1]
     fields = np.asarray(root["field_ids"][:], dtype=int)
     if np.any(fields <= 0) or len(set(fields)) != fields.size:
         raise ValueError("patch store field_ids must be positive and unique")
@@ -493,7 +527,36 @@ def patch_cycle_index(root) -> dict[str, PatchCycle]:
         if cycle.key in index:
             raise ValueError(f"duplicate patch cycle: {cycle.key}")
         index[cycle.key] = cycle
+    if key is not None:
+        _CYCLE_INDEX_CACHE[key] = (fingerprint, index)
     return index
+
+
+def _cycle_meta_fingerprint(root) -> str:
+    """Cheap digest of the arrays ``patch_cycle_index`` reads.
+
+    PERF-9 memoizes the index; the fingerprint makes the memoization SAFE
+    against callers that rewrite cycle metadata in place (the test fixtures and
+    the exporter's own writes do). It sums the same few arrays the index
+    derives from, so an unchanged store costs one small read per call while a
+    changed store misses the cache instead of returning a stale index.
+    """
+    import hashlib
+
+    h = hashlib.sha256()
+    for name in ("field_ids", "cycle_ids", "cycle_start_day", "cycle_end_day", "cycle_valid"):
+        arr = np.ascontiguousarray(np.asarray(root[name][:]))
+        h.update(str(arr.shape).encode())
+        h.update(arr.tobytes())
+    return h.hexdigest()
+
+
+def _cache_key_for(root) -> str | None:
+    """Resolved store path of a zarr group, or None when it has no path."""
+    path = getattr(root, "store_path", None) or getattr(root, "path", None)
+    if path is None:
+        return None
+    return str(Path(str(path)).resolve())
 
 
 def validate_locked_patch_store(root, splits_manifest: dict) -> str:
@@ -650,18 +713,47 @@ def build_patch_norm(*, root, splits_manifest: dict, holdout_manifest: dict,
     cycles, _ = select_patch_train_cycles(
         root, splits_manifest=splits_manifest, holdout_manifest=holdout_manifest,
     )
-    flat_vals, flat_sensors = [], []
-    for cycle in progress(cycles) if progress is not None else cycles:
+    # Audit PERF-6. The old body accumulated one (pixels, C) float64 block per
+    # field-cycle-bin in a list and then concatenated the list — every value
+    # existed TWICE at peak (list + concatenated copy), the largest memory
+    # spike of the norm build. Both passes below produce the SAME float64
+    # values in the SAME order, so the fitted artifact stays bit-for-bit
+    # reproducible (pinned by tests/unit/test_patch_norm_parity.py):
+    #   pass 1 — count the rows (cheap: it only reads the masks), allocate the
+    #            two arrays once, then
+    #   pass 2 — re-read the cycles and fill the pre-allocated arrays.
+    # The accumulation dtype is deliberately unchanged: float64 in, float64
+    # median/percentile out.
+    def _rows_for(cycle):
         values, obs, sensors, _ = read_patch_observations(root, cycle)
+        out = []
         for b, sensor in enumerate(sensors):
             pixels = obs[b].any(axis=0)
             if pixels.any():
-                flat_vals.append(np.where(obs[b][:, pixels], values[b][:, pixels], np.nan).T)
-                flat_sensors.append(np.full(pixels.sum(), sensor, dtype=np.uint8))
-    if not flat_vals:
+                out.append((
+                    np.where(obs[b][:, pixels], values[b][:, pixels], np.nan).T,
+                    int(sensor),
+                ))
+        return out
+
+    n_rows = 0
+    for cycle in progress(cycles) if progress is not None else cycles:
+        n_rows += sum(block.shape[0] for block, _ in _rows_for(cycle))
+    if n_rows == 0:
         raise ValueError("no finite in-field train pixel observations — refusing to fit norm stats")
 
-    stats = fit_patch_norm(np.concatenate(flat_vals), np.concatenate(flat_sensors))
+    flat_vals = np.empty((n_rows, N_CHANNELS), dtype=np.float64)
+    flat_sensors = np.empty(n_rows, dtype=np.uint8)
+    at = 0
+    for cycle in progress(cycles) if progress is not None else cycles:
+        for block, sensor in _rows_for(cycle):
+            n = block.shape[0]
+            flat_vals[at:at + n] = block
+            flat_sensors[at:at + n] = sensor
+            at += n
+    assert at == n_rows
+
+    stats = fit_patch_norm(flat_vals, flat_sensors)
     fields = sorted({cycle.field_id for cycle in cycles})
     return {
         "stats": stats,
@@ -839,22 +931,60 @@ class Provenance:
             raise ValueError("provenance n_fields must be positive")
 
 
-def output_sha256(root, *, sample: int = 512) -> str:
-    """Cheap content hash of the store: shapes + a deterministic value sample."""
+def output_sha256(root, *, sample: int = 512, slab: int = 16) -> str:
+    """Cheap content hash of the store: shapes + a deterministic value sample.
+
+    Audit PERF-1: this used to materialize the WHOLE ``values`` array
+    (``root["values"][:]``, ~1 GB fp16 at full extent) just to take a 512-value
+    sample — the largest export memory spike in the pipeline. It now streams
+    the store in row-slabs along the first axis. The digest is byte-identical
+    because the pick rule is expressed on FLAT indices: pass 1 counts the
+    finite values per slab (cheap, no full materialization), the same
+    ``finite_idx[::step][:sample]`` ordinals are computed from the total, and
+    pass 2 re-reads only the slabs that actually hold a pick.
+    """
     h = hashlib.sha256()
     for name in sorted(store_schema(1, 1)):
         arr = root[name]
         h.update(name.encode())
         h.update(str(arr.shape).encode())
         h.update(str(arr.dtype).encode())
-    vals = np.asarray(root["values"][:], dtype=np.float32)
-    flat = vals.reshape(-1)
-    finite_idx = np.flatnonzero(np.isfinite(flat))
-    if finite_idx.size:
-        step = max(1, finite_idx.size // sample)
-        pick = finite_idx[::step][:sample]
-        h.update(np.round(flat[pick], 4).astype(np.float32).tobytes())
-    h.update(str(int(np.isfinite(vals).sum())).encode())
+    values = root["values"]
+    n_rows = int(values.shape[0])
+    row_len = int(np.prod(values.shape[1:], dtype=np.int64))
+    step_rows = max(1, int(slab))
+    bounds = [(lo, min(n_rows, lo + step_rows)) for lo in range(0, n_rows, step_rows)]
+
+    def _slab(lo: int, hi: int) -> np.ndarray:
+        return np.asarray(values[lo:hi], dtype=np.float32).reshape(-1)
+
+    # Pass 1 — how many finite values does each slab hold (and thus the total)?
+    counts = np.array([int(np.isfinite(_slab(lo, hi)).sum()) for lo, hi in bounds],
+                      dtype=np.int64)
+    n_finite = int(counts.sum())
+    if not n_finite:
+        h.update(str(n_finite).encode())
+        return h.hexdigest()
+    step = max(1, n_finite // sample)
+    ordinals = np.arange(0, n_finite, step)[:sample]          # the original picks
+    # Pass 2 — locate those ordinals and re-read only their slabs. Ordinals are
+    # ascending and slabs are contiguous in flat order, so a cumulative-count
+    # mapping reproduces `flat[pick]` exactly.
+    cum = np.concatenate([[0], np.cumsum(counts)])
+    slab_of = np.searchsorted(cum, ordinals, side="right") - 1
+    local = ordinals - cum[slab_of]
+    picked: list[np.ndarray] = []
+    for si, (lo, hi) in enumerate(bounds):
+        sel = slab_of == si
+        if not sel.any():
+            continue
+        block = _slab(lo, hi)
+        idx = np.flatnonzero(np.isfinite(block))[local[sel]]
+        picked.append(block[idx])
+        del block
+    h.update(np.round(np.concatenate(picked), 4).astype(np.float32).tobytes())
+    # Order matters: the original wrote the finite COUNT after the pick bytes.
+    h.update(str(n_finite).encode())
     return h.hexdigest()
 
 
@@ -879,6 +1009,7 @@ __all__ = [
     "assert_patch_count_bounds",
     "assert_patch_train_cycles",
     "build_patch_norm",
+    "clear_store_caches",
     "create_store",
     "crop_and_pad",
     "estimate_store_bytes",

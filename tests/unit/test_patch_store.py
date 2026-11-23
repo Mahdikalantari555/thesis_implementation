@@ -285,3 +285,144 @@ def test_load_refuses_malformed_envelope_even_with_a_valid_hash(tmp_path, stats)
     path.write_text(json.dumps(norm))
     with pytest.raises(ValueError, match="invalid patch normalization"):
         P.load_patch_norm(path)
+
+
+# ---------------------------------------------------------------------------
+# PERF-1 — output_sha256 streams the store instead of materializing it
+# ---------------------------------------------------------------------------
+def _reference_output_sha256(root, *, sample: int = 512) -> str:
+    """Pre-PERF-1 body, verbatim: materialize ``values`` and hash the sample.
+
+    Kept as the parity oracle; this is the code the streaming version
+    replaced, so the store digest cannot drift silently.
+    """
+    import hashlib
+
+    h = hashlib.sha256()
+    for name in sorted(P.store_schema(1, 1)):
+        arr = root[name]
+        h.update(name.encode())
+        h.update(str(arr.shape).encode())
+        h.update(str(arr.dtype).encode())
+    vals = np.asarray(root["values"][:], dtype=np.float32)
+    flat = vals.reshape(-1)
+    finite_idx = np.flatnonzero(np.isfinite(flat))
+    if finite_idx.size:
+        step = max(1, finite_idx.size // sample)
+        pick = finite_idx[::step][:sample]
+        h.update(np.round(flat[pick], 4).astype(np.float32).tobytes())
+    h.update(str(int(np.isfinite(vals).sum())).encode())
+    return h.hexdigest()
+
+
+def _filled_store(tmp_path: Path, *, field_ids=(301, 302), n_cycles=3, size=8,
+                  nan_fraction: float = 0.3, seed: int = 0):
+    root = make_store(tmp_path, field_ids=field_ids, n_cycles=n_cycles, size=size)
+    rng = np.random.default_rng(seed)
+    for fi in range(len(field_ids)):
+        for ci in range(n_cycles):
+            fill_cycle(root, fi, ci, value=0.3)
+            shape = (P.N_BINS, P.N_CHANNELS, size, size)
+            vals = rng.standard_normal(shape).astype(np.float16)
+            vals[rng.random(shape) < nan_fraction] = np.nan
+            root["values"][fi, ci] = vals
+    return root
+
+
+@pytest.mark.parametrize("slab", [1, 2, 3, 5, 64])
+def test_streamed_output_sha256_is_byte_identical_to_the_materialized_body(
+    tmp_path: Path, slab: int,
+) -> None:
+    root = _filled_store(tmp_path)
+    assert P.output_sha256(root, slab=slab) == _reference_output_sha256(root)
+
+
+def test_streamed_output_sha256_is_identical_on_degenerate_stores(tmp_path: Path) -> None:
+    """All-NaN (nothing to sample) and all-finite (every position a candidate)
+    are the two ends the ordinal walk has to get right."""
+    root = make_store(tmp_path / "all_nan", field_ids=(301,), n_cycles=2)
+    for ci in range(2):
+        root["values"][0, ci] = np.full(
+            (P.N_BINS, P.N_CHANNELS, 8, 8), np.nan, dtype=np.float16)
+    assert P.output_sha256(root) == _reference_output_sha256(root)
+    assert P.output_sha256(root) == P.output_sha256(root), "must be deterministic"
+
+    root2 = make_store(tmp_path / "all_finite", field_ids=(301,), n_cycles=2)
+    rng = np.random.default_rng(3)
+    for ci in range(2):
+        root2["values"][0, ci] = rng.standard_normal(
+            (P.N_BINS, P.N_CHANNELS, 8, 8)).astype(np.float16)
+    assert P.output_sha256(root2, slab=1) == _reference_output_sha256(root2)
+    assert P.output_sha256(root2, slab=2) == P.output_sha256(root2, slab=64)
+
+
+def test_output_sha256_does_not_read_the_whole_values_array(tmp_path: Path) -> None:
+    """The point of PERF-1: the function must never ask for every row at once."""
+    store = _filled_store(tmp_path)
+    n_rows = int(store["values"].shape[0])
+    reads: list[int] = []
+
+    class Guard:
+        """Minimal read-only view over one zarr array, recording slice extents."""
+
+        def __init__(self, arr):
+            self._arr = arr
+            self.shape = arr.shape
+            self.dtype = arr.dtype
+
+        def __getitem__(self, key):
+            first = key[0] if isinstance(key, tuple) and key else key
+            if isinstance(first, slice):
+                lo, hi, _ = first.indices(self.shape[0])
+                reads.append(hi - lo)
+            else:                                   # pragma: no cover - never used
+                reads.append(self.shape[0])
+            return np.asarray(self._arr[key])
+
+    class RootView(dict):
+        pass
+
+    view = RootView(store)
+    view["values"] = Guard(store["values"])
+    digest = P.output_sha256(view, slab=1)
+    assert digest == _reference_output_sha256(store)
+    assert reads, "the streaming path must read the store"
+    assert max(reads) == 1, (
+        f"largest slice was {max(reads)} of {n_rows} rows — the store was "
+        "materialized instead of streamed"
+    )
+
+
+# ---------------------------------------------------------------------------
+# PERF-9 — the read-only store handle and cycle index are memoized
+# ---------------------------------------------------------------------------
+def test_open_store_is_memoized_for_read_mode(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    fill_cycle(store, 0, 0, value=0.3)
+    path = tmp_path / "patches.zarr"
+    P.clear_store_caches()
+    a = P.open_store(path)
+    b = P.open_store(path)
+    assert a is b, "read-only opens of the same store must share one handle"
+    # a write-mode open is never cached
+    c = P.open_store(path, mode="a")
+    assert c is not a
+    assert P.open_store(path) is a, "the read handle must survive a write open"
+
+
+def test_cycle_index_is_memoized_but_never_stale(tmp_path: Path) -> None:
+    """A cached index is reused, yet an in-place metadata change invalidates it."""
+    store = make_store(tmp_path, field_ids=(301, 302), n_cycles=2)
+    fill_cycle(store, 0, 0, value=0.3)
+    fill_cycle(store, 0, 1, value=0.3)
+    P.clear_store_caches()
+    first = P.patch_cycle_index(store)
+    again = P.patch_cycle_index(store)
+    assert again == first
+    assert again is first, "an unchanged store must hit the cache"
+
+    # change the metadata in place: the index must follow, not go stale
+    store["cycle_ids"][0, 1] = 999
+    updated = P.patch_cycle_index(store)
+    assert "301:999" in updated
+    assert "301:101" not in updated
