@@ -492,3 +492,36 @@ def test_gradual_never_warms_extraction_targets_or_masks():
     )
     for r in results:
         np.testing.assert_array_equal(r.m, m[r.source_row])
+
+
+# ---------------------------------------------------------------------------
+# PERF-8 — the per-phase and injection-% summaries share one injection pass
+# ---------------------------------------------------------------------------
+def test_inject_index_drop_dataset_is_deterministic_so_it_can_be_shared() -> None:
+    """eval_dev computes each round's S3 injection ONCE and reuses it.
+
+    That is only equivalent to the old double call if the call is a pure
+    function of its arguments. It seeds its RNG from (level, family, index,
+    round_idx) and rotates onset phases deterministically, so two calls must
+    return the same arrays, masks, phases and meta — bit for bit.
+    """
+    from ssl_anomaly.monitor import perturbations as mpert
+
+    rng = np.random.default_rng(11)
+    N, T, C = 6, 36, 4
+    X = rng.uniform(0.2, 0.5, size=(N, T, C)).astype(np.float32)
+    M = rng.random((N, T, C)) > 0.2
+    X = np.where(M, X, 0.0).astype(np.float32)
+
+    for rnd in range(3):
+        a = mpert.inject_index_drop_dataset(
+            X, M, level_id="S3", family="acute", index="ndvi", round_idx=rnd)
+        b = mpert.inject_index_drop_dataset(
+            X, M, level_id="S3", family="acute", index="ndvi", round_idx=rnd)
+        assert len(a) == len(b) == N
+        for ra, rb in zip(a, b):
+            assert np.array_equal(ra.x, rb.x), f"round {rnd}: injected values differ"
+            assert np.array_equal(ra.m, rb.m), f"round {rnd}: masks differ"
+            assert ra.phase == rb.phase
+            assert ra.onset_bin == rb.onset_bin
+            assert ra.meta == rb.meta

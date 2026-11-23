@@ -669,12 +669,22 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
 
         # Per-phase breakdown pooled over the acute/ndvi cells (the primary
         # index/family) — onset phases rotate deterministically per round.
-        per_phase: dict[str, dict] = {}
-        phase_flags: dict[str, list[int]] = {}
-        for rnd in range(max(1, args.rounds)):
-            results = mpert.inject_index_drop_dataset(
+        #
+        # Both summaries below consume the SAME per-round injections, and a
+        # round's injection is a pure function of (Xe, Me, level, family,
+        # index, round_idx) — the perturbation RNG is seeded from those and the
+        # phase rotation is deterministic. They used to call
+        # inject_index_drop_dataset twice per round (audit PERF-8); it is
+        # computed once here and reused.
+        injections = [
+            mpert.inject_index_drop_dataset(
                 Xe, Me, level_id="S3", family=sev.ACUTE_FAMILY, index="ndvi", round_idx=rnd,
             )
+            for rnd in range(max(1, args.rounds))
+        ]
+        per_phase: dict[str, dict] = {}
+        phase_flags: dict[str, list[int]] = {}
+        for rnd, results in enumerate(injections):
             for j, r in enumerate(results):
                 phase_flags.setdefault(r.phase, []).append(det_pools[f"S3/{sev.ACUTE_FAMILY}/ndvi"][rnd * n_eval + j])
         for ph, flags in phase_flags.items():
@@ -685,10 +695,7 @@ def run_severity_protocol(args: argparse.Namespace, manifest: dict, sel: dict, s
 
         # Injection % summary (of each field's own grand-growth median).
         pct_summary = {}
-        for rnd in range(max(1, args.rounds)):
-            results = mpert.inject_index_drop_dataset(
-                Xe, Me, level_id="S3", family=sev.ACUTE_FAMILY, index="ndvi", round_idx=rnd,
-            )
+        for results in injections:
             pcts = [r.meta["pct_of_field_median"] for r in results if r.meta["pct_of_field_median"] is not None]
             pct_summary = {"median_pct_of_field_grand_growth_median": float(np.median(pcts)) if pcts else None,
                            "n": len(pcts)}
