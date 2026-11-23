@@ -129,6 +129,10 @@ reasons and is recorded as a claim ceiling, not as a result.
   is deferred, this change still closes.
 - Foundation models / LLMs / VLMs as primary architectures; commercial imagery;
   yield forecasting (no yield labels exist); new satellite or weather data.
+- Madeline's path (initializing region model v0 from external early-season
+  yield-forecasting-model embeddings): not in scope — no such artifact exists
+  in-repo and no yield labels exist; if wanted later it is a separate change
+  with its own data contract.
 - Platform (`platform/`) changes; spec-target edits after the fact.
 
 ## Capabilities
@@ -189,3 +193,17 @@ reasons and is recorded as a claim ceiling, not as a result.
    willingness to provide labels? Required for any L4 claim (not for this change).
 6. **Whether T5 clustering/near-match outputs should feed the platform later**
    (out of scope here).
+7. **The advisor's two closing decision questions remain UNANSWERED** (the
+   relayed conversation never records the owner's pick — do not guess):
+   (a) Which is the model's expected main advantage? — (i) learning each
+   farm's natural temporal behaviour and detecting deviation; (ii) discovering
+   complex multivariate patterns; (iii) generalization to unseen years/growth
+   conditions; (iv) early detection before a severe NDVI collapse; (v) undecided
+   — find the best hypothesis scientifically.
+   (b) Which is the thesis's main priority? — (i) scientifically valid research,
+   even with a negative result; (ii) the best possible algorithm, even if SSL
+   is dropped; (iii) both (methodological novelty + competitive performance).
+   All H1–H5 stay pre-registered regardless; this answer scopes the thesis
+   narrative, the advisor-pack framing and which gate is elevated to the
+   headline. Note this also gates the "registered decision" (ثبت تصمیم) the
+   advisor asked for at the end of the analysis.

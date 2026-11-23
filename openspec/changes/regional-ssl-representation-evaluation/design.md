@@ -82,8 +82,20 @@ Candidate list (screening order, all capacity-matched, equal budgets):
    views = pre-registered, phenology-safe augmentations — no inversion of
    anomaly polarity; augmentation strength recorded). Literature: Barlow Twins
    (Zbontar et al., 2021; PMLR 139); Spectral-Temporal Barlow Twins for cloud-
-   corrupted satellite time series (2024, Cambridge repository). Augmentation
-   sensitivity is a reported axis, not a nuisance.
+   corrupted satellite time series (2024, Cambridge repository); SITS Book
+   Barlow Twins implementation (e-sensing.github.io/sitsbook). Augmentation
+   sensitivity is a reported axis, not a nuisance. Note the advisor warning:
+   augmentations that enforce invariance to biologically meaningful change
+   would erase exactly what detection needs — augmentation design is therefore
+   pre-registered and polarity-audited.
+   Together, C-BT / C-traj / C-hybrid are the advisor's three-experiment
+   decomposition: (1) Barlow Twins → representation learning; (2) BT +
+   prediction head → self-supervised future-trajectory modelling; (3) BT +
+   prediction + anomaly scoring → deviation detection. Each component's value
+   is isolated by design.
+   The hybrid objective follows the advisor's form: L = L_BT + α·L_rec (α
+   pre-registered; joint training on the shared trunk — **not** an ensemble
+   of separately trained models).
 3. **C-traj:** Self-supervised trajectory predictor (predict bins > t from ≤ t;
    no yield labels; targets are the future observations themselves). This is
    the advisor's "crop trajectory without yield labels" route.
@@ -242,6 +254,27 @@ thesis then reports the negative result, keeps B1 as the reference algorithm,
 and frames SSL's status as open for regions/data with different structure.
 No gate may be weakened after results are seen (no motivated reasoning).
 
+## Advisor's three-case reading rule (pre-registered)
+
+From the advisor analysis (2026-11-23); the reading rule applied to the
+G-A…G-E cells when the capstone decision paragraph is written:
+
+- **Case 1 — weaker on everything.** SSL loses to the FAR-matched simple
+  control on every claim-bearing cell. No justification for adopting SSL as
+  an algorithm exists; the thesis narrows to "B1 + honest negative result"
+  (the G-C/G-D fail path). Architectural complexity is not a defense.
+- **Case 2 — better only on complex patterns.** SSL wins on the gradual /
+  persistent / multivariate families but loses overall. That is itself a
+  publishable scientific finding: claims are scoped to those families, with
+  the full per-cell tables mandatory and H4 as the narrative anchor.
+- **Case 3 — better on generalization.** SSL holds up on temporal rolls and
+  leave-block-out while simple rules degrade. A legitimate scientific
+  justification for SSL (H5 as the narrative anchor) — demonstrated with
+  intervals, not asserted.
+
+These cases add no new gates; they are the decision taxonomy applied to the
+existing cells and recorded in the capstone's final findings document.
+
 ## Reproducibility, compute placement, artifacts
 
 - Seeds {13, 42, 2026} everywhere; CPU auto-detect, CUDA used when present;
@@ -261,6 +294,7 @@ No gate may be weakened after results are seen (no motivated reasoning).
 | Risk | Mitigation |
 |---|---|
 | Segmentation labels (T1) leak model-relevant info unfairly | Segmentation is fixed, data-derived, identical for all arms; probe compares encoders, not segmenters; documented |
+| Anomalies inside the training pool learned as "normal" | The frozen split/exclusion rules are inherited unchanged; the S3 contamination experiments live in the benchmark change; capstone training runs record the known-contamination risk note in the manifest |
 | Transfer curves overfit dev | Label subsets hashed per fraction; arms share subsets; CI-based gates; temporal rolls as second axis |
 | Retrieval gaming via trivial seasonal echoing | Track 1 requires anomaly-family match at matched FAR; raw-distance baseline strong by construction |
 | B1 rule mis-specified, rigged low/high | Two pre-registered variants reported; calibration on clean subset; FAR-matched — never tuned on eval |
