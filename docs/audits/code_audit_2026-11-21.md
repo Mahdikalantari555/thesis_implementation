@@ -172,3 +172,46 @@ before the proposal defense. Dispositions:
   Deviations are recorded in finding 25 ("Known training-path deviations"); no
   retrain was performed — the audit's own judgment stands: none corrupts a
   current result.
+
+## Performance backlog — implementation status (2026-11-21 follow-up)
+
+All ten PERF rows landed with the results-preservation each row demanded. Every
+item below is covered by a test that PINS the old arithmetic rather than
+trusting the rewrite:
+
+| # | Status | Preservation evidence |
+|---|--------|----------------------|
+| 1 | done (`output_sha256` streams row-slabs) | byte-identical digest vs the pre-change body on random/all-NaN/all-finite stores at slab sizes 1,2,3,7,16,100; a guard test fails if the store is ever read in one full-extent slice |
+| 2 | done (`causal_offset_correct` windowed nanmedian) | bit-parity vs the verbatim per-bin loop in `test_scoring_parity.py` |
+| 3 | done (`lookup` per-sensor tables + gather) | `test_patch_scores_parity.py` |
+| 4 | done (vectorized top-k over cell order) | same file; the `-inf`-pad shortcut was tried and REJECTED as wrong-multiset |
+| 5 | done (one masked `nanpercentile`) | `test_scoring_parity.py` |
+| 6 | done (pre-allocated float64/uint8 fit) | `test_patch_norm_parity.py`: exact median/iqr/n on ragged footprints, plus an accumulation-dtype spy (float32 is correctly rejected) |
+| 7 | done (`score_batch` groups by cell) | `test_normal_bank.py`: bit-parity vs the per-bin loop for k-NN k=1/5 and Mahalanobis; ~2.8× warm path |
+| 8 | done (one S3 injection pass per round) | `test_monitor_perturbations.py`: the injection is deterministic per round, so sharing it is exact |
+| 9 | done (memoized store handle + cycle index) | `test_patch_store.py`: handle shared, write-open does not evict, index follows an in-place metadata rewrite |
+| 10 | done (`score_cycles` exposes the z it scored) | `test_patch_eval.py`: the exposed z equals `apply_norm`'s z and z2 is derived from it |
+
+Two exactness traps found while doing this, both now documented at the call
+sites because they are easy to reintroduce:
+
+- `np.mean` over a `(Q, k)` block is not bit-identical to the 1-D `(k,)`
+  reduction when the block width differs. `_distance_many` must gather the k
+  selected values into a `(Q, k)` block first; a full-width reduction is wrong
+  in the last ULP (~2000/2000 cells in the fixture).
+- `normal_bank._distance` computes mean AND sqrt in the squared-distance dtype
+  and widens only at the very end. Promoting before the sqrt changes the last
+  ULP for essentially every cell; `np.sqrt(mean).astype(float64)` is the
+  contract.
+
+Item 4's audit finding was NOT a performance row but it is recorded here
+because the same commit series fixed it: `other_farm_perturbation_is_invariant`
+compared `base` against itself, so the independence gate could never fail. It
+now attaches a real, read-logging population to the scorer and a negative
+control (a peeking scorer) proves the gate rejects it.
+
+Timing note for item 7: the single-call speedup at 120 cycles x 36 bins is
+~1.4x, because the one-off leave-one-out q95 fit is shared by both
+formulations. The ~2.8x applies to the warm path (many scored batches against
+the same bank), which is how the bank arms are actually used. The test bounds
+the warm path at 1.3x to stay non-flaky on a shared machine.
