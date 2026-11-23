@@ -7,7 +7,7 @@ long jobs — they are handed to the owner as exact commands. Checkpoints and
 
 ## 0. Registration and pre-registration
 
-- [ ] 0.1 Record this change in `todo.md` (owner-facing entry) and freeze the
+- [x] 0.1 Record this change in `todo.md` (owner-facing entry) and freeze the
       pre-registration document (`configs/evaluation/pre_registration.yaml`):
       hypotheses H1–H5, gates G-A…G-E, label fractions, k ∈ {1,3,5,10}, m ∈
       {1,5,10}, S1–S6 severity references, eval-subset definition, seeds
@@ -41,17 +41,17 @@ long jobs — they are handed to the owner as exact commands. Checkpoints and
 
 ## 2. Pretraining quality battery (Capability 1)
 
-- [ ] 2.1 Masked reconstruction metric on dev clean cycles (observed entries
+- [x] 2.1 Masked reconstruction metric on dev clean cycles (observed entries
       only), 3 seeds.
-- [ ] 2.2 Farm-identity kNN probe (k ∈ {1,5}, top-1/top-5 vs 1/490 and
+- [x] 2.2 Farm-identity kNN probe (k ∈ {1,5}, top-1/top-5 vs 1/490 and
       5/490 chance and vs B1-feature kNN).
-- [ ] 2.3 Phenological-phase linear probe (DSH 36-way; vs majority baseline
+- [x] 2.3 Phenological-phase linear probe (DSH 36-way; vs majority baseline
       and vs B1-feature probe; macro-F1 + accuracy).
-- [ ] 2.4 Embedding temporal stability (within-field cycle-pair cosine;
+- [x] 2.4 Embedding temporal stability (within-field cycle-pair cosine;
       median/IQR; shuffled-null control).
-- [ ] 2.5 Collapse diagnostics (per-dim std spectrum; effective rank with
+- [x] 2.5 Collapse diagnostics (per-dim std spectrum; effective rank with
       recorded threshold; alignment/uniformity); hard fail at screening.
-- [ ] 2.6 `pretraining_quality.json` + unit tests for each probe (synthetic
+- [x] 2.6 `pretraining_quality.json` + unit tests for each probe (synthetic
       embeddings with known properties).
 
 ## 3. Candidate screening (region model v0)
@@ -68,9 +68,9 @@ long jobs — they are handed to the owner as exact commands. Checkpoints and
 
 ## 4. Downstream transfer suite (Capability 2)
 
-- [ ] 4.1 Label-fraction machinery: stratified 5/10/25/50/100 % subsets per
+- [x] 4.1 Label-fraction machinery: stratified 5/10/25/50/100 % subsets per
       task (hashed index lists, shared across arms), 3 repeats per cell.
-- [ ] 4.2 Arms A-rule, A-B1, A-rand, A-scratch, A-ssl-frozen, A-ssl-ft per
+- [x] 4.2 Arms A-rule, A-B1, A-rand, A-scratch, A-ssl-frozen, A-ssl-ft per
       task; equal budgets for A-scratch vs A-ssl-ft.
 - [ ] 4.3 T1 phenology-stage estimation (probe head; claim-bearing).
 - [ ] 4.4 T2 limited-label injection detection (AUC-PR per family × severity;
@@ -88,7 +88,7 @@ long jobs — they are handed to the owner as exact commands. Checkpoints and
       baseline (clean held-out dev cycles).
 - [ ] 4.7 T5 exploratory clustering/nearest-date listings — descriptive
       report only, labelled `exploratory`, never used in gate evaluation.
-- [ ] 4.8 `transfer_curves.json`, `retrieval_benchmark.json`,
+- [x] 4.8 `transfer_curves.json`, `retrieval_benchmark.json`,
       `near_matches.json`/`near_matches.md` (+ tests).
 
 ## 5. Generalization protocols (Capability 3)
@@ -96,16 +96,16 @@ long jobs — they are handed to the owner as exact commands. Checkpoints and
 - [ ] 5.1 Temporal rolls inside train+dev (cut years frozen in
       `configs/evaluation/temporal_rolls.yaml`; train ≤ Y → validate following
       12–24 months; B1 run identically per roll).
-- [ ] 5.2 Leave-one-block-out over the 20 locked blocks within train+dev
+- [x] 5.2 Leave-one-block-out over the 20 locked blocks within train+dev
       (holdout-excluded fields never appear).
 - [ ] 5.3 Geographic limitation recorded; claim ceiling L3 same-region stated
       in every findings section that quotes a number.
-- [ ] 5.4 `generalization.json` (+ tests for roll disjointness and block
+- [x] 5.4 `generalization.json` (+ tests for roll disjointness and block
       coverage).
 
 ## 6. Decision gates and capstone report
 
-- [ ] 6.1 Gate aggregator `decision_gates.json`: per-gate inputs, CIs,
+- [x] 6.1 Gate aggregator `decision_gates.json`: per-gate inputs, CIs,
       pass/fail, and pre-declared consequence text.
 - [ ] 6.2 Capstone report `docs/findings/26_regional_representation_
       evaluation.md` (+ `.fa.md`): all five-level tables (B1–B5; 5/10/25/50/
@@ -119,9 +119,9 @@ long jobs — they are handed to the owner as exact commands. Checkpoints and
 
 ## 7. Verification and hand-over
 
-- [ ] 7.1 Unit suite: `pytest tests/evaluation -q` green; full relevant
+- [x] 7.1 Unit suite: `pytest tests/evaluation -q` green; full relevant
       regression suite green (state counts).
-- [ ] 7.2 `--smoke` end-to-end for every new script; smoke outputs read and
+- [x] 7.2 `--smoke` end-to-end for every new script; smoke outputs read and
       inspected (metrics present, no NaN, shapes/counts expected).
 - [ ] 7.3 USER-RUN items: screening (§3), transfer runs (§4), rolls (§5) —
       handed over as exact commands with conda env, cwd, flags, expected wall

@@ -1,0 +1,329 @@
+"""Pre-registration + artifact binding gate (change tasks 0.1-0.4).
+
+These tests are the enforcement of two spec requirements:
+
+- ``representation-pretraining-quality`` / "Development-only pretraining
+  evidence" — "Split manifest drift … THEN the pretraining evaluation fails
+  closed and reports the mismatch".
+- ``generalization-and-claim-semantics`` / "Preservation of the frozen evidence
+  base" — "Artifact mutation detected … THEN the run fails closed".
+
+They also pin the pre-registration content: gates, hypotheses, fractions and
+seeds may not drift silently.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+import yaml
+
+from ssl_anomaly.evaluation.binding import (
+    DOCUMENTED_V2_HASHES,
+    PREREGISTRATION_PATH,
+    ArtifactBindingError,
+    bind_artifacts,
+    canonical_json_sha256,
+    documented_hash,
+    is_sha_prefix,
+    load_preregistration,
+    preregistration_sha256,
+    sha256_file,
+    sha256_prefix,
+)
+
+
+# ---------------------------------------------------------------------------
+# The committed pre-registration
+# ---------------------------------------------------------------------------
+
+
+def test_committed_preregistration_is_valid():
+    prereg = load_preregistration()
+    assert prereg.seeds == (13, 42, 2026)
+    assert prereg.label_fractions == (0.05, 0.10, 0.25, 0.50, 1.00)
+    assert set(prereg.gates) == {"G-A", "G-B", "G-C", "G-D", "G-E"}
+    assert set(prereg.hypotheses) == {"H1", "H2", "H3", "H4", "H5"}
+
+
+def test_committed_preregistration_pins_the_v2_chain():
+    prereg = load_preregistration()
+    # The three artifacts the capstone binds before any run.
+    for name in ("cycles_490_v2", "splits_locked_v2", "holdout_manifest_v2", "norm_stats_full_v2"):
+        assert name in prereg.artifacts, f"{name} must be pre-registered"
+    assert prereg.expected_hash("splits_locked_v2") == "30ecbe10"
+    assert prereg.expected_hash("holdout_manifest_v2") == "d501bf81"
+    assert prereg.expected_hash("norm_stats_full_v2") == "493f0395"
+
+
+def test_preregistration_hash_matches_documented_artifacts():
+    """The code-side hash table and the YAML must not drift apart."""
+    prereg = load_preregistration()
+    for name, expected in DOCUMENTED_V2_HASHES.items():
+        assert documented_hash(name) == expected
+        assert prereg.expected_hash(name) == expected, f"{name} drifted in the YAML"
+
+
+def test_preregistration_does_not_use_the_v1_norm():
+    """Finding 25 binds v2 to 493f0395; the v1 PoC norm must not be the freeze."""
+    prereg = load_preregistration()
+    assert prereg.expected_hash("norm_stats_full_v2") != "3cb1ca60"
+
+
+def test_every_gate_has_a_fail_consequence():
+    prereg = load_preregistration()
+    for gid, gate in prereg.gates.items():
+        assert gate["criterion"].strip(), gid
+        assert gate["fail_consequence"].strip(), gid
+        assert gate["inputs"], gid
+
+
+def test_hypotheses_reference_existing_gates():
+    prereg = load_preregistration()
+    for hid, hyp in prereg.hypotheses.items():
+        assert hyp["gate"] in prereg.gates, hid
+
+
+def test_evaluation_block_forbids_the_test_split():
+    payload = load_preregistration().payload
+    ev = payload["evaluation"]
+    assert "test" in ev["forbidden_splits"]
+    assert "test" not in ev["allowed_splits"]
+    assert ev["cycle_far_target"] == 0.05
+
+
+def test_tasks_mark_exploratory_artifacts():
+    tasks = load_preregistration().payload["tasks"]
+    assert tasks["T3_track2"]["claim_bearing"] is False
+    assert tasks["T3_near_matches"]["claim_bearing"] is False
+    assert tasks["T5"]["claim_bearing"] is False
+    for key in ("T1", "T2", "T3_track1", "T4"):
+        assert tasks[key]["claim_bearing"] is True, key
+
+
+def test_preregistration_document_hash_is_stable_and_recorded():
+    h1 = preregistration_sha256()
+    h2 = sha256_file(PREREGISTRATION_PATH)
+    assert h1 == h2 and len(h1) == 64
+    manifest = load_preregistration().to_manifest()
+    assert manifest["preregistration_sha256"] == h1
+    assert manifest["gate_ids"] == ["G-A", "G-B", "G-C", "G-D", "G-E"]
+
+
+def test_amendments_block_exists_and_is_a_list():
+    payload = load_preregistration().payload
+    assert isinstance(payload["amendments"], list)
+
+
+# ---------------------------------------------------------------------------
+# Malformed pre-registrations fail loudly
+# ---------------------------------------------------------------------------
+
+
+def _write_variant(tmp_path: Path, mutate) -> Path:
+    payload = yaml.safe_load(PREREGISTRATION_PATH.read_text(encoding="utf-8"))
+    mutate(payload)
+    out = tmp_path / "pre_registration.yaml"
+    out.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    return out
+
+
+def test_missing_gate_is_rejected(tmp_path):
+    def mutate(p):
+        del p["gates"]["G-D"]
+
+    with pytest.raises(ArtifactBindingError, match="gates must be exactly"):
+        load_preregistration(_write_variant(tmp_path, mutate))
+
+
+def test_weakened_gate_without_criterion_is_rejected(tmp_path):
+    def mutate(p):
+        p["gates"]["G-C"]["criterion"] = ""
+
+    with pytest.raises(ArtifactBindingError, match="lacks 'criterion'"):
+        load_preregistration(_write_variant(tmp_path, mutate))
+
+
+def test_wrong_label_fractions_are_rejected(tmp_path):
+    def mutate(p):
+        p["label_fractions"] = [0.1, 1.0]
+
+    with pytest.raises(ArtifactBindingError, match="5/10/25/50/100"):
+        load_preregistration(_write_variant(tmp_path, mutate))
+
+
+def test_wrong_seeds_are_rejected(tmp_path):
+    def mutate(p):
+        p["seeds"] = [1, 2, 3]
+
+    with pytest.raises(ArtifactBindingError, match="seeds must be"):
+        load_preregistration(_write_variant(tmp_path, mutate))
+
+
+def test_missing_preregistration_file_is_rejected(tmp_path):
+    with pytest.raises(ArtifactBindingError, match="not found"):
+        load_preregistration(tmp_path / "nope.yaml")
+
+
+# ---------------------------------------------------------------------------
+# Hash helpers
+# ---------------------------------------------------------------------------
+
+
+def test_sha256_file_streams_and_matches_hashlib(tmp_path):
+    import hashlib
+
+    p = tmp_path / "blob.bin"
+    data = b"x" * 5000 + b"tail"
+    p.write_bytes(data)
+    assert sha256_file(p) == hashlib.sha256(data).hexdigest()
+    assert sha256_prefix(sha256_file(p)) == hashlib.sha256(data).hexdigest()[:8]
+
+
+def test_canonical_json_hash_is_order_independent():
+    a = canonical_json_sha256({"b": 2, "a": 1})
+    b = canonical_json_sha256({"a": 1, "b": 2})
+    assert a == b
+
+
+def test_canonical_json_hash_refuses_nan():
+    with pytest.raises(ValueError):
+        canonical_json_sha256({"metric": float("nan")})
+
+
+def test_is_sha_prefix():
+    assert is_sha_prefix("30ecbe10")
+    assert is_sha_prefix("a" * 64)
+    assert not is_sha_prefix("not-a-hash")
+    assert not is_sha_prefix("30EC")  # too short
+
+
+# ---------------------------------------------------------------------------
+# bind_artifacts
+# ---------------------------------------------------------------------------
+
+
+def _prereg_with(tmp_path: Path, artifacts: dict) -> Path:
+    payload = yaml.safe_load(PREREGISTRATION_PATH.read_text(encoding="utf-8"))
+    payload["artifacts"] = artifacts
+    out = tmp_path / "pre.yaml"
+    out.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    return out
+
+
+def test_absent_artifacts_are_reported_not_substituted(tmp_path):
+    pre = _prereg_with(tmp_path, {
+        "splits_locked_v2": {"path": "missing/splits.json", "sha256_prefix": "30ecbe10"},
+    })
+    report = bind_artifacts(prereg=load_preregistration(pre), base_dir=tmp_path, strict=True)
+    assert report.ok
+    file_absent = [a for a in report.absent if not a.path.startswith("<code:")]
+    file_bound = [a for a in report.bound if not a.path.startswith("<code:")]
+    assert len(file_absent) == 1
+    assert file_bound == []
+    assert "Deferred" in report.note or "absent" in report.note
+
+
+def test_bound_artifact_matches_prefix(tmp_path):
+    target = tmp_path / "splits.json"
+    target.write_text("{}", encoding="utf-8")
+    digest = sha256_file(target)
+    pre = _prereg_with(tmp_path, {
+        "splits_locked_v2": {"path": "splits.json", "sha256_prefix": digest[:8]},
+    })
+    report = bind_artifacts(prereg=load_preregistration(pre), base_dir=tmp_path)
+    assert report.ok
+    file_bound = [a for a in report.bound if not a.path.startswith("<code:")]
+    assert len(file_bound) == 1
+    assert file_bound[0].actual_sha256 == digest
+
+
+def test_hash_mismatch_fails_closed(tmp_path):
+    target = tmp_path / "splits.json"
+    target.write_text("{}", encoding="utf-8")
+    pre = _prereg_with(tmp_path, {
+        "splits_locked_v2": {"path": "splits.json", "sha256_prefix": "deadbeef"},
+    })
+    with pytest.raises(ArtifactBindingError, match="deviates from the pre-registration"):
+        bind_artifacts(prereg=load_preregistration(pre), base_dir=tmp_path, strict=True)
+
+
+def test_hash_mismatch_reported_when_not_strict(tmp_path):
+    target = tmp_path / "splits.json"
+    target.write_text("{}", encoding="utf-8")
+    pre = _prereg_with(tmp_path, {
+        "splits_locked_v2": {"path": "splits.json", "sha256_prefix": "deadbeef"},
+    })
+    report = bind_artifacts(prereg=load_preregistration(pre), base_dir=tmp_path, strict=False)
+    assert not report.ok
+    assert len(report.mismatched) == 1
+    assert report.to_dict()["n_mismatch"] == 1
+
+
+def test_required_artifact_absent_raises(tmp_path):
+    pre = _prereg_with(tmp_path, {
+        "cycles_490_v2": {"path": "missing.parquet", "sha256_prefix": None},
+    })
+    with pytest.raises(ArtifactBindingError, match="required artifact\\(s\\) not bound"):
+        bind_artifacts(
+            prereg=load_preregistration(pre),
+            base_dir=tmp_path,
+            require=("cycles_490_v2",),
+        )
+
+
+def test_presence_only_probe_skips_hashing(tmp_path):
+    target = tmp_path / "splits.json"
+    target.write_text("{}", encoding="utf-8")
+    pre = _prereg_with(tmp_path, {
+        "splits_locked_v2": {"path": "splits.json", "sha256_prefix": "30ecbe10"},
+    })
+    report = bind_artifacts(
+        prereg=load_preregistration(pre), base_dir=tmp_path, compute_hashes=False, strict=True
+    )
+    assert report.artifacts[0].status == "present-unverified"
+    assert report.ok
+
+
+def test_overrides_reroute_paths(tmp_path):
+    alt = tmp_path / "elsewhere" / "splits.json"
+    alt.parent.mkdir()
+    alt.write_text("{}", encoding="utf-8")
+    digest = sha256_file(alt)
+    pre = _prereg_with(tmp_path, {
+        "splits_locked_v2": {"path": "nowhere.json", "sha256_prefix": digest[:8]},
+    })
+    report = bind_artifacts(
+        prereg=load_preregistration(pre),
+        base_dir=tmp_path,
+        overrides={"splits_locked_v2": str(alt)},
+    )
+    file_bound = [a for a in report.bound if not a.path.startswith("<code:")]
+    assert report.ok and len(file_bound) == 1
+
+
+def test_report_serialises_without_nan(tmp_path):
+    pre = _prereg_with(tmp_path, {
+        "splits_locked_v2": {"path": "missing.json", "sha256_prefix": "30ecbe10"},
+    })
+    report = bind_artifacts(prereg=load_preregistration(pre), base_dir=tmp_path)
+    blob = json.dumps(report.to_dict(), allow_nan=False)
+    assert "splits_locked_v2" in blob
+
+
+def test_clean_checkout_report_is_honest(monkeypatch, tmp_path):
+    """In this checkout the v2 chain is absent; the report must say so plainly."""
+    report = bind_artifacts(base_dir=tmp_path)
+    prereg = load_preregistration()
+    payload = report.to_dict()
+    assert payload["ok"] is True          # no mismatch
+    file_statuses = [a for a in report.artifacts if not a.path.startswith("<code:")]
+    assert file_statuses, "the pre-registration must name file artifacts"
+    assert all(a.status == "absent" for a in file_statuses)
+    assert len(file_statuses) == len(prereg.artifacts)
+    assert "clean checkout" in report.note
+    # The code-derived severity table IS bindable in a clean checkout.
+    code = [a for a in report.artifacts if a.path.startswith("<code:")]
+    assert code and code[0].status == "bound", code

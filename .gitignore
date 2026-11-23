@@ -52,6 +52,12 @@ rust/Cargo.lock
 **/*.so
 src/ssl_anomaly/_rs*.so
 
+# Smoke-run output: exercises the pipeline on synthetic fixtures and is NOT
+# evidence. Kept out of the repository so no synthetic number can be mistaken
+# for a measured one; real runs still commit their artifacts under reports/.
+reports/_smoke/
+reports/**/_smoke/
+
 # Releases and large HTML maps
 releases/
 reports/figures/*.html

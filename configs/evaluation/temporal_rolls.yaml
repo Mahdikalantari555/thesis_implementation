@@ -1,0 +1,34 @@
+# Temporal-roll and LOBO robustness configuration.
+#
+# Change: regional-ssl-representation-evaluation (design §Robustness).
+# The cut years are the pre-registered four; the gate criterion lives in
+# configs/evaluation/pre_registration.yaml (G-C), NOT here — this file only says
+# WHICH rolls to run, never whether a result passes.
+change: regional-ssl-representation-evaluation
+version: 1
+
+temporal_rolls:
+  #: Train on cycles starting strictly before the cut year; evaluate at/after it.
+  #: The implementation refuses leakage (see evaluation/robustness.py).
+  cut_years: [2016, 2018, 2020, 2022]
+  training_rule: "cycle_start_year < cut_year"
+  evaluation_rule: "cycle_start_year >= cut_year"
+  #: A roll whose train or eval side is empty is RECORDED as absent, not dropped.
+  keep_unusable_rolls: true
+
+lobo:
+  block_source: "spatial blocks from the frozen split manifest (20 pre-registered)"
+  expected_blocks: 20
+  #: Fewer blocks present in the table -> coverage.complete = False -> G-C fails.
+  require_complete_coverage: true
+
+summary:
+  #: A robustness verdict needs BOTH a median floor and breadth across folds.
+  #: These mirror the G-C criteria; G-C remains the authority for pass/fail.
+  min_median_ap: 0.50
+  min_fraction_folds_above: 0.75
+
+bootstrap:
+  n_boot: 500
+  unit: "field"          # farms/events, never cycles, for every interval
+  alpha: 0.05

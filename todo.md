@@ -165,10 +165,15 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
 
 ## Active openspec changes (2026-11-23) — derived from the change folders; full task lists live in each `tasks.md`
 
-**`regional-ssl-representation-evaluation`** — PROPOSED, 0/42. The capstone. Next actions (in order):
+**`regional-ssl-representation-evaluation`** — PROPOSED, 16/42. The capstone. Code built and green
+(`pytest tests/evaluation` 355 passed; six scripts smoke-pass), but **no real number exists yet** —
+every artifact needs owner-side data (v2 parquet/splits/holdout, T4 hour budget, v2 patch store) and
+owner-run training. Next actions (in order):
 1. Phase 0 registration: freeze `configs/evaluation/pre_registration.yaml` (H1–H5, G-A…G-E, fractions, seeds) on owner approval to apply;
    verify artifact bindings (`cycles_490_v2.parquet`, `splits_locked_v2.json` sha 30ecbe10…, `holdout_manifest_v2.json` sha d501bf81…);
    rebuild/record the v2 normalization sidecar; commit the pre-registration hash.
+   *Frozen in-tree* (`configs/evaluation/pre_registration.yaml`, gates G-A…G-E with executable
+   thresholds, `bind_artifacts` rejects a weakened criterion); the v2 bindings are still owner-side.
 2. B1–B5 ladder first (Phase 1) — the FAR-matched `ndvi_lst_rule` control must exist before any SSL claim;
    capacity manifest; scoring bridge; causality tests.
 3. Level-1 pretraining-quality battery (Phase 2) → architecture screening of region model v0 (Phase 3),
