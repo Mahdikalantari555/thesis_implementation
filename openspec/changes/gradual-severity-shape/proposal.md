@@ -1,5 +1,10 @@
 # Change: gradual-severity-shape
 
+> **Status (2026-11-23): SUPERSEDED.** The gradual (ramp) shape family remains desirable and is absorbed into `benchmark-latent-reconstruction-prediction-architectures` (persistent/gradual families). The v1 severity-protocol instance it extended was replaced by the v2 protocol.
+> See `openspec/changes/INDEX.md` (triage 2026-11-23). This change is kept as
+> historical record only; it SHALL NOT be applied, archived as complete, or
+> cited as current evidence.
+
 ## Why
 
 The finding-18 severity protocol tests two temporal shapes only — acute and

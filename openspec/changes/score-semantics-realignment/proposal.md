@@ -1,5 +1,10 @@
 # Change: score-semantics-realignment
 
+> **Status (2026-11-23): SUPERSEDED.** Input-inclusive vs one-step-ahead residual semantics fix for patch_cnn_gru; the patch path it corrected is voided (finding 25). Kept for audit trail; not applicable while the patch path is frozen.
+> See `openspec/changes/INDEX.md` (triage 2026-11-23). This change is kept as
+> historical record only; it SHALL NOT be applied, archived as complete, or
+> cited as current evidence.
+
 ## Why
 
 `PatchCausalGRU`'s horizon-`k` head at bin `t` targets bin `t+k-1` from GRU

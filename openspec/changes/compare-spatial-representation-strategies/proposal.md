@@ -1,5 +1,10 @@
 # Change: compare-spatial-representation-strategies
 
+> **Status (2026-11-23): SUPERSEDED.** Never completed (2/24); premise (zonal vs patch vs multi-scale detection) is void after the patch path was frozen/voided and superseded by the v2 chain (finding 25). A spatial question, if revived, would need a new pre-registration.
+> See `openspec/changes/INDEX.md` (triage 2026-11-23). This change is kept as
+> historical record only; it SHALL NOT be applied, archived as complete, or
+> cited as current evidence.
+
 ## Why
 
 Owner proposal (2026-11-15, `compare-spatial-representation-strategies`): a

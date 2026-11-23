@@ -1,5 +1,10 @@
 # Change: patch-level-controlled-trial
 
+> **Status (2026-11-23): SUPERSEDED.** Executed and complete (17/17) under v1; its headline verdict (MDM80 = S1, all families) is void per finding 25 (v2 fixed protocol, eval hash 852e1ba3: MDM80 censored >S6). Kept as historical record; its negative correction IS finding 25.
+> See `openspec/changes/INDEX.md` (triage 2026-11-23). This change is kept as
+> historical record only; it SHALL NOT be applied, archived as complete, or
+> cited as current evidence.
+
 ## Why
 
 Owner decision (notes.md, 2026-11-15): run a **patch-level training test**

@@ -152,7 +152,7 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
     of the SAME 6-trainings protocol on the v2 store.** The v1↔v2 comparison remains a
     standing thesis deliverable; candidate precision stays unvalidated (company harvest
     records remain the L4 validator).
-- ▶ **`decomposition-aware-ssl-study`** — isolated runner and [runbook](docs/decomposition_aware_ssl_study.md). Real benchmark/ablation and the architecture-gate decision require the canonical polygon zonal store, locked splits and existing frozen holdout manifest. Smoke is not empirical evidence.
+- ✅ **`decomposition-aware-ssl-study`** — ARCHIVED 2026-11-23 (spec `decomposition-aware-anomaly-study` merged). Isolated runner and [runbook](docs/decomposition_aware_ssl_study.md). Note: real benchmark/ablation numbers for its STL features still require the canonical polygon zonal store; smoke is not empirical evidence (applies to the capstone's B5/C-decomp reuse).
 - ▶ **`rerun-rq-suite-on-real-490`** (proposed 2026-11-10) — RQ1–RQ8 + data-scarcity results in findings 11–12 came from `simulate_490_field_archive`, not the real 490-field archive; re-run on real data, fail closed, provenance in every report.
   - ✅ Task 1: real_archive.py loader + hash check + provenance + --source arg (tests/unit/test_real_archive.py 4/6 pass)
   - ✅ Task 2: all 8 run_rq*.py + run_data_scarcity.py refactored with --source {real490,real32,simulated}; simulated → reports/simulated/
@@ -163,8 +163,58 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
   - ✅ Task 6: tests added (test_provenance_complete, test_fail_closed, test_no_32farm_borrow, test_sim_output_path); spec R1–R5 verified; change archived to openspec/changes/archive/
   - See `openspec/changes/rerun-rq-suite-on-real-490/`.
 
+## Active openspec changes (2026-11-23) — derived from the change folders; full task lists live in each `tasks.md`
+
+**`regional-ssl-representation-evaluation`** — PROPOSED, 0/42. The capstone. Next actions (in order):
+1. Phase 0 registration: freeze `configs/evaluation/pre_registration.yaml` (H1–H5, G-A…G-E, fractions, seeds) on owner approval to apply;
+   verify artifact bindings (`cycles_490_v2.parquet`, `splits_locked_v2.json` sha 30ecbe10…, `holdout_manifest_v2.json` sha d501bf81…);
+   rebuild/record the v2 normalization sidecar; commit the pre-registration hash.
+2. B1–B5 ladder first (Phase 1) — the FAR-matched `ndvi_lst_rule` control must exist before any SSL claim;
+   capacity manifest; scoring bridge; causality tests.
+3. Level-1 pretraining-quality battery (Phase 2) → architecture screening of region model v0 (Phase 3),
+   dev-only, 3 seeds, selection by gates only.
+4. Level-2 transfer suite + T3 retrieval with near-match listing (Phase 4) → generalization rolls (Phase 5)
+   → decision gates + findings 26 (Phase 6). Capstone claims nothing above L3; applied ambition (vision.md item 9) is vision-stage.
+- Blocked by: owner approval to run `/opsx:apply`; v2 store re-extraction/norm v2 for the patch-dependent parts stays out of scope here.
+
+**`benchmark-latent-reconstruction-prediction-architectures`** — PROPOSED, 0/37. Heavy counterpart (Colab T4). Next actions:
+1. Phase 0 inspection + freeze the committed experiment matrix (`configs/benchmarks/matrix.yaml`) and its hash;
+   regression gate: existing unit battery green first.
+2. Phase 1–2: common interface, registry, then architectures A1–A10 behind the Mamba feasibility gate; suppression S0–S3
+   with the committed applicability matrix (invalid combos → `Not Applicable`, never substituted).
+3. Phase 13: notebook executes only after the local gate; owner-run on T4; `Deferred` cells stay visible in all reports.
+- Blocked by: owner approval to apply; T4 budget for the first cycle (open question); v2 patch re-extraction decision —
+  patch-level cells stay `Deferred` until the v2 store + norm sidecar are bound; findings numbering at completion (≥ 27).
+
+**`cycle-detection-v3-multindex`** — ACTIVE, 26/27. The v2 producer; keep as-is. Only open item is the optional `--sweep`
+re-gate follow-up (gate FAILED → no switch; production path stays off). Owner call: pursue after the v2 store completes or close it.
+
+**DORMANT — need an explicit owner decision:** `oracle-floor-audit` (14/15; pool-V σ-floor audit of the voided patch arms)
+and `patch-alarm-statistic-e1` (0/11; channel-max residual aggregation follow-up). Revive with a fresh data/provenance contract, or reject.
+Nothing superseded is to be applied (see `openspec/changes/INDEX.md`); archived 2026-11-23:
+`decomposition-aware-ssl-study`, `training-holdout-invariant`, `separate-verification-gates`
+(main specs created: `decomposition-aware-anomaly-study`, `training-holdout`, `research-verification`).
+
 ## Queued — openspec candidates (one change each, user-approved direction)
 
+- **2026-11-23 triage (owner decision):** the v1-era patch line and the GRU-prediction
+  line are SUPERSEDED by the v2 chain + finding 25; `openspec/changes/INDEX.md` added;
+  superseded folders marked (not archived); `oracle-floor-audit` and
+  `patch-alarm-statistic-e1` left DORMANT for owner review. Archive candidates were
+  archived 2026-11-23 (see "Active openspec changes" above).
+- **`regional-ssl-representation-evaluation`** (PROPOSED 2026-11-23) — the capstone:
+  Level-1 pretraining quality + Level-2 downstream transferability of a light
+  **regional** SSL representation of field dynamics (B1–B5 input ladder, 5/10/25/50/100%
+  label fractions, T1–T5 tasks, temporal rolls + leave-block-out generalization,
+  pre-registered gates G-A…G-E). Architecture (incl. Barlow Twins candidate) is NOT
+  pre-approved — pre-registered screening decides. Semantics: anomaly ≠ stress
+  candidate ≠ stress; synthetic = controlled evidence only; geographic scope out.
+- **`benchmark-latent-reconstruction-prediction-architectures`** (PROPOSED 2026-11-23,
+  owner decision) — heavy counterpart, standalone Colab T4 benchmark: 5 paradigms ×
+  GRU/Mamba (A1–A10) × suppression (S0–S3) × 5 synthetic anomaly families × 3 severities
+  × 3 validation protocols; AUPRC primary; budget-aware execution with Deferred
+  visibility; three winner reports; feeds the capstone but no capstone gate depends on it.
+- **`madeline-yield-embeddings-init`** (TRACKED, not created 2026-11-23; owner decision) — Madeline's path: initialise/fine-tune the region base model from external early-season yield-forecasting-model embeddings. Self-supervised trajectory use needs no yield labels, but the external artifact itself needs a data, licence and provenance contract before an openspec change is written. Not implemented; not scheduled.
 0. **`code-audit-2026-11-21-deferred`** — the deferred defect list from the post-bd65829
    audit (`docs/audits/code_audit_2026-11-21.md`): the 3 result-corrupting bugs are FIXED
    (99709b0 / ea74a0c / d4b3cb8, σ refit + severity re-run required); the remaining

@@ -1,5 +1,10 @@
 # Change: patch-independent-indicators
 
+> **Status (2026-11-23): SUPERSEDED.** Independent-indicator agreement for patch arms under v1; void with the patch verdict. Environmental validation is re-specced (proxy-only, shared-input disclosure) in the new changes.
+> See `openspec/changes/INDEX.md` (triage 2026-11-23). This change is kept as
+> historical record only; it SHALL NOT be applied, archived as complete, or
+> cited as current evidence.
+
 ## Why
 
 Owner feature 15 demands comparison with TVDI, CWSI, ETa and

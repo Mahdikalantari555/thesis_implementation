@@ -1,5 +1,10 @@
 # Change: patch-contamination-absorption
 
+> **Status (2026-11-23): SUPERSEDED.** Patch-arm contamination/absorption study (v1 PoC context); absorbed findings 20/23 already closed the mechanism question at field level. Superseded by the v2 chain; revive only with a fresh patch path.
+> See `openspec/changes/INDEX.md` (triage 2026-11-23). This change is kept as
+> historical record only; it SHALL NOT be applied, archived as complete, or
+> cited as current evidence.
+
 ## Why
 
 Real training data is contaminated: unlabeled field-cycles contain unknown

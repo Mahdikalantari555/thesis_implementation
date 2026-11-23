@@ -1,5 +1,9 @@
 # Proposal: oracle-floor-audit
 
+> **Status (2026-11-23): DORMANT.** Post-finding-25 analysis of the frozen patch arms on the unassigned pool V (σ-floor verdict). NOT voided — but it restates a direction (patch arms) whose adoption is void under finding 25. Left unmarked deliberately; needs owner review before any follow-up (see INDEX.md).
+> See `openspec/changes/INDEX.md` (triage 2026-11-23). Nothing here is
+> approved for application without an explicit owner decision.
+
 ## Why
 
 Finding 25 (2026-11-21) left the corrected-protocol verdict: MDM80 censored

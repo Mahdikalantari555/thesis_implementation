@@ -1,5 +1,10 @@
 # Change: patch-full-run-and-ablations
 
+> **Status (2026-11-23): SUPERSEDED.** Full-run verdicts (finding 24, S1=1.000, 'gate PASS') are void per finding 25 and the v1 chain was discarded in favor of v2. Do not resume; no result from this change may be cited.
+> See `openspec/changes/INDEX.md` (triage 2026-11-23). This change is kept as
+> historical record only; it SHALL NOT be applied, archived as complete, or
+> cited as current evidence.
+
 ## Why
 
 The PoC (`patch-level-controlled-trial`) proves the patch arm on a subset;

@@ -1,5 +1,10 @@
 # Change: predictive-ssl-controlled-trial
 
+> **Status (2026-11-23): SUPERSEDED.** gru_pred trial: negative verdict (finding 22/23 — absorption hypothesis not supported; path C closed), executed under the v1 protocol. Kept as historical record; its content motivated the prediction-paradigm arm in the new benchmark change.
+> See `openspec/changes/INDEX.md` (triage 2026-11-23). This change is kept as
+> historical record only; it SHALL NOT be applied, archived as complete, or
+> cited as current evidence.
+
 ## Why
 
 Owner directive (2026-11-14): do NOT change the GRU-AE architecture blindly

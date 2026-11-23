@@ -1,5 +1,10 @@
 # Change: platform-patch-scorer-wiring
 
+> **Status (2026-11-23): SUPERSEDED.** Blocked on (a) owner approval and (b) a frozen winner. Finding 25 voided the frozen winner (patch arms >S6), so wiring would expose a void model in the platform. Superseded; requires a fresh, approved winner.
+> See `openspec/changes/INDEX.md` (triage 2026-11-23). This change is kept as
+> historical record only; it SHALL NOT be applied, archived as complete, or
+> cited as current evidence.
+
 ## Why
 
 Finding 23 (2026-11-18): on the identical finding-18 severity protocol and eval
