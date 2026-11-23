@@ -1,4 +1,4 @@
-# OpenSpec changes index — triage 2026-11-23
+# OpenSpec changes index — triage 2026-11-23, archived 2026-11-23
 
 Maintained by the owner's triage decision of 2026-11-23 (recorded in
 `todo.md`): **the v1-era patch line and the GRU-prediction line are
@@ -18,19 +18,16 @@ but blocked on an explicit owner decision before any application.
 
 | Change | Tasks | Status | Notes |
 |---|---|---|---|
-| `regional-ssl-representation-evaluation` | 0/42 | PROPOSED — the capstone | Level-1/Level-2 evaluation of a light regional SSL representation; five-level ladders; pre-registered gates; this implementation's anchor change |
+| `regional-ssl-representation-evaluation` | 0/42 | PROPOSED — the capstone | Level-1/Level-2 evaluation of a light regional SSL representation; five-level ladders; pre-registered gates G-A…G-E; owner decisions registered 2026-11-23 (advantage = undecided; priority = both + applied ambition; Madeline path = tracked future change) |
 | `benchmark-latent-reconstruction-prediction-architectures` | 0/37 | PROPOSED — heavy counterpart | Architecture/suppression/synthetic breadth benchmark (Colab T4, budget-aware); feeds the capstone, no capstone gate depends on it |
-| `cycle-detection-v3-multindex` | 26/27 | ACTIVE — live, v2 producer | Fused multi-index detector; produced `cycles_490_v2.parquet` (4,458 windows / 3,478 clean) |
-| `oracle-floor-audit` | 14/15 | DORMANT — analysis stands | Post-finding-25 pool-V audit; restates the (void) patch direction; owner review required before follow-up |
-| `patch-alarm-statistic-e1` | 0/11 | DORMANT — unapplied | Child of oracle-floor-audit (channel-max residual aggregation; power 0.30–0.67 vs 0.06–0.46 committed); blocked on patch-revival decision |
+| `cycle-detection-v3-multindex` | 26/27 | ACTIVE — v2 producer; nearly closed | Only open item is an optional follow-up: the gate FAILED, so no switch; production path stays off; owner call whether to re-gate with `--sweep` after the v2 store completes |
 
-## Complete — `/opsx:archive` candidates (touch nothing until owner approves)
+## Dormant — unapplied, await owner decision
 
 | Change | Tasks | Notes |
 |---|---|---|
-| `decomposition-aware-ssl-study` | 8/8 | Completed; its features feed the capstone B5 rung / C-decomp candidate |
-| `training-holdout-invariant` | 13/13 | Standing invariant; remains binding for all future changes |
-| `separate-verification-gates` | 2/2 | Checkout-vs-real-data verification selections; live practice |
+| `oracle-floor-audit` | 14/15 | Post-finding-25 pool-V audit (σ-floor verdict); analysis stands, but it restates the voided patch direction; needs owner review before any follow-up |
+| `patch-alarm-statistic-e1` | 0/11 | Unapplied child of oracle-floor-audit (channel-max residual aggregation; power 0.30–0.67 vs committed 0.06–0.46); blocked on a patch-revival decision |
 
 ## Superseded (historical record; SHALL NOT be applied or cited as current)
 
@@ -53,7 +50,14 @@ but blocked on an explicit owner decision before any application.
 | `predictive-ssl-controlled-trial` | 6/13 | gru_pred negative (findings 22/23); path C closed; v1 protocol |
 | `score-semantics-realignment` | 8/10 | Residual-semantics fix for the voided patch path; audit trail |
 
-## Archive
+## Archive (`openspec/changes/archive/`)
 
-`archive/` holds the 19 previously archived changes (2026-11-07 → 2026-11-15);
-untouched by this triage.
+19 changes archived previously (2026-11-07 → 2026-11-15). Archived
+2026-11-23 (tasks verified complete; main specs created/updated by
+`/opsx:archive`):
+
+| Change | Archived spec (new) |
+|---|---|
+| `2026-11-23-decomposition-aware-ssl-study` | `decomposition-aware-anomaly-study` (+7 requirements) |
+| `2026-11-23-training-holdout-invariant` | `training-holdout` (+2 requirements) |
+| `2026-11-23-separate-verification-gates` | `research-verification` (+1 requirement) |
