@@ -28,7 +28,7 @@ This change introduces a **date-centric raw satellite store** that keeps **all 5
 
 ### C. Derived Temporal Metadata (Cycle/Phenology) — derived view
 - `cycles_v3.parquet`: `field, cycle_id, start_date, end_date, harvest_date, ratoon_no, kind, length_days, censored, phenology_stage, stage_confidence`.
-- Phenology stages extracted from the NDVI curve (peak detection, derivative thresholds), with stage confidence. DSH retained as **temporal conditioning**, not storage axis.
+- Phenology stages extracted from the **multi-band** spectral-temporal curve (NDVI + LST + CWSI_ET + GDD), with stage confidence. **NDVI alone is insufficient** (v2 lesson: missed winter harvests, conflated seasons). DSH retained as **temporal conditioning**, not storage axis.
 - Classical sugarcane phases (§4 of analysis): Germination (30–45d), Tillering/Canopy (60–90d), Grand Growth (120–180d), Maturation (60–90d), Harvest (event). Ratoon vs plant-cane handled.
 
 ### D. Validation Store — independent
@@ -41,7 +41,7 @@ This change introduces a **date-centric raw satellite store** that keeps **all 5
 - `weather.zarr`: daily (5002 days) + aligned to satellite dates (538), causal constraint (only info available up to observation date).
 
 ### G. Cycle-detection method comparison (owner-gated)
-- Multiple detectors (NDVI threshold/peak-valley, change-point, phenology-model fit) run on a **farm subset** (selected sensitive farms). Owner visually approves which method detects cycles best on those farms. No single method is imposed; the chosen method + its parameters are recorded.
+- Multiple detectors (multi-band NDVI+LST+CWSI peak/valley, change-point on multi-band feature vector, phenology-model fit on NDVI+LST jointly) run on a **farm subset** (selected sensitive farms). Owner visually approves which method detects cycles best on those farms. No single method is imposed; the chosen method + its parameters are recorded. **NDVI-only detection is explicitly rejected** based on the v2 finding (18/19 long cycles were two seasons joined by a missed winter harvest).
 - Figures under `D:/RS/Thesis/.scratch/advisor_pack_2026-11-22/figures_perfield/` are the reference for owner review.
 
 ### H. Model-training update (additive)

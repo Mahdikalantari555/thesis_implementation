@@ -10,7 +10,7 @@
 - [ ] 0b.3 Fallback to v2 cycle-centric subset if extraction blocked.
 
 ## 1. Methods (all 4, on subset, full time range)
-- [ ] 1.1 B2 no-NN baseline (phenology + date×neighbor) — σ from residual (train split only).
+- [ ] 1.1 B2 no-NN baseline (phenology + date×neighbor) — σ from residual (train split only). **Phenology uses multi-band (NDVI+LST+CWSI+GDD), not NDVI alone** (v2 lesson).
 - [ ] 1.2 Pixel-wise CNN autoencoder (≤250k params) → reconstruction residual = score.
 - [ ] 1.3 Barlow Twins (ST-BT style) on spectral-temporal trajectories → representation distance = score.
 - [ ] 1.4 GRU-AE baseline (existing) on subset.

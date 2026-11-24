@@ -27,6 +27,7 @@ Colab is unavailable. We need **first anomaly-score outputs** on the owner's own
   - Stage 2: for the top-K suspicious (field, date) pairs, pixel-level score on 48×48 (within-field stress map) — ONNXRuntime CPU for speed.
   - Persistence (≥2 obs, ≥5 d apart) + cold-LST gate (ΔLST < −2 °C rejected as cloud/shadow). Event-level framing (Q8).
 - **Data input:** date-centric raw store on the 32-farm subset (`raw_satellite_subset.zarr`, D=538, F=32, K=7, S=48). If not ready, fall back to v2 cycle-centric subset (no full migration required for the probe).
+- **Phenology note (v2 lesson):** cycle detection and phenology features must use **multi-band** input (NDVI + LST + CWSI_ET + GDD), not NDVI alone. NDVI-only detection missed winter harvests and conflated seasons (18/19 long cycles). This applies to the B2 baseline's phenology component and any cycle-derived features.
 - **IRIS XE:** document that training stays CPU; inference may use ONNXRuntime CPU. No GPU claim.
 
 ## Capabilities
