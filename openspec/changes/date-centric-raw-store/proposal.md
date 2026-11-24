@@ -18,7 +18,7 @@ This change introduces a **date-centric raw satellite store** that keeps **all 5
 ## What Changes
 
 ### A. Raw Satellite Store (Date-centric) — new, additive
-- `raw_satellite.zarr`: `(D=538, F=490, K=7, S=48, S=48) fp16` + `pixel_valid`, `in_field`, `dates`, `field_ids`, `sensor_id`, `bbox_origin`.
+- `raw_satellite.zarr`: per-farm arrays `(D=538, K=7, H_i, W_i) fp16` + `pixel_valid`, `in_field`, `dates`, `field_ids`, `sensor_id`, `bbox_origin`. **Variable spatial size** (farm bounding box, no 48×48 padding) — owner decision 2026-11-24. Each farm gets its own zarr group. NDVI is NOT stored (computed on-demand).
 - Base channels = 7 physical bands only: `blue, green, red, nir, swir1, swir2, lst`. **NDVI is NOT stored** (computed on-demand by the feature-engineering module).
 - Chunking: `(1, 1, 7, 48, 48)` with sharding for date- and field-centric access.
 - Source: METRIC products / `stats_long.parquet` / `zonal_stats/*.parquet` (538 dates). Validation: parity vs `stats_long.parquet`.
@@ -28,7 +28,7 @@ This change introduces a **date-centric raw satellite store** that keeps **all 5
 
 ### C. Derived Temporal Metadata (Cycle/Phenology) — derived view
 - `cycles_v3.parquet`: `field, cycle_id, start_date, end_date, harvest_date, ratoon_no, kind, length_days, censored, phenology_stage, stage_confidence`.
-- Phenology stages extracted from the **multi-band** spectral-temporal curve (NDVI + LST + CWSI_ET + GDD), with stage confidence. **NDVI alone is insufficient** (v2 lesson: missed winter harvests, conflated seasons). DSH retained as **temporal conditioning**, not storage axis.
+- Phenology stages extracted from the **multi-band** spectral-temporal curve (NDVI + SAVI + LST + GDD), with stage confidence. **NDVI alone is insufficient** (v2 lesson: missed winter harvests, conflated seasons). CWSI_ET is NOT needed (owner decision 2026-11-24). DSH retained as **temporal conditioning**, not storage axis.
 - Classical sugarcane phases (§4 of analysis): Germination (30–45d), Tillering/Canopy (60–90d), Grand Growth (120–180d), Maturation (60–90d), Harvest (event). Ratoon vs plant-cane handled.
 
 ### D. Validation Store — independent

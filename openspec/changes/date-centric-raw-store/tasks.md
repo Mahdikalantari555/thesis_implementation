@@ -6,7 +6,7 @@
 - [ ] 0.3 Record the selected farm subset in `configs/benchmarks/farm_subset.yaml` (or a new config).
 
 ## 1. Cycle-detection method comparison (owner-gated, no migration yet)
-- [ ] 1.1 Implement 3 detectors on the farm subset: (a) multi-band NDVI+LST+CWSI peak/valley threshold (v2 extended), (b) change-point (PELT/rbocpd) on multi-band feature vector, (c) phenology-model fit (logistic/Gaussian) on NDVI+LST jointly. **NDVI-only detection is explicitly rejected** (v2 lesson: missed winter harvests, conflated seasons).
+- [ ] 1.1 Implement 3 detectors on the farm subset: (a) multi-band NDVI+SAVI+LST+GDD peak/valley threshold (v2 extended), (b) change-point (PELT/rbocpd) on multi-band feature vector, (c) phenology-model fit (logistic/Gaussian) on NDVI+SAVI+LST jointly. **NDVI-only detection is explicitly rejected** (v2 lesson: missed winter harvests, conflated seasons).
 - [ ] 1.2 Render per-farm figures (multi-band curves + detected cycles) for owner review.
 - [ ] 1.3 Owner approves the best method per farm (or globally). Record method + params in config.
 - [ ] 1.4 Only after approval: run chosen detector on all 490 fields → `cycles_v3.parquet` (draft).
@@ -23,7 +23,7 @@
 
 ## 4. Derived Temporal Metadata
 - [ ] 4.1 Build `cycles_v3.parquet` (field, cycle_id, start/end/harvest, ratoon_no, kind, length_days, censored, phenology_stage, stage_confidence).
-- [ ] 4.2 Phenology extraction from multi-band curves (NDVI + LST + CWSI_ET + GDD; peak detection, derivative thresholds, stage confidence). **NDVI alone is insufficient** (v2 lesson: missed winter harvests).
+- [ ] 4.2 Phenology extraction from multi-band curves (NDVI + SAVI + LST + GDD; peak detection, derivative thresholds, stage confidence). **NDVI alone is insufficient** (v2 lesson: missed winter harvests). CWSI_ET not needed.
 - [ ] 4.3 DSH as temporal conditioning (not storage axis).
 
 ## 5. Validation & Field Stats Stores

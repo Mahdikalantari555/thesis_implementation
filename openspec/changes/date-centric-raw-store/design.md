@@ -7,20 +7,20 @@ The v2 cycle-centric store (`patches.zarr`), splits, checkpoints and reports are
 Phenology is a **derived metadata layer**, not a storage axis:
 - Raw store holds all 538 dates (no phase).
 - `cycles_v3.parquet` holds phases + confidence + DSH, extracted from the multi-band
-  spectral-temporal curve (NDVI + LST + red-edge proxies + weather), not NDVI alone.
+  spectral-temporal curve (NDVI + SAVI + LST + GDD), not NDVI alone.
   **Lesson from v2 phenology:** NDVI-only cycle detection missed winter harvests and
   conflated two seasons into one (18/19 long cycles were two seasons joined by a
-  missed winter harvest). Multi-band input (NDVI + LST + CWSI_ET + GDD) is required
-  for robust harvest detection.
+  missed winter harvest). Multi-band input (NDVI + SAVI + LST + GDD) is required
+  for robust harvest detection. CWSI_ET is NOT needed (owner decision 2026-11-24).
 - Classical sugarcane phases (Germination 30–45d, Tillering 60–90d, Grand Growth
   120–180d, Maturation 60–90d, Harvest event). Ratoon vs plant-cane via kind/length_days.
 - DSH becomes temporal conditioning in the tokenizer (one-hot stage + DSH), not a bin index.
 
 ## Cycle-detection method comparison (owner-gated)
 Three detectors on a farm subset selected by the owner from `figures_perfield/`:
-1. Multi-band NDVI+LST+CWSI peak/valley threshold (current v2, extended to multi-band).
-2. Change-point (PELT / rbocpd) on multi-band feature vector.
-3. Phenology-model fit (logistic/Gaussian) on NDVI + LST jointly.
+1. Multi-band NDVI+SAVI+LST+GDD peak/valley threshold (current v2, extended to multi-band).
+2. Change-point (PELT / rbocpd) on multi-band feature vector (NDVI, SAVI, LST, GDD).
+3. Phenology-model fit (logistic/Gaussian) on NDVI + LST + SAVI jointly.
 
 Owner visually approves the best method per farm (or globally). Only then run on all 490
 fields. No single method is imposed by default. **NDVI-only detection is explicitly
