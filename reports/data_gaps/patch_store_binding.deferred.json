@@ -1,0 +1,63 @@
+{
+  "artifact": "patch store (patches.zarr) + patch_sigma.npz sidecar",
+  "config_key": "artifacts.patch_store_v2",
+  "status": "Deferred",
+  "reason": "No patches.zarr store with a co-located patch_sigma.npz sidecar found in any root, and no inspected bundle contains both patches.zarr and a patch_runs/v3 patch_sigma.npz sidecar.",
+  "checked_at": "2026-11-24T07:35:16.442164+00:00",
+  "git_sha": "1f808387310d05829d39a6cb5b1d0d24b8a4f129",
+  "searched_stores": [
+    "D:\\RS\\Thesis\\thesis_implementation\\data\\patch_runs\\v3\\patches.zarr",
+    "D:\\RS\\Thesis\\Data\\Processed\\patch_runs\\v3\\patches.zarr",
+    "D:\\RS\\Thesis\\Data\\Processed\\satellite\\patches.zarr",
+    "D:\\RS\\Thesis\\thesis_implementation\\data\\processed\\patches.zarr"
+  ],
+  "searched_sidecars": [
+    "D:\\RS\\Thesis\\thesis_implementation\\data\\patch_runs\\v3\\patch_sigma.npz",
+    "D:\\RS\\Thesis\\Data\\Processed\\patch_runs\\v3\\patch_sigma.npz",
+    "D:\\RS\\Thesis\\thesis_implementation\\data\\processed\\patch_sigma.npz"
+  ],
+  "bundles_inspected": [
+    {
+      "zip": "D:\\RS\\Thesis\\thesis_implementation\\google_drive\\patch_full_v2_eval_bundle.zip",
+      "has_store": false,
+      "has_sidecar": false,
+      "store_entries_sample": [],
+      "sidecar_entries": []
+    },
+    {
+      "zip": "D:\\RS\\Thesis\\thesis_implementation\\google_drive\\patch_full_v2_eval_bundle_v2.zip",
+      "has_store": false,
+      "has_sidecar": false,
+      "store_entries_sample": [],
+      "sidecar_entries": []
+    },
+    {
+      "zip": "D:\\RS\\Thesis\\thesis_implementation\\google_drive\\thesis_data_full_v2.zip",
+      "has_store": true,
+      "has_sidecar": false,
+      "store_entries_sample": [
+        "data/patch_runs/v3/patches.zarr/.manifest.jsonl",
+        "data/patch_runs/v3/patches.zarr/bbox_origin/zarr.json",
+        "data/patch_runs/v3/patches.zarr/cycle_end_day/zarr.json",
+        "data/patch_runs/v3/patches.zarr/cycle_ids/zarr.json",
+        "data/patch_runs/v3/patches.zarr/cycle_start_day/zarr.json"
+      ],
+      "sidecar_entries": []
+    },
+    {
+      "zip": "D:\\RS\\Thesis\\thesis_implementation\\google_drive\\patch_full_v2_eval_bundle.zip",
+      "has_store": false,
+      "has_sidecar": false,
+      "store_entries_sample": [],
+      "sidecar_entries": []
+    },
+    {
+      "zip": "D:\\RS\\Thesis\\thesis_implementation\\google_drive\\patch_full_v2_eval_bundle_v2.zip",
+      "has_store": false,
+      "has_sidecar": false,
+      "store_entries_sample": [],
+      "sidecar_entries": []
+    }
+  ],
+  "owner_action": "Produce/mirror patches.zarr + patch_sigma.npz under patch_runs/v3 (task 3.1-3.4); or upload a bundle containing both."
+}

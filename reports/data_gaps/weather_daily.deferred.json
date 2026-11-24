@@ -1,0 +1,21 @@
+{
+  "artifact": "weather_daily.parquet (ERA5 daily covariates)",
+  "config_key": "artifacts.weather_daily_v2",
+  "status": "Deferred",
+  "reason": "No weather_daily.parquet and no weather_daily*.zip found in any searched location; owner upload google_drive/weather_daily_v2.zip is missing.",
+  "checked_at": "2026-11-24T07:34:58.771542+00:00",
+  "git_sha": "1f808387310d05829d39a6cb5b1d0d24b8a4f129",
+  "searched_paths": [
+    "D:\\RS\\Thesis\\thesis_implementation\\data\\processed\\weather_daily.parquet",
+    "D:\\RS\\Thesis\\Data\\Processed\\weather\\weather_daily.parquet",
+    "D:\\RS\\Thesis\\thesis_implementation\\data",
+    "D:\\RS\\Thesis\\Data",
+    "D:\\RS\\Thesis\\thesis_implementation\\google_drive"
+  ],
+  "found_sources": [],
+  "targets": {
+    "impl": "D:\\RS\\Thesis\\thesis_implementation\\data\\processed\\weather_daily.parquet",
+    "canonical": "D:\\RS\\Thesis\\Data\\Processed\\weather\\weather_daily.parquet"
+  },
+  "owner_action": "Upload google_drive/weather_daily_v2.zip containing weather_daily.parquet, then re-run this script."
+}

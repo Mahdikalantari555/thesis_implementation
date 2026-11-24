@@ -1,0 +1,21 @@
+{
+  "status": "Deferred",
+  "checked_at": "2026-11-24T07:35:16.195203+00:00",
+  "git_sha": "1f808387310d05829d39a6cb5b1d0d24b8a4f129",
+  "artifact": "decomposition/stl_features.parquet",
+  "config_key": "artifacts.stl_features",
+  "reason": "Optional, unproduced by default (B5-class STL features from decomposition-aware-ssl-study). No owner upload present.",
+  "found_sources": [
+    "D:\\RS\\Thesis\\thesis_implementation\\openspec\\changes\\data-fix-and-colab-prep\\deferred\\stl_features.deferred.json",
+    "D:\\RS\\Thesis\\thesis_implementation\\reports\\data_gaps\\stl_features.deferred.json",
+    "D:\\RS\\Thesis\\thesis_implementation\\openspec\\changes\\data-fix-and-colab-prep\\deferred\\stl_features.deferred.json",
+    "D:\\RS\\Thesis\\thesis_implementation\\reports\\data_gaps\\stl_features.deferred.json"
+  ],
+  "searched_roots": [
+    "D:\\RS\\Thesis\\thesis_implementation",
+    "D:\\RS\\Thesis"
+  ],
+  "owner_action": "Optional: upload google_drive/stl_features_v2.zip, or explicitly decline; leave required_for: optional.",
+  "impact": "Blocks nothing; reported as absent.",
+  "config_path": "data/processed/decomposition/stl_features.parquet"
+}

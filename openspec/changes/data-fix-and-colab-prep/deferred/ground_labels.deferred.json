@@ -1,0 +1,11 @@
+{
+  "status": "Deferred",
+  "checked_at": "2026-11-24T07:30:41.358608+00:00",
+  "git_sha": "1f808387310d05829d39a6cb5b1d0d24b8a4f129",
+  "change": "data-fix-and-colab-prep",
+  "artifact": "ground/confirmed-anomaly labels",
+  "config_key": "n/a (no config binding; todo owner task 4)",
+  "reason": "No ground_labels*.zip or label parquet anywhere.",
+  "owner_action": "Upload google_drive/ground_labels_v2.zip (owner task 4).",
+  "impact": "L4 claims unsupported; environmental tables print absent/shared-input only."
+}

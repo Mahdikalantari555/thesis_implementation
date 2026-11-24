@@ -1,0 +1,11 @@
+{
+  "status": "Deferred",
+  "checked_at": "2026-11-24T07:30:41.358608+00:00",
+  "git_sha": "1f808387310d05829d39a6cb5b1d0d24b8a4f129",
+  "change": "data-fix-and-colab-prep",
+  "artifact": "weather_daily.parquet (ERA5 daily covariates)",
+  "config_key": "artifacts.weather_daily_v2",
+  "reason": "Owner upload missing: google_drive/weather_daily_v2.zip absent; no weather_daily.parquet in canonical or impl roots.",
+  "owner_action": "Upload google_drive/weather_daily_v2.zip; extract to data/processed/weather_daily.parquet and mirror to Data/Processed/weather/weather_daily.parquet; append amendments entry.",
+  "impact": "weather_inputs cells blocked until bound."
+}

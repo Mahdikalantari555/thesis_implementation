@@ -18,19 +18,27 @@ interface (`ssl_anomaly.backends.get_backend("rust")`):
 - Rust toolchain (`rustc` + `cargo`, edition 2021)
 - `maturin >= 1.5` (`uv pip install maturin`)
 
-## Build & Install (WSL / Linux)
+## Build & Install (WSL / Linux — geospatial conda env)
+
+Windows has no Rust toolchain; build on WSL using the geospatial conda env:
 
 ```bash
-# Activate project virtualenv from repo root
-source .venv/bin/activate
-uv pip install maturin
+source /home/asus/miniforge3/etc/profile.d/conda.sh
+conda activate geospatial
+source ~/.cargo/env
+export PYO3_PYTHON=/home/asus/miniforge3/envs/geospatial/bin/python
+export PYTHONPATH=/home/asus/Projects/thesis/thesis_implementation/src
 
 # 1. Verify standalone Rust release build
 cargo build --release --manifest-path rust/Cargo.toml
 
-# 2. Build wheel and install into active virtualenv
+# 2. Build wheel and install into active env
 maturin develop --release --manifest-path rust/Cargo.toml
 ```
+
+Expected: `Finished release profile` (~10-30s) then `Installed ssl_anomaly_rs`.
+On Windows, `ssl_anomaly_rs` is not importable and `get_backend("rust")` raises
+`NotImplementedError` (fail-open; NumPy backend is used).
 
 ## Build & Install (Windows PowerShell)
 

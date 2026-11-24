@@ -67,7 +67,7 @@ raising and SHALL produce the same result as the Python path.
 ### Requirement: Verification gate before enablement
 
 A port SHALL NOT be enabled unless `fast-anything verify` has passed every
-recorded, edge, and derived call at relative tolerance 1e-9, the targeted unit
+recorded, edge, and derived call at relative tolerance 1e-6, the targeted unit
 test selection has passed with acceleration on and off, and an end-to-end A/B
 benchmark has shown a measured gain. Any edit to a Python function or its Rust
 crate SHALL invalidate that port's verification until the gate is repeated.

@@ -1,0 +1,11 @@
+{
+  "status": "Deferred",
+  "checked_at": "2026-11-24T07:30:41.358608+00:00",
+  "git_sha": "1f808387310d05829d39a6cb5b1d0d24b8a4f129",
+  "change": "data-fix-and-colab-prep",
+  "artifact": "canonical mirror of v2 artifacts (cycles/splits/holdout/norm/patches.zarr)",
+  "config_key": "artifacts.* (cycles_490_v2, splits_locked_v2, holdout_manifest_v2, norm_stats_full_v2, patch_store_v2)",
+  "reason": "Large copy (~293 MB patches.zarr) is an owner/execution step; agent verifies only. cycles_490_v2.parquet present in impl but absent from bundle.",
+  "owner_action": "Mirror (copy, not move) v2 artifacts into Data/Processed/; verify sha256; do not alter frozen files.",
+  "impact": "Canonical Data/Processed not self-contained until mirrored."
+}
