@@ -152,6 +152,42 @@ class PlatformReadinessTests(unittest.TestCase):
         ranges = next(item for item in result["checks"] if item["check"] == "channel_ranges")
         self.assertEqual(ranges["status"], "FAIL")
 
+    @unittest.skipUnless(importlib.util.find_spec("ijson"), "optional ijson dependency not installed")
+    def test_nan_literal_in_sidecar_is_reported_not_fatal(self):
+        """A bare NaN is invalid strict JSON; ijson raises JSONError, not ValueError."""
+        self._write_fixture()
+        checkpoints = self.base / "checkpoints"
+        checkpoints.mkdir()
+        for stem in SCORE_CHECKPOINTS.values():
+            (checkpoints / f"{stem}.json").write_text(json.dumps({
+                "model_id": stem, "ladder_rung": "L2"
+            }), encoding="utf-8")
+        victim = next(iter(SCORE_CHECKPOINTS.values()))
+        raw = (checkpoints / f"{victim}.json").read_text(encoding="utf-8")
+        (checkpoints / f"{victim}.json").write_text(
+            raw[:-1] + ', "dev_metrics_summary": {"median_delay_days": NaN}}', encoding="utf-8")
+        self.config = InspectorConfig(
+            repo_root=self.config.repo_root, title="test", host="127.0.0.1", port=0, open_browser=False,
+            read_only=True, roots=(InputRoot("platform_data", self.platform), InputRoot("checkpoints", checkpoints)),
+            output_dir=self.config.output_dir, max_json_bytes=1_000_000, max_series_bytes=5_000_000,
+        )
+        result = validate_platform(self.config, [])  # must not raise
+        sidecars = [item for item in result["checks"] if item["check"] == "checkpoint_sidecars"]
+        self.assertTrue(sidecars)
+        self.assertEqual(sidecars[-1]["status"], "WARNING")
+        self.assertIn("IncompleteJSONError", sidecars[-1]["reason"])
+
+    @unittest.skipUnless(importlib.util.find_spec("ijson"), "optional ijson dependency not installed")
+    def test_nan_literal_in_series_is_reported_not_fatal(self):
+        self._write_fixture()
+        payload = json.loads((self.platform / "series_khuzestan.json").read_text(encoding="utf-8"))
+        payload["fields"]["F-001"]["channels"]["ndvi"][1] = float("nan")
+        (self.platform / "series_khuzestan.json").write_text(json.dumps(payload), encoding="utf-8")
+        result = validate_platform(self.config, [])  # must not raise
+        self.assertEqual(result["status"], "BLOCKED")
+        dates = next(item for item in result["checks"] if item["check"] == "observation_dates")
+        self.assertEqual(dates["status"], "FAIL")
+
 
 if __name__ == "__main__":
     unittest.main()

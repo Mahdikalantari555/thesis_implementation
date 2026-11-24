@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import shutil
 import sys
 import time
@@ -60,6 +61,25 @@ from ssl_anomaly.monitor import protocol as mproto  # noqa: E402
 from ssl_anomaly.monitor import scoring as mscoring  # noqa: E402
 from ssl_anomaly.monitor import severity_table as sev  # noqa: E402
 from ssl_anomaly.monitor import splits as msplits  # noqa: E402
+
+
+def _jsonable(obj):
+    """One NaN JSON policy (audit 2026-11-21 item 14): non-finite → null.
+
+    A missing median delay (no detection, or a censored >S6 sentinel) is
+    represented as JSON ``null`` = not-measured, never as the bare ``NaN``
+    literal that strict JSON readers (ijson, JSON.parse) reject.
+    """
+    if isinstance(obj, dict):
+        return {str(k): _jsonable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_jsonable(v) for v in obj]
+    if isinstance(obj, (np.floating, np.integer)):
+        obj = obj.item()
+    if isinstance(obj, float) and not math.isfinite(obj):
+        return None
+    return obj
+
 
 MODEL_ID_MAP = {
     "masked_transformer": "masked_transformer_main",
@@ -322,10 +342,11 @@ def freeze(args) -> int:
         "notes": args.notes,
     }
     sidecar["manifest_sha256"] = json.dumps(
-        {k: sidecar[k] for k in sorted(sidecar)}, sort_keys=True, default=str
+        _jsonable({k: sidecar[k] for k in sorted(sidecar)}), sort_keys=True,
+        default=str, allow_nan=False
     )
     sidecar_path = REPO_ROOT / "checkpoints" / f"{model_id}.json"
-    sidecar_path.write_text(json.dumps(sidecar, indent=2), encoding="utf-8")
+    sidecar_path.write_text(json.dumps(_jsonable(sidecar), indent=2, allow_nan=False), encoding="utf-8")
     print(f"[freeze] {ckpt_dst}")
     if "detection_rate_1mad" in best:
         print(f"[freeze] sidecar {sidecar_path} (ladder_rung=L2, seed {seed} "
@@ -426,7 +447,7 @@ def final_test(args) -> int:
         ),
     }
     out = REPO_ROOT / "reports" / f"final_test_{MODEL_ID_MAP[args.model]}.json"
-    out.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    out.write_text(json.dumps(_jsonable(report), indent=2, allow_nan=False), encoding="utf-8")
 
     # Update the frozen sidecar's ladder rung when the target holds.
     model_id = MODEL_ID_MAP[args.model]
@@ -435,12 +456,12 @@ def final_test(args) -> int:
         sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
         sidecar["ladder_rung"] = ladder
         sidecar["final_test_file"] = str(out.relative_to(REPO_ROOT))
-        sidecar_path.write_text(json.dumps(sidecar, indent=2), encoding="utf-8")
+        sidecar_path.write_text(json.dumps(_jsonable(sidecar), indent=2, allow_nan=False), encoding="utf-8")
 
-    print(json.dumps({k: report[k] for k in (
+    print(json.dumps(_jsonable({k: report[k] for k in (
         "far_clean_main", "far_clean_b1", "detection_rate_1mad_main",
         "detection_rate_1mad_b1", "bootstrap_ci95_fields_main",
-        "bootstrap_ci95_fields_b1", "ladder_rung_result")}, indent=2))
+        "bootstrap_ci95_fields_b1", "ladder_rung_result")}), indent=2, allow_nan=False))
     print(f"[final-test] report → {out}")
     if not target_met:
         print("[final-test] D6 target NOT met — reported as a finding; rung stays L2 "
@@ -512,9 +533,10 @@ def attach_severity(args) -> int:
             "(platform serving calibration frozen in finding 16)")
     sidecar["notes"] = (sidecar.get("notes", "") + "; " + note).strip("; ")
     sidecar["manifest_sha256"] = json.dumps(
-        {k: sidecar[k] for k in sorted(sidecar)}, sort_keys=True, default=str
+        _jsonable({k: sidecar[k] for k in sorted(sidecar)}), sort_keys=True,
+        default=str, allow_nan=False
     )
-    sidecar_path.write_text(json.dumps(sidecar, indent=2), encoding="utf-8")
+    sidecar_path.write_text(json.dumps(_jsonable(sidecar), indent=2, allow_nan=False), encoding="utf-8")
     print(f"[attach-severity] sidecar {sidecar_path}")
     print(f"[attach-severity] mdm80 (frozen seed {sidecar['frozen_seed']}): "
           + " ".join(f"{k}={v['value']}" for k, v in entry["mdm80"].items()))
@@ -795,21 +817,22 @@ def final_test_severity(args) -> int:
         ),
     }
     out = REPO_ROOT / "reports" / f"final_test_{MODEL_ID_MAP[args.model]}_severity.json"
-    out.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    out.write_text(json.dumps(_jsonable(report), indent=2, allow_nan=False), encoding="utf-8")
 
     sidecar["ladder_rung"] = ladder
     sidecar["final_test_severity_file"] = str(out.relative_to(REPO_ROOT))
     sidecar["manifest_sha256"] = json.dumps(
-        {k: sidecar[k] for k in sorted(sidecar)}, sort_keys=True, default=str
+        _jsonable({k: sidecar[k] for k in sorted(sidecar)}), sort_keys=True,
+        default=str, allow_nan=False
     )
-    sidecar_path.write_text(json.dumps(sidecar, indent=2), encoding="utf-8")
+    sidecar_path.write_text(json.dumps(_jsonable(sidecar), indent=2, allow_nan=False), encoding="utf-8")
 
-    print(json.dumps({
+    print(json.dumps(_jsonable({
         "target_a_margin": a_margin, "target_a_met": target_a,
         "target_b_pairs": {k: (v["main"], v["b1"], v["evaluable"]) for k, v in b_pairs.items()},
         "target_b_met": target_b, "ladder_rung_result": ladder,
         "trial_mode": trial_mode,
-    }, indent=2, default=str))
+    }), indent=2, default=str, allow_nan=False))
     print(f"[final-test] report → {out}")
     if trial_mode:
         print("[final-test] gru_pred trial mode: five gates of "

@@ -19,6 +19,20 @@ from scripts.platform_channels import CHANNEL_REGISTRY, SCORE_CHECKPOINTS, SCORE
 from .config import InspectorConfig
 from .security import assert_within
 
+try:
+    from ijson.common import JSONError as _IjsonError
+except ImportError:  # ijson is optional; the guards below report its absence
+    _IjsonError = None
+
+# ijson raises JSONError (not ValueError) on malformed JSON, including bare NaN
+# literals. A single unreadable artifact must surface as a finding, never abort
+# the whole scan (see tools/inspector/app.py initial-scan flow).
+STREAM_ERRORS: tuple[type[BaseException], ...] = (
+    OSError, PermissionError, UnicodeError, ValueError, TypeError, OverflowError, json.JSONDecodeError,
+)
+if _IjsonError is not None:
+    STREAM_ERRORS += (_IjsonError,)
+
 FARM_ID = re.compile(r"^F-\d{3,}$")
 ALLOWED_SPLITS = {"train", "dev", "test", "monitoring"}
 ALLOWED_CHANNEL_PROVENANCE = {"observed", "modelled", "proxy", "absent"}
@@ -48,7 +62,7 @@ def _read_farms(config: InspectorConfig, checks: list[dict[str, Any]]) -> tuple[
             checks.append(_finding("farm_registry", "WARNING", "Farm registry exceeds configured JSON read limit"))
             return set(), {}
         value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, PermissionError, UnicodeError, json.JSONDecodeError) as exc:
+    except STREAM_ERRORS as exc:
         checks.append(_finding("farm_registry", "FAIL", f"Farm registry unreadable: {exc.__class__.__name__}", True))
         return set(), {}
     if not isinstance(value, list) or not value or len(value) > MAX_FARMS:
@@ -119,7 +133,7 @@ def _axis_and_version(path: Path) -> tuple[int | None, list[str] | None, str | N
                     if len(axis) >= MAX_AXIS:
                         return version, None, "Date axis exceeds the configured safety bound"
                     axis.append(value)
-    except (OSError, ValueError, TypeError, OverflowError) as exc:
+    except STREAM_ERRORS as exc:
         return version, None, f"Series structure unreadable: {exc.__class__.__name__}"
     if not axis:
         return version, None, "Series date axis is absent"
@@ -142,7 +156,7 @@ def _checkpoint_alignment(path: Path, config: InspectorConfig) -> dict[str, Any]
     try:
         with path.open("rb") as stream:
             payload_refs = dict(ijson.kvitems(stream, "checkpoints"))
-    except (OSError, ValueError, TypeError) as exc:
+    except STREAM_ERRORS as exc:
         return _finding("checkpoint_sidecars", "FAIL", f"Checkpoint mapping unreadable: {exc.__class__.__name__}", True)
     expected = {str(key): str(value) for key, value in SCORE_CHECKPOINTS.items()}
     if payload_refs != expected:
@@ -172,7 +186,7 @@ def _checkpoint_alignment(path: Path, config: InspectorConfig) -> dict[str, Any]
                         metadata[prefix] = value
             if metadata.get("model_id") != stem:
                 mismatched.append(stem)
-    except (OSError, PermissionError, ValueError, TypeError) as exc:
+    except STREAM_ERRORS as exc:
         return _finding("checkpoint_sidecars", "WARNING", f"Checkpoint sidecar metadata unavailable: {exc.__class__.__name__}")
     if mismatched:
         return _finding("checkpoint_sidecars", "FAIL", "Checkpoint sidecar model IDs do not align with registered stems", True, examples=mismatched[:5])
@@ -215,7 +229,7 @@ def _read_test_masks(path: Path, farm_ids: set[str], axis_length: int) -> tuple[
                 elif active is not None and prefix == f"fields.{active}.split" and event == "end_array":
                     active = None
                     pair = []
-    except (OSError, ValueError, TypeError) as exc:
+    except STREAM_ERRORS as exc:
         issues.append(f"split tags unreadable: {exc.__class__.__name__}")
     incomplete = [farm_id for farm_id, pos in positions.items() if pos != axis_length]
     issues.extend(f"{farm_id}: split tags do not align with axis" for farm_id in incomplete[:20])
@@ -380,7 +394,7 @@ def _validate_series_values(path: Path, axis_length: int, masks: dict[str, bytea
                         add_issue(ladder_missing, parts[1])
                 elif len(parts) == 3 and parts[0] == "fields" and parts[1] in farm_ids and parts[2] == "ladderRung" and event == "null":
                     add_issue(ladder_missing, parts[1])
-    except (OSError, ValueError, TypeError, OverflowError) as exc:
+    except STREAM_ERRORS as exc:
         add_issue(malformed, f"series values unreadable: {exc.__class__.__name__}")
     missing_fields = sorted(farm_ids - field_ids_seen)
     if missing_fields:
