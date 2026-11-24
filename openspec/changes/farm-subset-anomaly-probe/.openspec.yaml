@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-11-24
+goal: Get first anomaly-score outputs on the owner's own machine without Colab;
+  validate methods on a farm subset.
