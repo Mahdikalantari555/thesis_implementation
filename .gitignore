@@ -57,6 +57,7 @@ src/ssl_anomaly/_rs*.so
 # for a measured one; real runs still commit their artifacts under reports/.
 reports/_smoke/
 reports/**/_smoke/
+/reports/inspector/
 
 # Releases and large HTML maps
 releases/

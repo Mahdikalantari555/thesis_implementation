@@ -1,0 +1,33 @@
+[inspector]
+title = "Thesis Inspector"
+host = "127.0.0.1"
+port = 8765
+open_browser = true
+read_only = true
+
+[paths]
+data = "data"
+checkpoints = "checkpoints"
+reports = "reports"
+platform_data = "platform/src/data"
+external_roots = []
+
+[scan]
+mode = "manual"
+hash_strategy = "metadata_first"
+max_sample_size = 10000
+max_files = 25000
+max_json_bytes = 8000000
+max_npz_uncompressed_bytes = 128000000
+max_series_bytes = 250000000
+hash_small_files_under_bytes = 1000000
+ignore_hidden = true
+
+[validation]
+platform_contract = 5
+check_physical_ranges = true
+check_provenance = true
+
+[reporting]
+output_dir = "reports/inspector"
+save_history = true

@@ -1,0 +1,8 @@
+# The Inspector server and JSON/CSV/GeoJSON metadata readers use Python's standard library.
+# Install optional readers only when corresponding artifact formats are in scope:
+# numpy>=1.26       # NPZ and numerical array summaries
+# pyarrow>=15       # Parquet metadata and bounded row samples
+# zarr>=2.18        # Zarr metadata and lazy bounded samples
+# rasterio>=1.3     # GeoTIFF metadata
+# shapely>=2.0      # optional full GeoJSON geometry validation
+# ijson>=3.2        # bounded streaming farm-series timelines
