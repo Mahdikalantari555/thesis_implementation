@@ -182,14 +182,53 @@ owner-run training. Next actions (in order):
    → decision gates + findings 26 (Phase 6). Capstone claims nothing above L3; applied ambition (vision.md item 9) is vision-stage.
 - Blocked by: owner approval to run `/opsx:apply`; v2 store re-extraction/norm v2 for the patch-dependent parts stays out of scope here.
 
-**`benchmark-latent-reconstruction-prediction-architectures`** — PROPOSED, 0/37. Heavy counterpart (Colab T4). Next actions:
-1. Phase 0 inspection + freeze the committed experiment matrix (`configs/benchmarks/matrix.yaml`) and its hash;
-   regression gate: existing unit battery green first.
-2. Phase 1–2: common interface, registry, then architectures A1–A10 behind the Mamba feasibility gate; suppression S0–S3
-   with the committed applicability matrix (invalid combos → `Not Applicable`, never substituted).
-3. Phase 13: notebook executes only after the local gate; owner-run on T4; `Deferred` cells stay visible in all reports.
-- Blocked by: owner approval to apply; T4 budget for the first cycle (open question); v2 patch re-extraction decision —
-  patch-level cells stay `Deferred` until the v2 store + norm sidecar are bound; findings numbering at completion (≥ 27).
+**`benchmark-latent-reconstruction-prediction-architectures`** — IN PROGRESS, 26/37 (ticked 2026-11-23; 11 boxes annotated with what is missing).
+Harness built and green (26/37 boxes ticked, each open box annotated with what is missing): `src/ssl_anomaly/benchmarking/` (config, matrix, registry, bindings, inputs,
+splits, synthetic, capacity, collapse, interface, arms+suppression, metrics, calibration, scoring,
+checkpoints, stats, protocols, indices, hpo, runner, report, bundle), `configs/benchmarks/`
+(**`matrix.yaml` committed** — 357 cells, `matrix_sha256 03a7b6cd6c4f…`, Pending 297 / Deferred 30
+`patch-v2-unbound` / Not Applicable 30), `scripts/benchmarks/{run_benchmark,run_hpo,report_benchmark,
+bundle_benchmark,make_colab_notebook}.py`, `notebooks/benchmarks/architecture_comparison_benchmark.ipynb`
+(20 generated sections), `tests/benchmarking` **139 passed**, fixture+smoke end-to-end verified twice
+(18/20 and 16/20 Completed; the difference is the collapse gate firing on noise — see
+`docs/findings/27_benchmark_harness_local_gate.md`). **No scientific claim**: every manifest from a
+plumbing run carries `stamp = SMOKE FIXTURE` and `ladder_rung = L0`.
+1. Owner runs the notebook §9 (screening, T4) then §10 (full block, 3 seeds, `--resume`); the agent
+   never launches it (§6.1 gate is complete and reproducible).
+2. Bundle back with `--collect` (complete-or-defect, `SHA256SUMS.txt`); report regenerates from the
+   bundle alone.
+3. The 14 questions are answered only after ≥2 seeds and ≥8 farms in common; on the fixture the cell
+   factor explains ~4.5× the variance of the model factor, so a single-seed ranking is declared
+   meaningless **before** looking at real numbers.
+- Blocked by: owner-side data (list below); T4 hour budget for the first cycle; v2 patch re-extraction
+  decision (patch cells stay `Deferred` until the store + norm sidecar are bound). Findings numbering:
+  27 assigned to the harness/gate record; the results finding gets the next number at completion.
+
+### Owner data-prep tasks — architecture benchmark (2026-11-23)
+
+Everything below is a **Drive upload or a repo binding decision**; no code is needed from the owner.
+Items 1–2 already exist and need no action beyond confirmation; 3–6 are the gaps that currently make
+parts of the matrix unrunnable, and each names what unblocks.
+
+| # | task | exact target | what it unblocks |
+|---|---|---|---|
+| 1 | Confirm the v2 cycle table is the one to read | `MyDrive/thesis_colab/thesis_data_full_v2.zip` (293,475,431 B, present) contains `data/processed/cycles_490_v2.parquet` + `splits_locked_v2.json` + `holdout_manifest_v2.json` + `norm_stats_full_v2.json` | the whole farm-level matrix; the runner pins the hashes of the files it actually reads, so no separate checksum upload is needed |
+| 2 | Do **not** upload `thesis_data_full.zip` as a benchmark source | v1 stays as-is (historical comparison only) | keeps the v1↔v2 distinction honest — the benchmark reads v2 only |
+| 3 | Export and upload a **daily ERA5/weather sidecar** per farm-cycle (the W-axis input): `et0` (grass-reference ET), plus the fields already used by the platform channel list, at the same 15-day bin grid as the cycles | `MyDrive/thesis_colab/weather_daily_v2.zip` (naming to match `artifacts.weather_daily_v2`), or an added file inside the v2 zip + a one-line `amendments:` entry | I2/I3 with real weather, W1 vs W2 (gated late fusion), and the ETa/ETrF/CWSI_ET reference indices — today CWSI_ET is reported `unavailable` and ETa/ETrF fall back to `absent` because no ET0 series is bound |
+| 4 | Upload **labelled confirmed-anomaly / harvest-loss records** (field id, date range, type, source), if any exist outside the remote sensing archive | `MyDrive/thesis_colab/ground_labels_v2.zip` | the only way to test "synthetic anomaly ≠ confirmed stress": without it every index/arm agreement stays a remote-sensing-internal comparison, and the independence checks (`assert_not_circular`) have no real label source to point at |
+| 5 | Re-extract the **v2 patch store** + its `patch_sigma.npz`-class norm sidecar, or say "not this cycle" | `data/patch_runs/v3/patches.zarr` (+ sidecar) inside the v2 bundle | 30 `Deferred` patch-level cells (`reason = patch-v2-unbound`). Binding them is a config edit + matrix re-derivation, not code work; leaving them Deferred is a legitimate answer and the report states it |
+| 6 | Provide a **standalone `cycles_490_v2.parquet`** (or confirm the in-zip copy is authoritative) if the run is to be repeated from a laptop instead of Colab | `MyDrive/thesis_colab/cycles_490_v2.parquet` + `sha256` recorded in the run notes | local re-planning of the exact cells (the `--plan` path runs without data; a local *execute* needs the table) |
+| 7 | Decide the **T4 hour budget for the first launch** (contract says 6 h) | reply or edit `configs/benchmarks/benchmark_config.yaml → budget.t4_hours` **as a recorded amendment** | how much of the 297 pending cells fits per launch; overruns become `Deferred` with a reason, never silent truncation |
+| 8 | STL/decomposition feature table (finding-20 follow-up), if the phase-axis alternative is to be scored | `MyDrive/thesis_colab/stl_features_v2.zip` | the `PhaseAxis` alternative inputs (GDD/landmark) named in 6.2 — the DSH default needs nothing extra, so this is optional |
+| 9 | Bind the **B1 / GRU-AE incumbent checkpoint** (+ its `norm_stats.json` and config) if the incumbent is to appear as a reference arm | its path recorded in the run's `bindings.json` — the benchmark refuses a missing binding rather than retraining a stand-in | 8.4 reference arms + the 58 `B1`/`BL-*` matrix cells that are still `Pending` |
+| 10 | Confirm the **T4 hour budget** for the screening launch (contract: 6 h) | `budget.t4_hours` edit *as a recorded amendment* | how much of the 297 pending cells fits per launch; the excess becomes `Deferred` with a reason, never silent truncation |
+
+
+
+**Blocking minimum: 3 and 5** (item 9 only decides whether the incumbent appears as a reference row). With neither, the run still produces the primary
+paradigm/backbone/suppression comparison on I3/W0–W2-farm-level data, and the report prints the
+missing-coverage rows; nothing is silently substituted. Rows 1–2 need no action beyond a confirmation; 3–10 are decisions or uploads.
+
 
 **`cycle-detection-v3-multindex`** — ACTIVE, 26/27. The v2 producer; keep as-is. Only open item is the optional `--sweep`
 re-gate follow-up (gate FAILED → no switch; production path stays off). Owner call: pursue after the v2 store completes or close it.

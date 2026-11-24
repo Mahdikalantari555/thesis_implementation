@@ -1,0 +1,240 @@
+# Suppression applicability matrix — BINDING, committed before execution.
+#
+# change: benchmark-latent-reconstruction-prediction-architectures
+# task: 3.5 (spec anomaly-suppression-benchmark / "Explicit architecture applicability")
+#
+# Every (model, suppression) pair the matrix can generate appears here exactly
+# once, with status `applicable` or `not-applicable` and — for the latter — a
+# reason that a machine can quote. A not-applicable pair is NEVER substituted with
+# a different loss (research-integrity rule 11); the registry records the cell as
+# `Not Applicable` and the report lists it as such.
+#
+# `adapter` / `adapter_doc` on an applicable row means the pair is only valid
+# through that documented objective adapter — the adapter is part of the
+# pre-registration, not something an implementer may improvise mid-run.
+#
+# The four suppression configs (design §Anomaly suppression matrix):
+#   S0  baseline objective
+#   S1  soft suppression: bounded per-observation weights w in [w_min, 1],
+#       computed from a DETACHED or previous-epoch signal, never from the current
+#       residual alone (a self-reinforcing reweighting is the defect this row exists
+#       to prevent)
+#   S2  masked learning: controlled masking of CONTEXT bins, distinct from the
+#       mandatory missing-data handling
+#   S3  synthetic-anomaly suppression: contaminated training + suppression-aware
+#       learning, generator independent of the evaluation generator
+
+version: 1
+created: "2026-11-23"
+change: benchmark-latent-reconstruction-prediction-architectures
+pair_format: "<model-id>/<suppression-id>"
+
+pairs:
+  # ---------------------------------------------------------------- input recon
+  A1/S0: {status: applicable}
+  A1/S1:
+    status: applicable
+    weight_signal: "previous-epoch detached per-bin residual (epoch t-1 buffer)"
+    bound: [0.05, 1.0]
+  A1/S2:
+    status: applicable
+    note: "context bins zeroed with their value channels; observation masks retained"
+  A1/S3:
+    status: applicable
+  A2/S0: {status: applicable}
+  A2/S1:
+    status: applicable
+    weight_signal: "previous-epoch detached per-bin residual (epoch t-1 buffer)"
+    bound: [0.05, 1.0]
+  A2/S2: {status: applicable}
+  A2/S3: {status: applicable}
+
+  # ------------------------------------------------------- latent reconstruction
+  A3/S0: {status: applicable}
+  A3/S1:
+    status: applicable
+    weight_signal: "detached per-bin latent residual from the frozen target encoder"
+    bound: [0.1, 1.0]
+  A3/S2: {status: applicable}
+  A3/S3: {status: applicable}
+  A4/S0: {status: applicable}
+  A4/S1:
+    status: applicable
+    weight_signal: "detached per-bin latent residual from the frozen target encoder"
+    bound: [0.1, 1.0]
+  A4/S2: {status: applicable}
+  A4/S3: {status: applicable}
+
+  # --------------------------------------------------------- future prediction
+  A5/S0: {status: applicable}
+  A5/S1:
+    status: applicable
+    weight_signal: "previous-epoch detached per-horizon prediction residual"
+    bound: [0.05, 1.0]
+    note: >-
+      weights multiply the TARGET-bin loss only. Reweighting by the current
+      forward pass would make the estimator chase its own residuals, which is
+      exactly the non-reinforcing requirement of the spec.
+  A5/S2:
+    status: applicable
+    adapter: context_masking_only
+    adapter_doc: >-
+      S2 masks CONTEXT bins (replacing their value channels with the learned MASK
+      token) and leaves every prediction TARGET bin intact. Masking targets as
+      well would turn the arm into an imillator of input reconstruction and change
+      the estimand, so it is out of scope by definition of this adapter. The
+      loss denominators exclude any target bin whose observation mask is 0.
+  A5/S3: {status: applicable}
+  A6/S0: {status: applicable}
+  A6/S1:
+    status: applicable
+    weight_signal: "previous-epoch detached per-horizon prediction residual"
+    bound: [0.05, 1.0]
+  A6/S2:
+    status: applicable
+    adapter: context_masking_only
+    adapter_doc: >-
+      Same adapter as A5/S2: context-only masking, targets untouched.
+  A6/S3: {status: applicable}
+
+  # -------------------------------------------------------------------- JEPA
+  A7/S0: {status: applicable}
+  A7/S1:
+    status: applicable
+    weight_signal: "detached target-encoder latent residual (already gradient-free)"
+    bound: [0.1, 1.0]
+  A7/S2:
+    status: "not-applicable"
+    reason: >-
+      degenerate: the arm's pre-registered S0 objective already predicts the
+      latents of MASKED bins, so a masking ablation of A7 is the model itself and
+      carries no contrast. Recording it as `Not Applicable` (spec) is honest;
+      re-defining S2 for JEPA into something else would be a substitute loss.
+  A7/S3: {status: applicable}
+  A8/S0: {status: applicable}
+  A8/S1:
+    status: applicable
+    weight_signal: "detached target-encoder latent residual (already gradient-free)"
+    bound: [0.1, 1.0]
+  A8/S2:
+    status: "not-applicable"
+    reason: >-
+      degenerate, as for A7/S2: JEPA's S0 objective is masked latent prediction,
+      so the masking ablation is not a contrast.
+  A8/S3: {status: applicable}
+
+  # -------------------------------------------------------------------- hybrid
+  A9/S0: {status: applicable}
+  A9/S1:
+    status: applicable
+    weight_signal: "previous-epoch detached residual, shared across both loss terms"
+    bound: [0.05, 1.0]
+  A9/S2: {status: applicable}
+  A9/S3: {status: applicable}
+  A10/S0: {status: applicable}
+  A10/S1:
+    status: applicable
+    weight_signal: "previous-epoch detached residual, shared across both loss terms"
+    bound: [0.05, 1.0]
+  A10/S2: {status: applicable}
+  A10/S3: {status: applicable}
+
+  # ----------------------------------------------------------------- references
+  B1/S0:
+    status: applicable
+    note: "the incumbent phase-aware robust z-score rule; train-fitted threshold only"
+  B1/S1:
+    status: "not-applicable"
+    reason: >-
+      B1 is a fixed scoring rule with a train-only threshold: it has no loss to
+      reweight. Applying robustness weights to its z-scores would redefine the
+      baseline being compared against (integrity rule 6).
+  B1/S2:
+    status: "not-applicable"
+    reason: >-
+      B1 has no learned representation and no context window to mask; its inputs
+      are already the mask-aware bin medians. A "masked" B1 would be a different
+      rule, not a suppression ablation.
+  B1/S3:
+    status: "not-applicable"
+    reason: >-
+      nothing is fitted to the sample distribution beyond location/scale, so
+      "contaminated training" is not a meaningful arm; the contamination audit for
+      B1 is recorded as its robustness to the contaminated normalization statistics
+      in the generalization report, not as a suppression cell.
+  BL-RULE/S0: {status: applicable}
+  BL-RULE/S1:
+    status: "not-applicable"
+    reason: "threshold rule with no objective; same argument as B1/S1"
+  BL-RULE/S2:
+    status: "not-applicable"
+    reason: "no context encoder to mask; same argument as B1/S2"
+  BL-RULE/S3:
+    status: "not-applicable"
+    reason: "no fitted representation to contaminate; same argument as B1/S3"
+  A-RAND/S0:
+    status: applicable
+    note: "capacity control: random-init encoder of the same trunk, never trained"
+  A-RAND/S1:
+    status: "not-applicable"
+    reason: >-
+      the control is defined by the ABSENCE of training; suppression is a property
+      of a training procedure, so a suppressed random-init encoder is a
+      contradiction, not a control.
+  A-RAND/S2:
+    status: "not-applicable"
+    reason: "as A-RAND/S1: masking is a training-time intervention on an untrained arm"
+  A-RAND/S3:
+    status: "not-applicable"
+    reason: "as A-RAND/S1: contamination targets a fitted objective that does not exist"
+
+  # ------------------------------------------------------ classical baselines
+  BL-IF/S0: {status: applicable}
+  BL-IF/S1:
+    status: "not-applicable"
+    reason: >-
+      Isolation Forest's estimator is a random axis-split partition; sample
+      weights are not part of its definition, so a weighted variant is a different
+      estimator and would break the "same permitted data, no unequal budgets"
+      comparison (integrity rule 6).
+  BL-IF/S2:
+    status: "not-applicable"
+    reason: >-
+      the tabular baseline has no sequence context; "masking bins" means dropping
+      columns of its summary-feature vector, which is the I-axis ablation already
+      registered there and would be double-counted here.
+  BL-IF/S3:
+    status: applicable
+    coverage: contamination-only
+    note: >-
+      fit on the contaminated training partition; no suppression mechanism exists
+      for this estimator, so the cell measures contamination SENSITIVITY, not
+      suppression efficacy. The report must state that, per row.
+  BL-OCSVM/S0: {status: applicable}
+  BL-OCSVM/S1:
+    status: "not-applicable"
+    reason: >-
+      nu-OC-SVM's objective is a hard margin on the enclosing hypersphere with no
+      per-sample weight parameter; introducing one changes the estimator class.
+  BL-OCSVM/S2:
+    status: "not-applicable"
+    reason: "no temporal context in the summary-feature representation (as BL-IF/S2)"
+  BL-OCSVM/S3:
+    status: applicable
+    coverage: contamination-only
+    note: "contamination sensitivity only; no suppression mechanism exists"
+  BL-RPCA/S0: {status: applicable}
+  BL-RPCA/S1:
+    status: "not-applicable"
+    reason: >-
+      degenerate by construction: Robust PCA's sparse-outlier support term already
+      performs per-entry down-weighting of large residuals, i.e. it IS a hard
+      analogue of S1. Adding S1 on top would double-count the mechanism, so RPCA
+      is reported as the S1 reference row instead.
+  BL-RPCA/S2:
+    status: "not-applicable"
+    reason: "no context bins in a matrix factorisation of summary features (as BL-IF/S2)"
+  BL-RPCA/S3:
+    status: applicable
+    coverage: contamination-only
+    note: "contamination sensitivity only; RPCA's sparse term is not a suppression schedule"
