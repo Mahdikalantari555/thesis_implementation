@@ -70,6 +70,30 @@ each with a test now pinned to it:
    mirrors the exact matrix it bound to into the out dir, and a test asserts both the mirror and the
    audit's refusal of an unauditable run.
 
+7. **Three baselines that were one baseline.** `_run_reference` picked its estimator with
+   `transfer.get("fitter") or "robust_centre"` — and `assert_transfer` never returns a `fitter` key. So
+   Isolation Forest, One-Class SVM and robust PCA all fitted the same centre-and-spread rule, every
+   searched knob was ignored, and the fixture HPO run proved it: three arms, three different search
+   spaces, and *identical* scores to five decimals (0.02751). The estimator is now declared once, in
+   `suppression/classical.FITTERS`, next to the estimators; `FITTER_CONSUMED` states which knobs each
+   fitter reads; a selection key that no code consumes is a `RunPlanError` rather than a dropped
+   argument; and `run_hpo.py` skips an arm whose space its fitter cannot use and writes the reason into
+   `hpo_selection.json`. After the fix BL-IF = 0.0272 with `n_estimators=200, max_samples=0.8,
+   contamination=0.05` reaching the actual `IsolationForest`, BL-OCSVM = 0.0379, and BL-RPCA is recorded
+   as `SKIPPED — the 'rpca_pca' fitter reads ['contamination', 'n_components'] and nothing else, so
+   ['iters', 'lam'] could not be searched`. That last one is **an open contract problem, not a passing
+   test**: either the robust-PCA estimator grows a λ/iteration path or the space is amended; a silent
+   no-op search was the only thing worse than saying so.
+8. **A handoff the notebook promised and the code did not have.** Section 8 of the generated notebook
+   tells the owner that the winning configs join the run via `--selection-file`; no such flag existed,
+   and `RunOptions` had no selection field, so HPO output could only have been pasted by hand into the
+   frozen contract — which the contract forbids. `--selection-file` now exists end to end: it refuses a
+   file whose own split audit did not pass, refuses `d_model` (the capacity band is not searchable), and
+   applies each arm's config through the runner — structural keys into `build_arm`, optimisation keys
+   into a per-cell view of `training` (so the manifest's `optimizer.lr` is the lr that ran), reference
+   keys into the fitter — while every cell manifest records `selection_applied`. The selection is a
+   *layer*, recorded per cell; the contract keeps its hash.
+
 Two more were caught at the boundary between modules: `metrics.cell_metrics` had no per-farm output at
 all (so the bootstrap had nothing farm-level to resample), and `TensorFrame` carried no cycle dates (so
 V1's temporal-holdout assertion could not be evaluated — it now derives a monotone proxy from row order
@@ -119,7 +143,8 @@ and *states* that it did).
   second fixture run (`--out /tmp/cli_run2`) audited `complete: true` with `matrix.yaml` among the run
   files, and `collect → verify` is now a test, not a transcript.
 
-Unit battery: `tests/benchmarking/` **139 passed** (`--no-cov`). The rest of `tests/` is unchanged by
+Unit battery: `tests/benchmarking/` **142 passed** (`--no-cov`), including the
+`collect → verify → tamper` bundle round trip and the run-dir self-description check. The rest of `tests/` is unchanged by
 this work — `git diff HEAD` over tracked files is empty; every line of it is new files. (In this sandbox
 51 pre-existing failures / 31 collection errors remain in modules that do not import `benchmarking`;
 they are environment- and data-dependent and are reported rather than hidden.)
@@ -146,7 +171,14 @@ they are environment- and data-dependent and are reported rather than hidden.)
   `lr / weight_decay / batch_size / epochs / horizon_k / dropout / loss weights` instead; allowing it
   to move `d_model` would let an arm win by being bigger, so `run_hpo.py` drops the key from every
   space and says so in `hpo_selection.json`.
-* A partial bundle is a defect. There is no "upload it anyway and note the gaps later".
+* A partial bundle is a defect. There is no "upload it anyway and note the gaps later". Two
+  corollaries were needed to make that rule true rather than merely strict: the run directory carries
+  its own copy of the bound `matrix.yaml` (so a bundle describes itself without the repo), and
+  `meta.json`/`last.pt` are required as a **pair** only where a checkpoint can exist — a random-init
+  control or a fitted reference estimator trains nothing, so "no checkpoint" is a recorded design fact,
+  while a sidecar without its checkpoint is a truncated write and stays a defect.
+* `--plan` does not need a GPU (it trains nothing); requiring one made the laptop planning path die on
+  a device error before it could report the *real* blocker, which is the missing v2 artifact bindings.
 * `RunOptions.hpo` raises if set: the runner does not tune, so the flag would otherwise record an
   unsearched arm as searched.
 

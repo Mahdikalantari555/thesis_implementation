@@ -72,7 +72,9 @@ class SearchRecord:
     def to_dict(self) -> dict:
         return {"model_id": self.model_id, "split": self.split, "budget": dict(self.budget),
                 "n_trials": len(self.trials), "best": self.best.to_dict() if self.best else None,
-                "best_over": [t.to_dict() for t in self.trials],
+                # the full trace, not a summary: `audit_search` and any later reader must be
+                # able to check the split of *every* trial from the file alone
+                "trials": [t.to_dict() for t in self.trials],
                 "stopped_by": self.stopped_by, "notes": list(self.notes),
                 "selection_metric": self.budget.get("selection_metric"),
                 "validation_only": self.split in ("dev", "validation", "val")}

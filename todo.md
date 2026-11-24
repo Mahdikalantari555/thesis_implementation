@@ -189,8 +189,10 @@ checkpoints, stats, protocols, indices, hpo, runner, report, bundle), `configs/b
 (**`matrix.yaml` committed** — 357 cells, `matrix_sha256 03a7b6cd6c4f…`, Pending 297 / Deferred 30
 `patch-v2-unbound` / Not Applicable 30), `scripts/benchmarks/{run_benchmark,run_hpo,report_benchmark,
 bundle_benchmark,make_colab_notebook}.py`, `notebooks/benchmarks/architecture_comparison_benchmark.ipynb`
-(20 generated sections), `tests/benchmarking` **139 passed**, fixture+smoke end-to-end verified twice
-(18/20 and 16/20 Completed; the difference is the collapse gate firing on noise — see
+(20 generated sections), `tests/benchmarking` **142 passed**, fixture+smoke end-to-end verified twice
+(18/20 and 16/20 Completed; the difference is the collapse gate firing on noise), the reference arms
+(BL-IF/OCSVM/RPCA + A-RAND control) execute and bundle-audit clean, and `run_hpo.py` → `run_benchmark.py
+--selection-file` is a closed loop (see
 `docs/findings/27_benchmark_harness_local_gate.md`). **No scientific claim**: every manifest from a
 plumbing run carries `stamp = SMOKE FIXTURE` and `ladder_rung = L0`.
 1. Owner runs the notebook §9 (screening, T4) then §10 (full block, 3 seeds, `--resume`); the agent
@@ -222,8 +224,7 @@ parts of the matrix unrunnable, and each names what unblocks.
 | 8 | STL/decomposition feature table (finding-20 follow-up), if the phase-axis alternative is to be scored | `MyDrive/thesis_colab/stl_features_v2.zip` | the `PhaseAxis` alternative inputs (GDD/landmark) named in 6.2 — the DSH default needs nothing extra, so this is optional |
 | 9 | Bind the **B1 / GRU-AE incumbent checkpoint** (+ its `norm_stats.json` and config) if the incumbent is to appear as a reference arm | its path recorded in the run's `bindings.json` — the benchmark refuses a missing binding rather than retraining a stand-in | 8.4 reference arms + the 58 `B1`/`BL-*` matrix cells that are still `Pending` |
 | 10 | Confirm the **T4 hour budget** for the screening launch (contract: 6 h) | `budget.t4_hours` edit *as a recorded amendment* | how much of the 297 pending cells fits per launch; the excess becomes `Deferred` with a reason, never silent truncation |
-
-
+| 11 | Decide **BL-RPCA's search space**: either teach `suppression/classical.py:rpca_pca` to consume `lam`/`iters`, or amend `search.budgets.BL-RPCA.space` to the keys it reads (`n_components`) | an amendment entry in the contract (or an estimator change + re-verified matrix hash) | today `run_hpo.py` records BL-RPCA as `SKIPPED` rather than searching knobs no code reads; leaving it that way is a legitimate answer, silently tuning it is not |
 
 **Blocking minimum: 3 and 5** (item 9 only decides whether the incumbent appears as a reference row). With neither, the run still produces the primary
 paradigm/backbone/suppression comparison on I3/W0–W2-farm-level data, and the report prints the

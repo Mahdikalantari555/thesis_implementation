@@ -55,12 +55,26 @@ def make_probe(cfg, app, cells, a, mid: str):
 
     def evaluate(cfg_dict: dict) -> tuple[float, dict]:
         raw = copy.deepcopy(cfg.raw)
+        # only the keys that live in `training` are written there; the rest travel as a
+        # selection, and `_TRAIN_KEYS` is what keeps a searched `n_estimators` from being
+        # smuggled into the torch config as an unknown field
         raw.setdefault("training", {}).update(
             {k: v for k, v in cfg_dict.items() if k in _TRAIN_KEYS})
         probe = dataclasses.replace(cfg, raw=raw)
+        # A reference arm does not live in the screening block, so forcing --tier here would plan
+        # no cell and every trial would "fail" for a reason that has nothing to do with the model.
+        # The probe instead asks the committed matrix which tier/block the arm is actually in.
+        home = next((c for c in cells if c.model_id == mid and c.status == "Pending"), None)
+        if home is None:
+            raise RuntimeError(f"{mid}: no Pending cell in the committed matrix — an arm with no "
+                               "planned cell cannot be searched, and pretending otherwise would "
+                               "record a selection that was never evaluated")
+        # the trial's config is applied through the runner's selection layer, so what is
+        # scored is exactly what would be run — not a training loop that ignores the search
         opts = RunOptions(base=Path(a.data_root or a.base), out=Path(a.out) / mid / f"t{evaluate.n}",
-                          tier=a.tier, fixture=True, smoke=True, epochs=a.epochs, limit=1,
-                          model_ids=(mid,), batch_size=a.batch_size)
+                          tier=home.tier, blocks=(home.block,), fixture=True, smoke=True,
+                          epochs=a.epochs, limit=1, model_ids=(mid,), batch_size=a.batch_size,
+                          selection={mid: dict(cfg_dict)})
         evaluate.n += 1
         r = BenchmarkRunner(probe, app, cells, opts)
         r.prepare()
@@ -120,19 +134,45 @@ def main(argv: list[str] | None = None) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     records = []
+    skipped: dict[str, dict] = {}
     for mid in arms:
         budget = hpo.budget_for(cfg, mid)
-        space = budget["space"]
+        # The edit happens on the *contract's* space, before parsing. Feeding the parsed
+        # representation back through `budget_for` would double-parse it — and `parse_space`
+        # rightly refuses an already-parsed spec, because a space that fails to parse is
+        # sampled as nothing, which is how an arm gets reported as "tuned" with no tuning.
+        raw_space = dict((cfg.raw["search"]["budgets"][mid] or {}).get("space") or {})
         # d_model is *not* searchable here. The parameter band (capacity.target_params and
         # the min/max ratios) is what makes the arms comparable, and it is chosen by
         # capacity.tuning over the pre-registered grid; letting HPO move d_model as well
         # would let an arm win by being bigger. So the key is dropped, and the drop is
         # reported rather than quietly forgotten.
-        dropped = sorted(k for k in space if k == "d_model")
-        space = {k: v for k, v in space.items() if k not in dropped}
+        dropped = sorted(k for k in raw_space if k == "d_model")
+        space = {k: v for k, v in raw_space.items() if k not in dropped}
         if not space:
             raise SystemExit(f"{mid}: its declared space is only capacity dimensions, which HPO may not "
                              "move; nothing to search")
+        if set(space) != set(budget["space"]) - set(dropped):
+            raise SystemExit(f"{mid}: the contract space and the parsed space disagree — "
+                             "a key would be searched that no one declared")
+        if mid in (cfg.baselines or []) and mid != "A-RAND":
+            # A reference arm's space is only real if its estimator reads the keys. Searching
+            # `lam`/`iters` against an SVD-based robust PCA that accepts neither would spend
+            # trials to produce a "best config" that changes nothing, so the arm is skipped
+            # and the reason is written into the selection file instead of being swallowed.
+            from ssl_anomaly.suppression import classical
+            stray = classical.unconsumed(mid, space)
+            if stray:
+                skipped[mid] = {
+                    "reason": f"the {classical.FITTERS.get(mid)!r} fitter reads "
+                              f"{sorted(classical.FITTER_CONSUMED.get(classical.FITTERS.get(mid), frozenset()))} "
+                              f"and nothing else, so {stray} could not be searched",
+                    "unconsumed_keys": stray,
+                    "fix": "extend suppression/classical.py to consume these knobs, or amend "
+                           "benchmark_config.yaml's space for this arm — a recorded amendment, not a drop",
+                }
+                print(f"[hpo] {mid}: SKIPPED — {skipped[mid]['reason']}", file=sys.stderr)
+                continue
         if not a.fixture:
             raise SystemExit(
                 f"{mid}: refusing to search against the real archive without --fixture — a search on "
@@ -154,7 +194,10 @@ def main(argv: list[str] | None = None) -> int:
 
     audit = hpo.audit_search(records)
     selection = {r.model_id: (dict(r.best.config) if r.best else None) for r in records}
+    for mid in skipped:
+        selection[mid] = None
     doc = {"equal_budgets": eq, "audit": audit, "selection": selection,
+           "skipped": skipped,
            "split": a.split, "trials_per_arm": a.trials or eq["trials_per_arm"],
            "epochs_per_trial": a.epochs, "probe_tier": a.tier,
            "applied_by": ("run_benchmark.py --selection-file <this file> (a selection layer, not an "

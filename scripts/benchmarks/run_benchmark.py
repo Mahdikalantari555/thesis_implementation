@@ -76,12 +76,45 @@ def _profile_hours(path: Path | None) -> dict[str, float]:
     return {str(k): float(v) for k, v in est.items()}
 
 
+def _read_selection(path: str | None) -> dict[str, dict] | None:
+    """`hpo_selection.json` → the per-arm overrides, with the file's own honesty checked first.
+
+    The audit check is not ceremony: a selection produced by a search that peeked at `test`
+    would otherwise be applied to every cell of the real run, and the leak would be two
+    modules away from where it happened.
+    """
+    if not path:
+        return None
+    doc = json.loads(Path(path).read_text())
+    audit = doc.get("audit") or {}
+    if audit.get("ok") is not True:
+        raise SystemExit(f"{path}: the search's own audit did not pass (ok={audit.get('ok')!r}, "
+                         f"violations={audit.get('violations')!r}) — a selection is only as clean as "
+                         "the split it was chosen on")
+    sel = {k: dict(v) for k, v in (doc.get("selection") or {}).items() if v}
+    if not sel:
+        raise SystemExit(f"{path}: no arm carries a selection — either every search failed (see "
+                         "hpo_table.md) or the file is the wrong one")
+    bad = {k: sorted(kk for kk in v if kk == "d_model") for k, v in sel.items()
+           if any(kk == "d_model" for kk in v)}
+    if bad:
+        raise SystemExit(f"{path}: selection carries capacity key(s) for {sorted(bad)} — d_model is "
+                         "fixed by capacity tuning so the arms stay comparable; run_hpo drops it and "
+                         "this file should not contain it")
+    stamp = doc.get("warning") or ""
+    print(f"[run] applying HPO selection for {len(sel)} arm(s) from {path}"
+          + (f" — {stamp}" if stamp else ""), file=sys.stderr)
+    return sel
+
+
 def build_runner(a, cfg, app, cells) -> BenchmarkRunner:
     opts = RunOptions(
         base=Path(a.data_root or a.base), out=Path(a.out), tier=a.tier or None,
         blocks=_csv(a.block), model_ids=_csv(a.model_ids), seeds=_csv_ints(a.seeds),
+        selection=_read_selection(a.selection_file),
         limit=a.limit, epochs=a.epochs, resume=a.resume, smoke=a.smoke, fixture=a.fixture,
-        dry_run=a.dry_run, hpo=a.hpo, hpo_trials=a.hpo_trials,
+        allow_cpu_training=a.allow_cpu_training,
+        dry_run=bool(a.dry_run or getattr(a, "plan", False)), hpo=a.hpo, hpo_trials=a.hpo_trials,
         matrix_path=Path(a.matrix_path) if a.matrix_path else (
             COMMITTED_MATRIX if COMMITTED_MATRIX.is_file() else None),
     )
@@ -114,6 +147,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--smoke", action="store_true", help="tiny run, stamped as plumbing evidence")
     ap.add_argument("--fixture", action="store_true", help="synthetic panel instead of the v2 archive")
+    ap.add_argument("--selection-file", default=None,
+                    help="hpo_selection.json from scripts/benchmarks/run_hpo.py — applies each arm's "
+                         "searched hyperparameters as a selection layer on top of the frozen contract. "
+                         "Refused if the file's own split audit did not pass, or if it carries d_model")
+    ap.add_argument("--allow-cpu-training", action="store_true",
+                    help="train on CPU anyway. Meant for the reference arms (IF/OC-SVM/RPCA fit on "
+                         "CPU by design) and for plumbing proofs: a full torch block on a laptop "
+                         "would burn hours to produce nothing citable, so the default is to refuse")
     ap.add_argument("--hpo", action="store_true", help="run the per-arm equal-budget search first")
     ap.add_argument("--hpo-trials", type=int, default=None)
     ap.add_argument("--profile", default=None, help="run_summary.json to take wall-time estimates from")

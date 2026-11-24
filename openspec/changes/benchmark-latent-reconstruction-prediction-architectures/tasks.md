@@ -93,7 +93,7 @@ exact command/notebook written out → `--resume` verified. Laptop budget for de
 
 - [ ] 8.1 Isolation Forest, 8.2 One-Class SVM, 8.3 Robust PCA behind the common
       interface; 8.4 GRU-AE/B1 references reused; 8.5 input-compatibility
-      documentation; 8.6 common-evaluation smoke. *IF / OC-SVM / Robust-Covariance PCA + random/chance references behind the common interface, input-compatibility table (`arms.COMPATIBLE_INPUTS`) and smoke-runnable. **8.4 B1 reference is not wired to the incumbent checkpoint** and 8.6's common-evaluation smoke did not include any reference arm — the 58 `B1`/`BL-*` matrix cells are still `Pending`.*
+      documentation; 8.6 common-evaluation smoke. *IF / OC-SVM / robust-PCA + the random-init capacity control run behind the common interface (verified on the fixture: `--tier full --block references_trained` → 2 Completed, `--block capacity_control` → 2 Completed, `bundle_benchmark.py --audit` complete). Each reference arm now uses its own declared fitter (`suppression.classical.FITTERS`); before that fix all three fitted the same robust-centre rule and reported identical scores. **8.4 stays open**: B1 is the phase-aware z-score rule here, not the incumbent checkpoint, and nothing has run against the real archive — the 58 `B1`/`BL-*` cells remain `Pending`. Also open: `BL-RPCA`'s declared space (`lam`, `iters`) is not read by the implemented estimator, so HPO refuses to search it instead of reporting a tuned arm that was not.*
 
 ## Phase 9 — Validation protocols and metrics
 
@@ -120,7 +120,7 @@ exact command/notebook written out → `--resume` verified. Laptop budget for de
 - [ ] 11.1 Per-architecture search spaces + equal budget table committed;
       11.2 validation-only selection verified by test (selection code path
       rejects test split); 11.3 parameter- and 11.4 compute-matched
-      configurations; 11.5 FLOPs/runtime recorded; 11.6 no-test-tuning audit. *spaces + equal-budget table committed, `d_model` removed from every space (it is the capacity knob), selection-on-forbidden-split refused at selection *and* re-checked by `audit_search`, params/FLOPs recorded. 11.3/11.4 (matched configurations chosen by a *real* search) need the owner's T4 HPO run; `run_hpo.py --fixture --smoke` only proves the plumbing and stamps itself L0.*
+      configurations; 11.5 FLOPs/runtime recorded; 11.6 no-test-tuning audit. *spaces + equal-budget table committed, `d_model` removed from every space (it is the capacity knob), selection-on-forbidden-split refused at selection *and* re-checked by `audit_search`, params/FLOPs recorded. 11.3/11.4 are now a closed loop: `run_hpo.py` writes `hpo_selection.json` and `run_benchmark.py --selection-file` applies it per arm (structural keys to `build_arm`, optimisation keys to a per-cell `training` view, reference keys to the fitter), with `selection_applied` recorded in every cell manifest — a layer on top of the frozen contract, never an edit to it. Still open: the search has only been executed on the fixture at 1-epoch probes (13 arms, `audit.ok: true`, `violations: []`), `BL-RPCA` is recorded `SKIPPED` (its knobs are not read by the implemented robust-PCA), and the parameter/compute-matched configurations the real run will use are owner-executed work.*
 
 ## Phase 12 — Budget-aware execution
 

@@ -130,6 +130,48 @@ def robust_centre(x: np.ndarray, weights: np.ndarray | None = None) -> tuple[np.
     return centre, scale
 
 
+#: which estimator each pre-registered reference arm actually is. The mapping lives here,
+#: next to the estimators, because a runner that guessed it (``transfer.get("fitter") or
+#: "robust_centre"``) silently fitted the same centre-spread rule for IF, OCSVM and RPCA
+#: alike — three "baselines" that were one baseline, with every searched knob ignored.
+FITTERS: dict[str, str] = {
+    "B1": "robust_centre",
+    "BL-RULE": "fixed_rule",
+    "BL-IF": "sklearn_isolation_forest",
+    "BL-OCSVM": "sklearn_one_class_svm",
+    "BL-RPCA": "rpca_pca",
+}
+#: the search-space keys each fitter reads. Anything else in a selection is refused, not dropped:
+#: a knob that no code consumes turns a "tuned" arm into an untuned one wearing a tuned label.
+FITTER_CONSUMED: dict[str, frozenset[str]] = {
+    "robust_centre": frozenset(),
+    "fixed_rule": frozenset(),
+    "sklearn_isolation_forest": frozenset({"n_estimators", "max_samples", "contamination"}),
+    "sklearn_one_class_svm": frozenset({"nu", "gamma", "kernel", "contamination"}),
+    "rpca_pca": frozenset({"n_components", "contamination"}),
+}
+
+
+def fitter_for(model_id: str) -> str:
+    """The estimator id for a reference arm; an unmapped arm is an error, not a default."""
+    try:
+        return FITTERS[model_id]
+    except KeyError:
+        raise TransferError(
+            f"{model_id!r} is not mapped to a fitter in `suppression.classical.FITTERS` "
+            f"(known: {sorted(FITTERS)}); guessing one would run an arm under an estimator the "
+            "contract never named"
+        ) from None
+
+
+def unconsumed(model_id: str, keys) -> list[str]:
+    """Searched keys this arm's fitter will ignore — the contract's space, audited."""
+    kind = FITTERS.get(model_id)
+    if kind is None:
+        return sorted(set(keys))
+    return sorted(set(keys) - FITTER_CONSUMED.get(kind, frozenset()))
+
+
 def fit_score(
     kind: str, x_train: np.ndarray, x_score: np.ndarray, *,
     weights: np.ndarray | None = None, contamination: float | None = None,
@@ -191,6 +233,9 @@ def fit_score(
         if kind == "sklearn_isolation_forest":
             kw = dict(n_estimators=int(p.get("n_estimators", 200)), random_state=int(seed),
                       contamination=float(contamination) if contamination is not None else "auto")
+            if p.get("max_samples") is not None:      # sklearn accepts a float fraction or an int
+                ms = p["max_samples"]
+                kw["max_samples"] = int(ms) if isinstance(ms, int) or float(ms) >= 1 else float(ms)
             if weights is not None:
                 raise TransferError(
                     "Isolation Forest accepts no per-sample weight; S1 is recorded not_applicable "

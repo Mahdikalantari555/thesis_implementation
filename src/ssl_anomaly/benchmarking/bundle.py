@@ -122,6 +122,23 @@ def audit_cell(run_dir: Path, *, require: tuple[str, ...] = CELL_REQUIRED) -> Ce
         for hk in ("data_sha256", "panel_labels_sha256"):
             if not data.get(hk):
                 man_missing.append(f"data.{hk}")
+        # `meta.json` + `last.pt` are the checkpoint *pair* (checkpoints.SIDECAR_NAME), and a
+        # pair only exists where a checkpoint exists. A random-init control or a fitted
+        # reference estimator trains nothing, so it has neither: that is a design fact, not a
+        # defect. Exactly one of the two, however, is — a sidecar without a checkpoint is a
+        # truncated write, and a bundle must not publish one quietly.
+        pair = ("meta.json", "last.pt")
+        have = [n for n in pair if (run_dir / n).is_file()]
+        if len(have) == 1:
+            orphan = [n for n in pair if n not in have][0]
+            if orphan not in missing:
+                missing.append(orphan)
+            notes.append(f"checkpoint pair incomplete: {have[0]} exists without {orphan}")
+        elif not have and str(man.get("checkpoint") or "saved") != "saved":
+            missing = [n for n in missing if n not in pair]
+            present_note = (f"no checkpoint recorded: the manifest declares "
+                            f"checkpoint={man.get('checkpoint')!r}, so nothing was trained to resume")
+            notes.append(present_note)
         if man.get("stamp"):
             notes.append(f"stamped: {man['stamp']}")
         if (man.get("pool_disjointness") or {}).get("disjoint") is False:

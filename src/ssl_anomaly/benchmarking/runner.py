@@ -59,6 +59,25 @@ from ssl_anomaly.benchmarking import synthetic as _syn
 from ssl_anomaly.benchmarking.config import ARCHITECTURES, BenchmarkConfig
 from ssl_anomaly.benchmarking.matrix import ExperimentCell, status_counts
 
+#: keys that define the parameter band — fixed by capacity tuning, never by HPO
+CAPACITY_KEYS = frozenset({"d_model"})
+
+#: what an arm's constructor accepts (mirrors `arms._arm_kwargs`). A searched key outside both
+#: this set and `_TRAIN_KEYS` is refused rather than dropped: a config nobody consumes is how an
+#: arm ends up recorded as "tuned at lr=…" while it was trained at the contract default.
+_ARM_KEYS = frozenset({
+    "n_bins", "d_model", "n_layers", "dropout", "d_state", "latent_dim", "huber_beta",
+    "horizon_k", "ema_momentum", "variance_weight", "lambda_rec", "lambda_pred", "backbone",
+    "bottleneck_frac", "mask_rate",
+})
+#: the optimisation-side keys, applied per cell inside `_train`
+_TRAIN_KEYS = frozenset({"lr", "weight_decay", "batch_size", "epochs", "warmup_epochs",
+                         "eval_every_epochs", "grad_clip", "optimizer"})
+#: keys the classical reference fitters take (see `suppression.classical.fit_score`)
+_REF_KEYS = frozenset({"n_estimators", "max_samples", "contamination", "nu", "gamma", "lam",
+                       "iters"})
+
+
 SMOKE_STAMP = "SMOKE FIXTURE — plumbing evidence only, not a scientific result"
 
 #: Mamba id → its GRU twin, for the feasibility gate (measured inside the same run).
@@ -90,6 +109,10 @@ class RunOptions:
     hpo: bool = False
     hpo_trials: int | None = None
     matrix_path: Path | None = None
+    #: per-arm hyperparameters chosen by `scripts/benchmarks/run_hpo.py`, as
+    #: ``{model_id: {key: value}}``. A selection layer, never a contract edit: the frozen
+    #: config keeps its hash, and every cell manifest records what was applied on top of it.
+    selection: dict[str, dict] | None = None
 
     @property
     def is_smoke(self) -> bool:
@@ -288,7 +311,10 @@ class BenchmarkRunner:
                               "self-description")
         self.registry.register(self.cells, matrix_sha256=self.matrix_sha)
 
-        self.device = _env.detect_device(self.cfg, require=(not o.allow_cpu_training and not o.is_smoke))
+        # a plan is not a training run: requiring CUDA here would make `--plan` unusable on the
+        # laptop where the owner decides what to send to Colab
+        self.device = _env.detect_device(self.cfg, require=(not o.allow_cpu_training and
+                                                            not o.is_smoke and not o.dry_run))
         self.budget = _env.BudgetMeter(float(self.cfg.raw["budget"]["t4_hours"]))
         self.bindings = _bind.verify_bindings(
             self.cfg, base=o.base, matrix_sha256=self.matrix_sha,
@@ -545,6 +571,9 @@ class BenchmarkRunner:
 
         rdir = _ck.run_dir(self.out / "runs", cell.experiment_id, cell.seed)
         rdir.mkdir(parents=True, exist_ok=True)
+        # per-cell, not per-run: a cell that never trains must not inherit the previous cell's
+        # effective training block, or its manifest would report an lr it never used
+        self._eff = None
         notes: list[str] = list(self.frame.notes)
         if o.is_smoke:
             notes.append(SMOKE_STAMP)
@@ -553,6 +582,22 @@ class BenchmarkRunner:
         tensors = self.tensors[cell.input]
         d_ch = int(bundle.tensors.n_channels)
         d_cv = int(bundle.tensors.cov.shape[-1])
+        # Which kind of cell this is must be decided *before* an arm is built: a classical
+        # reference has no torch arm to construct, and building one first made every B1/BL-*
+        # cell die in the arm factory with "not one of the pre-registered arms" — 58 matrix
+        # cells failing for a reason that had nothing to do with their design.
+        is_ref = cell.model_id in self.cfg.baselines and cell.model_id != "A-RAND"
+        is_control = cell.model_id == "A-RAND"
+        if is_ref:
+            metrics, cost, notes = self._run_reference(cell, rdir, notes)
+            self._retire(cell, "Completed", None, rdir, metrics={
+                "macro_auprc": (metrics.get("macro") or {}).get("macro"),
+                "cells_used": (metrics.get("macro") or {}).get("n_cells_used"),
+                "wall_seconds": round(time.time() - t_start, 2)})
+            self._wall[cell.model_id] = time.time() - t_start
+            return CellResult(cell.experiment_id, "Completed", None, time.time() - t_start,
+                              metrics, cost, rdir, notes)
+
         arm = self._build_arm(cell, d_ch, d_cv)
         arm.set_suppression(cell.suppression, self._suppression_params(cell))
         spec = _jsonable(arm.objective_spec())
@@ -560,10 +605,8 @@ class BenchmarkRunner:
         if probs:
             raise RunPlanError(f"objective audit failed for {cell.experiment_id}: {probs}")
 
-        is_ref = cell.model_id in self.cfg.baselines and cell.model_id != "A-RAND"
-        is_control = cell.model_id == "A-RAND"
         trainable = arm.trainable_parameter_report()
-        if trainable["trainable_params"] == 0 and not (is_ref or is_control):
+        if trainable["trainable_params"] == 0 and not is_control:
             raise RunPlanError(f"{cell.model_id} has 0 trainable parameters — refusing to train a frozen arm")
 
         if is_control:
@@ -575,7 +618,20 @@ class BenchmarkRunner:
             notes.append(
                 "A-RAND: parameters frozen at initialisation and never stepped — this cell measures what "
                 "the trunk's structure alone yields, which is the point of the capacity control")
-            self._write_artifacts(rdir, arm, cell, [], metrics, cost,
+            # The bundle rule is complete-or-defect, and `MINIMUM_RUN_FILES` is the same for a
+            # control cell as for a trained one — so the control writes the two side-cars it
+            # legitimately has, with the reason recorded, instead of leaving an "incomplete run
+            # dir" that looks like a training failure.
+            (rdir / "progress.jsonl").write_text(json.dumps(
+                {"epoch": 0, "backend": "untrained_random_init", "wall_s": 0.0,
+                 "note": "no optimisation step is taken; the score is the trunk's random structure"})
+                + "\n", encoding="utf-8")
+            (rdir / "norm_stats.json").write_text(json.dumps(
+                {"available": False,
+                 "reason": "random-init control: nothing was fitted, so there are no learned "
+                           "per-channel statistics to report",
+                 "data_sha256": self.hashes.get("data_sha256")}, indent=1), encoding="utf-8")
+            self._write_artifacts(rdir, cell, arm, [], metrics, cost,
                                   {"verdict": "not_applicable_by_construction",
                                    "reasons": ["random-init control: no representation is learned"]},
                                   notes, cal_fit=cal_fit, thr=thr, scores_bin=scores_bin, chan=chan)
@@ -587,9 +643,7 @@ class BenchmarkRunner:
             return CellResult(cell.experiment_id, "Completed", None, time.time() - t_start,
                               metrics, cost, rdir, notes)
 
-        if is_ref:
-            metrics, cost, notes = self._run_reference(cell, rdir, notes)
-        else:
+        if True:  # references returned above; everything left trains a torch arm
             if cell.suppression == "S3":
                 tensors = self._contaminated_tensors(cell, tensors)
                 notes.append(
@@ -637,6 +691,34 @@ class BenchmarkRunner:
                                  manifest=str(rdir / "run_manifest.json"), metrics=metrics or {})
 
     # -- components --------------------------------------------------------
+    #: the training block a cell actually optimised with (None = contract defaults, untrained)
+    _eff: dict | None = None
+
+    def _selection_for(self, model_id: str) -> dict:
+        """The searched config for this arm, or {} when it runs at contract defaults.
+
+        Refusing a capacity key here is the point: `d_model` is what the ±20 % band fixes, so a
+        selection that moved it would let an arm win by being bigger than its twin.
+        """
+        sel = (self.opts.selection or {}).get(model_id) or {}
+        is_ref = model_id in self.cfg.baselines and model_id != "A-RAND"
+        allowed = set(_ARM_KEYS) | set(_TRAIN_KEYS) | (set(_REF_KEYS) if is_ref else set())
+        stray = sorted(set(sel) - allowed)
+        if stray:
+            raise RunPlanError(
+                f"{model_id}: the selection carries {stray}, which nothing in this runner reads"
+                + ("" if is_ref else " (a reference arm is not searched through torch keys)")
+                + "; applying it silently would record the arm as tuned at settings it never used"
+            )
+        bad = sorted(k for k in sel if k in CAPACITY_KEYS)
+        if bad:
+            raise RunPlanError(
+                f"{model_id}: the selection carries capacity key(s) {bad}; the parameter band is set by "
+                "capacity tuning over the pre-registered grid and HPO may not move it, or the arms stop "
+                "being comparable"
+            )
+        return dict(sel)
+
     def _build_arm(self, cell: ExperimentCell, d_ch: int, d_cv: int):
         from ssl_anomaly.models.bench.arms import build_arm
 
@@ -645,17 +727,26 @@ class BenchmarkRunner:
         ov: dict[str, Any] = {}
         if cap.get("d_model"):
             ov["d_model"] = int(cap["d_model"])
-        lam_key, block_labels = str(cell.variant or "base"), ("base", "screen")
+        lam_key = str(cell.variant or "base")
         variants = t.get("lambda_variants") or {}
-        if lam_key not in block_labels and lam_key not in variants:
+        # The authority for "which variants exist" is the committed matrix, not a hardcoded
+        # label list: the capacity-control block legitimately names `rand_gru`/`rand_mamba`,
+        # and a check that only knows the λ blocks would fail every control cell for a reason
+        # that has nothing to do with the control. A variant that appears *nowhere* in the
+        # matrix is still a refusal, because that is a hand-edited cell.
+        declared = {str(c.variant or "base") for c in self.cells if c.block == cell.block}
+        if lam_key not in declared and lam_key not in variants:
             raise RunPlanError(
-                f"cell {cell.experiment_id} names variant {lam_key!r}, which is neither a block label "
-                f"{list(block_labels)} nor a key of training.lambda_variants {sorted(variants)}; a "
-                "mis-spelled λ variant must not silently train at the defaults"
+                f"cell {cell.experiment_id} names variant {lam_key!r}, which the committed matrix "
+                f"never declares for block {cell.block!r} (it declares {sorted(declared)}) and which "
+                "is not a key of training.lambda_variants "
+                f"{sorted(variants)}; a mis-spelled λ variant must not silently train at the defaults"
             )
         if lam_key in variants:
             lam = variants[lam_key]
             ov.update(lambda_rec=float(lam["lambda_rec"]), lambda_pred=float(lam["lambda_pred"]))
+        sel = self._selection_for(cell.model_id)
+        ov.update({k: v for k, v in sel.items() if k in _ARM_KEYS})
         return build_arm(cell.model_id, cfg=self.cfg, d_channels=d_ch, d_cov=d_cv,
                          variant=lam_key if lam_key in variants else "base", **ov)
 
@@ -692,7 +783,13 @@ class BenchmarkRunner:
     def _train(self, cell: ExperimentCell, arm, tensors: dict, rdir: Path, notes: list[str]) -> list[dict]:
         import torch
 
-        o, t = self.opts, self.cfg.raw["training"]
+        o = self.opts
+        # per-cell view of the training block: `t` is read for lr / weight_decay / batch_size /
+        # epochs throughout this method, so applying the selection once here means every one of
+        # those reads — and the manifest that records them — sees the searched value
+        t = {**self.cfg.raw["training"],
+             **{k: v for k, v in self._selection_for(cell.model_id).items() if k in _TRAIN_KEYS}}
+        self._eff = t
         bs = int(o.batch_size or t.get("batch_size", 32))
         ep_full = int(t.get("epochs_full", 40))
         ep_screen = int(self.cfg.raw["budget"].get("max_epochs_screening", 6))
@@ -1172,6 +1269,7 @@ class BenchmarkRunner:
 
     # -- classical references ----------------------------------------------
     def _run_reference(self, cell: ExperimentCell, rdir: Path, notes: list[str]) -> tuple[dict, dict, list[str]]:
+        from ssl_anomaly.suppression import classical
         from ssl_anomaly.suppression.classical import assert_transfer, fit_score
 
         row_app = (self.app.get("pairs") or {}).get(f"{cell.model_id}/{cell.suppression}", {}) or {}
@@ -1182,7 +1280,15 @@ class BenchmarkRunner:
                 f"({transfer['reason']}) — the two authorities disagree and neither may be overridden silently"
             )
         notes.append(f"suppression transfer for {cell.model_id}: {transfer['mode']}")
-        kind = transfer.get("fitter") or "robust_centre"
+        kind = classical.fitter_for(cell.model_id)
+        stray = classical.unconsumed(cell.model_id, self._selection_for(cell.model_id))
+        if stray:
+            raise RunPlanError(
+                f"{cell.experiment_id}: the selection carries {stray}, which the {kind!r} fitter does "
+                f"not read ({sorted(classical.FITTER_CONSUMED.get(kind, frozenset())) or 'no knobs'}); "
+                "searching a knob that no code consumes records an arm as tuned while it ran at "
+                "defaults — extend the estimator or amend the contract's space, do not drop the key"
+            )
         ch = tuple(self.frame.channel_names)
         ev = self.eval_idx
         tr = self.train_idx
@@ -1191,10 +1297,21 @@ class BenchmarkRunner:
         contamination = (float(self.cfg.raw["synthetic"]["test_prevalence"])
                          if transfer["mode"] in ("contamination_param", "nu_param") else None)
         t0 = time.time()
-        _s_fit, rec = fit_score(kind, xt, xt[:8], contamination=contamination,
-                               params={"channel_names": ch, "n_estimators": 100}, seed=int(cell.seed))
-        s_ev, rec2 = fit_score(kind, xt, xe, contamination=contamination,
-                               params={"channel_names": ch, "n_estimators": 100}, seed=int(cell.seed))
+        # the searched knobs have to reach the fitter. Hard-coding `n_estimators` here made
+        # every BL-* trial identical — the search would then report an arm as "tuned" with
+        # zero tuning done, which is the exact failure this module's error messages warn about.
+        sel = self._selection_for(cell.model_id)
+        ref_params = {"channel_names": ch}
+        ref_params.update({k: v for k, v in sel.items() if k != "contamination"})
+        # an explicit selection outranks the contract's prevalence-derived default; the *source*
+        # is recorded because "which contamination did this baseline use" changes the score
+        contam = sel.get("contamination", contamination)
+        contam_source = ("selection" if "contamination" in sel else
+                         ("contract_test_prevalence" if contamination is not None else "none"))
+        _s_fit, rec = fit_score(kind, xt, xt[:8], contamination=contam,
+                               params=ref_params, seed=int(cell.seed))
+        s_ev, rec2 = fit_score(kind, xt, xe, contamination=contam,
+                               params=ref_params, seed=int(cell.seed))
         wall = time.time() - t0
         T = int(self.frame.x.shape[1])
         scores_bin = np.full((self.frame.n, T), np.nan)
@@ -1211,9 +1328,15 @@ class BenchmarkRunner:
         metrics = self._metrics_for(cell, scores_bin, np.full(self.frame.n, np.nan), thr)
         metrics["level_note"] += "; this estimator scores cycles, not bins"
         cost = {"params": 0, "fit_record": _jsonable(rec2), "train_wall_seconds": _round(wall),
+                "contamination_source": contam_source,
+                "contamination": _round(contam) if contam is not None else None,
+                "fitter": kind, "selection_applied": sel or None,
                 "device": "cpu", "why_cpu": self.device.cpu_reason if self.device else None,
                 "flops": {"note": "analytic convention is defined for the A-arms only"}}
         manifest = {
+            # a fitted reference estimator has no checkpoint to resume; recording that fact is
+            # what lets the bundle audit distinguish "nothing to save" from "save was lost"
+            "checkpoint": "none",
             "experiment_id": cell.experiment_id, "cell_hash": cell.cell_hash, "seed": cell.seed,
             "factors": _factors(cell), "benchmark_config_sha256": self.cfg.document_sha256,
             "matrix_sha256": self.matrix_sha, "data": self.hashes,
@@ -1245,6 +1368,11 @@ class BenchmarkRunner:
                          collapse_rep, notes, *, cal_fit=None, thr=None, scores_bin=None,
                          chan=None) -> None:
         manifest = {
+            # whether a checkpoint exists must be stated, not inferred: a random-init
+            # control trains nothing, so it has no `last.pt`, and a filename rule that
+            # demands one would turn a design fact into a bundle defect
+            "checkpoint": "saved" if (rdir / "last.pt").is_file() else "none",
+            "selection_applied": self._selection_for(cell.model_id) or None,
             "experiment_id": cell.experiment_id, "cell_hash": cell.cell_hash, "seed": cell.seed,
             "factors": _factors(cell), "priority": cell.priority, "tier": cell.tier, "block": cell.block,
             "benchmark_config_sha256": self.cfg.document_sha256, "matrix_sha256": self.matrix_sha,
@@ -1267,10 +1395,11 @@ class BenchmarkRunner:
                                              "cell has the same budget as one that never crashed, so "
                                              "counting only the last invocation would understate it"),
                          "history_tail": _jsonable((list(getattr(self, "_prior_history", [])) + hist)[-12:]),
-                         "early_stop": self.cfg.raw["training"].get("early_stop"),
-                         "optimizer": {"name": self.cfg.raw["training"].get("optimizer"),
-                                       "lr": float(self.cfg.raw["training"].get("lr", 2e-3)),
-                                       "weight_decay": float(self.cfg.raw["training"].get("weight_decay", 1e-5)),
+                         "early_stop": (self._eff or self.cfg.raw["training"]).get("early_stop"),
+                         "optimizer": {"name": (self._eff or self.cfg.raw["training"]).get("optimizer"),
+                                       "lr": float((self._eff or self.cfg.raw["training"]).get("lr", 2e-3)),
+                                       "weight_decay": float((self._eff or self.cfg.raw["training"])
+                                                              .get("weight_decay", 1e-5)),
                                        "betas": [0.9, 0.999], "eps": 1e-8,
                                        "grad_clip_norm": float(self.cfg.raw["training"].get("grad_clip_norm", 1.0))},
                          "objective_audit": self.objective_audit["problems"]},
