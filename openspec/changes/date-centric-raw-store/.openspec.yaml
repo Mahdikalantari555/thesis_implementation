@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-11-24
+goal: Preserve full temporal/pixel fidelity while keeping cycle-centric as a
+  derived view; enable irregular time-series models and short-stress detection.
