@@ -1,0 +1,70 @@
+{
+  "schema": "mini-representation-first-pilot/v1",
+  "created_utc": "2026-11-24T18:58:08.901026+00:00",
+  "git_sha": "d60963e00121b60ac39015c3fb67511e30a63b64",
+  "data_source": "D:\\RS\\Thesis\\Data\\Processed\\mini_research_dataset",
+  "claim_rung": "L2",
+  "claim_note": "Suspected weak labels; no stress or generalization claim.",
+  "n_windows": 6120,
+  "n_features": 20,
+  "n_suspected_windows": 895,
+  "prevalence": 0.14624183006535948,
+  "train_rule": "year < 2023",
+  "test_rule": "year >= 2023",
+  "cysp_rg": {
+    "ssl": {
+      "r_at_1": 0.0869,
+      "n_queries": 2520
+    },
+    "raw": {
+      "r_at_1": 0.0492,
+      "n_queries": 2520
+    },
+    "gain": 0.0377,
+    "shuffled_year_control": 0.9994
+  },
+  "cysp_rg_random_init": {
+    "ssl": {
+      "r_at_1": 0.0476,
+      "n_queries": 2520
+    },
+    "raw": {
+      "r_at_1": 0.0492,
+      "n_queries": 2520
+    },
+    "gain": -0.0016,
+    "shuffled_year_control": 0.9992
+  },
+  "probe_ssl_embedding": {
+    "auprc": 0.3266,
+    "prevalence": 0.1468,
+    "n_test": 2520,
+    "n_positive_test": 370
+  },
+  "probe_raw_features": {
+    "auprc": 0.4981,
+    "prevalence": 0.1468,
+    "n_test": 2520,
+    "n_positive_test": 370
+  },
+  "probe_random_embedding": {
+    "auprc": 0.3014,
+    "prevalence": 0.1468,
+    "n_test": 2520,
+    "n_positive_test": 370
+  },
+  "collapse": {
+    "effective_rank": 1.888,
+    "mean_pairwise_cosine": 0.0225,
+    "per_dim_std_min": 0.17982,
+    "per_dim_std_max": 0.50968
+  },
+  "label_source": "D:\\RS\\Thesis\\Data\\Processed\\mini_research_dataset\\suspected_stress\\suspected_patches.parquet",
+  "embeddings": "D:\\RS\\Thesis\\thesis_implementation\\reports\\mini_dataset\\representation_first_pilot_embeddings.npz",
+  "caveats": [
+    "CWSI_ET shared-input with LST; ETaDaily is a METRIC model product.",
+    "Suspicion is not stress; no water/salinity typing.",
+    "3 adjacent farms only; no geographic generalization claim."
+  ],
+  "wall_s": 170.02
+}

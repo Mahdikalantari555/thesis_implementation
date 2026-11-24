@@ -1,0 +1,32 @@
+# Smoke configuration: light, CPU, single-farm protocol.
+name: mini_smoke
+store_root: "D:/RS/Thesis/Data/Processed/mini_research_dataset"
+representation:
+  spatial: full_field
+  temporal: sliding
+  window_length: 60
+  stride: 60
+  include_delta_t: true
+  include_indices: true
+  weather_group: weather_core
+protocol:
+  name: single_farm
+  train_farms: ["R12-08"]
+  test_farms: ["R12-06", "R12-10"]
+  holdout_boundary: "2025-01-01"
+  justification: "First day of last complete calendar year before partial 2026 (season_structure.json); configurable."
+model:
+  name: gru_ae
+  d_model: 16
+  latent_dim: 8
+  n_layers: 1
+  dropout: 0.1
+  epochs: 2
+  batch_size: 8
+  lr: 0.001
+  seeds: [13, 42]
+  device: auto
+out_root: "D:/RS/Thesis/Data/Processed/mini_research_dataset/experiments"
+resume: false
+n_trials: 2
+claim_rung: L2

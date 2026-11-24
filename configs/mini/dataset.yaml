@@ -1,0 +1,52 @@
+# Mini research dataset — frozen preparation config.
+# See docs/mini_research_dataset.md for the evidence behind these values.
+schema: mini-dataset-v1
+
+farms:
+  geojson: "D:/RS/Thesis/Data/RoI/Farms.geojson"
+  names: ["R12-06", "R12-08", "R12-10"]
+  ogc_fid: {"R12-06": 244, "R12-08": 245, "R12-10": 246}
+  crs: "EPSG:32639"
+  pixel_size_m: 30.0
+
+dates:
+  source: "D:/RS/Thesis/Data/Processed/satellite/scene_inventory.parquet"
+  column: "acquisition_date"
+  expected_count: 538
+  first: "2013-03-30"
+  last: "2026-09-10"
+
+scenes:
+  root: "D:/RS/Thesis/Data/Metric/scenes"
+  pattern: "landsat_{ymd}_*"
+  bands:
+    blue: "blue.tif"
+    green: "green.tif"
+    red: "red.tif"
+    nir: "nir08.tif"
+    swir1: "swir16.tif"
+    swir2: "swir22.tif"
+    lst: "lwir11.tif"
+  quality: "qa_pixel.tif"
+  scale:
+    reflectance_factor: 0.0000275
+    reflectance_offset: -0.2
+    temperature_factor: 0.00341802
+    temperature_offset: 149.0
+
+weather:
+  aligned: "D:/RS/Thesis/Data/Processed/weather/weather_aligned.parquet"
+  hourly: "D:/RS/Thesis/Data/Weather/raw/point_01_raw_hourly.parquet"
+  gdd_base_c: 10.0
+  heat_stress_threshold_c: 35.0
+
+output:
+  root: "D:/RS/Thesis/Data/Processed/mini_research_dataset"
+  satellite_store: "satellite.zarr"
+  weather_dir: "weather"
+  validation_dir: "validation"
+  splits_dir: "splits"
+
+zarr:
+  format: 2
+  consolidated: true

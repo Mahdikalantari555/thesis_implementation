@@ -22,6 +22,7 @@ application.
 | `regional-ssl-representation-evaluation` | 15/42 | PROPOSED — the capstone | Level-1/Level-2 evaluation of a light regional SSL representation; five-level ladders; pre-registered gates G-A…G-E; owner decisions registered 2026-11-23 (advantage = undecided; priority = both + applied ambition; Madeline path = tracked future change) |
 | `benchmark-latent-reconstruction-prediction-architectures` | 0/37 | PROPOSED — heavy counterpart | Architecture/suppression/synthetic breadth benchmark (Colab T4, budget-aware); feeds the capstone, no capstone gate depends on it |
 | `cycle-detection-v3-multindex` | 26/27 | ACTIVE — v2 producer; nearly closed | Only open item is an optional follow-up: the gate FAILED, so no switch; production path stays off; owner call whether to re-gate with `--sweep` after the v2 store completes |
+| `mini-research-dataset` | 28/28 | COMPLETE — additive three-farm lab (apply done, not archived) | 3 farms (R12-06/08/10), 538 real scene dates; configurable protocols, spatial/temporal reprs and 9-architecture registry; no claim beyond L2 |
 
 ## Dormant — unapplied, await owner decision
 

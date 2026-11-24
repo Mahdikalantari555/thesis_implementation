@@ -1,0 +1,252 @@
+{
+  "schema": "mini-experiment-report/v1",
+  "experiment": "mini_smoke",
+  "generated_utc": "2026-11-24T17:11:19Z",
+  "git_sha": "d60963e00121b60ac39015c3fb67511e30a63b64",
+  "data_source": "D:\\RS\\Thesis\\Data\\Processed\\mini_research_dataset",
+  "source_manifest": {
+    "mini_manifest_sha256": "218b6158a0dfd2f3c861019ef175c85d031f29f6b84b3410bf41a20814172469",
+    "git_sha": "d60963e00121b60ac39015c3fb67511e30a63b64",
+    "date_list_sha256": "8688c5c163202c659e9da88a69afd91c1997afaedc12201da1b2f4dd8f4fca5f",
+    "n_dates": 538,
+    "first_date": "2013-03-30",
+    "last_date": "2026-09-10",
+    "weather_group": "weather_core"
+  },
+  "config": {
+    "name": "mini_smoke",
+    "store_root": "D:\\RS\\Thesis\\Data\\Processed\\mini_research_dataset",
+    "representation": {
+      "spatial": "full_field",
+      "patch_sizes": [
+        3,
+        5,
+        7
+      ],
+      "max_pixels": 64,
+      "min_valid_fraction": 0.5,
+      "temporal": "sliding",
+      "window_length": 60,
+      "stride": 60,
+      "sample_step": 2,
+      "include_delta_t": true,
+      "include_indices": true,
+      "weather_group": "weather_core"
+    },
+    "protocol": {
+      "name": "single_farm",
+      "train_farms": [
+        "R12-08"
+      ],
+      "test_farms": [
+        "R12-06",
+        "R12-10"
+      ],
+      "holdout_boundary": "2025-01-01",
+      "justification": "First day of last complete calendar year before partial 2026 (season_structure.json); configurable."
+    },
+    "model": {
+      "name": "gru_ae",
+      "d_model": 16,
+      "latent_dim": 8,
+      "n_layers": 1,
+      "dropout": 0.1,
+      "epochs": 2,
+      "batch_size": 8,
+      "lr": 0.001,
+      "seeds": [
+        13,
+        42
+      ],
+      "device": "auto"
+    },
+    "out_root": "D:\\RS\\Thesis\\Data\\Processed\\mini_research_dataset\\experiments",
+    "resume": false,
+    "n_trials": 2,
+    "mlflow_experiment": "mini-research-dataset",
+    "claim_rung": "L2"
+  },
+  "model_spec": {
+    "name": "gru_ae",
+    "family": "reconstruction",
+    "placement": "laptop",
+    "source": "models/gru_ae.py",
+    "available": true,
+    "note": ""
+  },
+  "seeds": [
+    13,
+    42
+  ],
+  "device": "cpu",
+  "n_seeds": 2,
+  "n_rotations": 1,
+  "claim_rung": "L2",
+  "claim_note": "Screening evidence only. No stress, generalization or baseline-superiority claim.",
+  "holdout_boundary": "2025-01-01",
+  "holdout_justification": "First day of last complete calendar year before partial 2026 (season_structure.json); configurable.",
+  "valid_patch_counts": {},
+  "metric_tracks": {
+    "reconstruction": [
+      "loss",
+      "clean_score_mean",
+      "deviated_score_mean",
+      "synthetic_deviation_auprc"
+    ],
+    "representation": [
+      "clean_score_mean",
+      "deviated_score_mean",
+      "synthetic_deviation_auprc"
+    ]
+  },
+  "aggregate": {
+    "clean_score": {
+      "mean": 1.151472568511963,
+      "std": 0.02899909019470215,
+      "n": 2
+    },
+    "deviated_score": {
+      "mean": 1.1704173684120178,
+      "std": 0.02377718687057495,
+      "n": 2
+    },
+    "synthetic_auprc": {
+      "mean": 0.5732109677488361,
+      "std": 0.003894135378510355,
+      "n": 2
+    },
+    "step_reference_auprc": {
+      "mean": 0.6487445735706961,
+      "std": 0.0,
+      "n": 2
+    },
+    "random_init_auprc": {
+      "mean": 0.5723449346931262,
+      "std": 0.007179450362016171,
+      "n": 2
+    },
+    "loss": {
+      "mean": 1.1187775,
+      "std": 0.02307349999999997,
+      "n": 2
+    }
+  },
+  "per_seed": [
+    {
+      "schema": "mini-run/v1",
+      "protocol": "single",
+      "seed": 13,
+      "model": "gru_ae",
+      "family": "reconstruction",
+      "param_count": 7306,
+      "n_train_units": 8,
+      "n_test_units": 16,
+      "train_date_range": [
+        "2013-03-30",
+        "2025-09-23"
+      ],
+      "test_date_range": [
+        "2013-03-30",
+        "2025-09-23"
+      ],
+      "train_farms": [
+        "R12-08"
+      ],
+      "test_farms": [
+        "R12-06",
+        "R12-10"
+      ],
+      "split_sha256": {
+        "train": "23960b10480e4fe8",
+        "test": "d203561866767011"
+      },
+      "losses": [
+        1.142774,
+        1.141851
+      ],
+      "clean_score_mean": 1.180471658706665,
+      "deviated_score_mean": 1.1941945552825928,
+      "synthetic_deviation_auprc": 0.5693168323703257,
+      "step_reference_auprc": 0.6487445735706961,
+      "random_init_auprc": 0.56516548433111,
+      "baseline_note": "Balanced clean/deviated sets (prevalence 0.5 by construction); random-init encoder and step detector are references, not trained models.",
+      "synthetic_deviation_note": "Controlled one-channel NDVI drop on held-out windows only; evidence for L2 controlled deviation, NOT stress detection.",
+      "n_imputed_features": 39,
+      "valid_patch_counts": {},
+      "device": "cpu",
+      "wall_s": 3.45,
+      "git_sha": "d60963e00121b60ac39015c3fb67511e30a63b64",
+      "data_source": "D:\\RS\\Thesis\\Data\\Processed\\mini_research_dataset",
+      "holdout_boundary": "2025-01-01",
+      "holdout_justification": "First day of last complete calendar year before partial 2026 (season_structure.json); configurable.",
+      "claim_rung": "L2",
+      "checkpoint": "D:\\RS\\Thesis\\Data\\Processed\\mini_research_dataset\\experiments\\mini_smoke\\single\\seed_13\\last.pt",
+      "progress": "D:\\RS\\Thesis\\Data\\Processed\\mini_research_dataset\\experiments\\mini_smoke\\single\\seed_13\\progress.jsonl"
+    },
+    {
+      "schema": "mini-run/v1",
+      "protocol": "single",
+      "seed": 42,
+      "model": "gru_ae",
+      "family": "reconstruction",
+      "param_count": 7306,
+      "n_train_units": 8,
+      "n_test_units": 16,
+      "train_date_range": [
+        "2013-03-30",
+        "2025-09-23"
+      ],
+      "test_date_range": [
+        "2013-03-30",
+        "2025-09-23"
+      ],
+      "train_farms": [
+        "R12-08"
+      ],
+      "test_farms": [
+        "R12-06",
+        "R12-10"
+      ],
+      "split_sha256": {
+        "train": "23960b10480e4fe8",
+        "test": "d203561866767011"
+      },
+      "losses": [
+        1.109494,
+        1.095704
+      ],
+      "clean_score_mean": 1.1224734783172607,
+      "deviated_score_mean": 1.1466401815414429,
+      "synthetic_deviation_auprc": 0.5771051031273464,
+      "step_reference_auprc": 0.6487445735706961,
+      "random_init_auprc": 0.5795243850551424,
+      "baseline_note": "Balanced clean/deviated sets (prevalence 0.5 by construction); random-init encoder and step detector are references, not trained models.",
+      "synthetic_deviation_note": "Controlled one-channel NDVI drop on held-out windows only; evidence for L2 controlled deviation, NOT stress detection.",
+      "n_imputed_features": 39,
+      "valid_patch_counts": {},
+      "device": "cpu",
+      "wall_s": 0.23,
+      "git_sha": "d60963e00121b60ac39015c3fb67511e30a63b64",
+      "data_source": "D:\\RS\\Thesis\\Data\\Processed\\mini_research_dataset",
+      "holdout_boundary": "2025-01-01",
+      "holdout_justification": "First day of last complete calendar year before partial 2026 (season_structure.json); configurable.",
+      "claim_rung": "L2",
+      "checkpoint": "D:\\RS\\Thesis\\Data\\Processed\\mini_research_dataset\\experiments\\mini_smoke\\single\\seed_42\\last.pt",
+      "progress": "D:\\RS\\Thesis\\Data\\Processed\\mini_research_dataset\\experiments\\mini_smoke\\single\\seed_42\\progress.jsonl"
+    }
+  ],
+  "optuna": {
+    "study_name": "no-name-7e45914a-2996-40f5-8c82-a496285b4dcf",
+    "n_trials": 2,
+    "best_params": {
+      "lr": 0.003185589124093264
+    },
+    "best_value": 1.0851770639419556,
+    "values": [
+      1.1381527185440063,
+      1.0851770639419556
+    ]
+  },
+  "wall_s": 9.5,
+  "output_dir": "D:\\RS\\Thesis\\Data\\Processed\\mini_research_dataset\\experiments"
+}

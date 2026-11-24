@@ -553,3 +553,27 @@ two experiments.
    - Resume task 6.2 (single-change model tuning until plateau) — paused because the primary metric had no dynamic range at 1×MAD; tuning on it optimizes noise.
    - Tasks 11.1–11.6 (skill adoption: scholar-evaluation, literature-review/citation-management, scientific-writing, benchmark-methodology/eval-harness, mle-workflow) — pending user approval (11.6 installs skills locally).
    - Optional: winter-harvest segmentation tuning (findings 14/15 follow-up); `openspec archive wire-platform-to-real-data` still pending after its item 1 lands.
+
+## Owner-requested extension (2026-11-24) — representation-first recovery
+
+- **Scope recorded before implementation.** Source: owner message after the mini pilot failed to
+  beat simple references; full research memo in
+  `thesis_research/SSL_Proposal/02_representation_first_recovery_plan.md`.
+- **No gate modification.** This is exploratory and additive to the registered capstone change
+  `regional-ssl-representation-evaluation`; G-A…G-E, H1–H5 and the frozen splits stay unchanged.
+- **New primary metric:** Cross-Year Same-Phase Retrieval Gain (CYSP-RG) — ΔR@1 of frozen SSL
+  embeddings vs raw vectors, leave-one-year-out, positives = same farm + same phenological stage
+  in other years, hard negatives = same farm/different stage and different farm/same stage,
+  with shuffled-year negative control and random-init encoder control.
+- **Suspected-stress labelling (new, additive):** per-pixel/patch graded labels sampled from real
+  METRIC products on the mini grid (CWSI_ET + ETaDaily deficit, train-years-only baseline,
+  S1–S4 stage conditioning, ≥2 acquisitions). Always "suspected", never stress; CWSI equifinality
+  disclosed; no water/salinity typing.
+- **Simple model on those labels:** logistic/2-layer MLP on frozen embeddings vs matched raw/B1
+  baselines; AUPRC + prevalence + label-efficiency + ECE; strict (no ETa/CWSI input) and disclosed
+  proxy arms reported separately.
+- **Open questions to surface to owner before scaling beyond the mini store:**
+  1. Which held-out year for LOYO on the 490-field archive (and is it inside train+dev only)?
+  2. Accept CWSI age-tiered thresholds (young 0.40–0.45 / old 0.30–0.35) for *suspicion* only?
+  3. Should suspected-pixel outputs be written to `Data/Processed/` (additive) with no platform wiring?
+  4. L4 evidence path (ECe / expert review) still unresolved — blocks any stress claim.

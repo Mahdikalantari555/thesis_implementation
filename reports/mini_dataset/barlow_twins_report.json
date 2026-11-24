@@ -1,0 +1,252 @@
+{
+  "schema": "mini-experiment-report/v1",
+  "experiment": "mini_smoke",
+  "generated_utc": "2026-11-24T17:11:34Z",
+  "git_sha": "d60963e00121b60ac39015c3fb67511e30a63b64",
+  "data_source": "D:\\RS\\Thesis\\Data\\Processed\\mini_research_dataset",
+  "source_manifest": {
+    "mini_manifest_sha256": "218b6158a0dfd2f3c861019ef175c85d031f29f6b84b3410bf41a20814172469",
+    "git_sha": "d60963e00121b60ac39015c3fb67511e30a63b64",
+    "date_list_sha256": "8688c5c163202c659e9da88a69afd91c1997afaedc12201da1b2f4dd8f4fca5f",
+    "n_dates": 538,
+    "first_date": "2013-03-30",
+    "last_date": "2026-09-10",
+    "weather_group": "weather_core"
+  },
+  "config": {
+    "name": "mini_smoke",
+    "store_root": "D:\\RS\\Thesis\\Data\\Processed\\mini_research_dataset",
+    "representation": {
+      "spatial": "full_field",
+      "patch_sizes": [
+        3,
+        5,
+        7
+      ],
+      "max_pixels": 64,
+      "min_valid_fraction": 0.5,
+      "temporal": "sliding",
+      "window_length": 60,
+      "stride": 60,
+      "sample_step": 2,
+      "include_delta_t": true,
+      "include_indices": true,
+      "weather_group": "weather_core"
+    },
+    "protocol": {
+      "name": "single_farm",
+      "train_farms": [
+        "R12-08"
+      ],
+      "test_farms": [
+        "R12-06",
+        "R12-10"
+      ],
+      "holdout_boundary": "2025-01-01",
+      "justification": "First day of last complete calendar year before partial 2026 (season_structure.json); configurable."
+    },
+    "model": {
+      "name": "barlow_twins",
+      "d_model": 16,
+      "latent_dim": 8,
+      "n_layers": 1,
+      "dropout": 0.1,
+      "epochs": 2,
+      "batch_size": 8,
+      "lr": 0.001,
+      "seeds": [
+        13,
+        42
+      ],
+      "device": "auto"
+    },
+    "out_root": "D:\\RS\\Thesis\\Data\\Processed\\mini_research_dataset\\experiments_barlow_twins",
+    "resume": false,
+    "n_trials": 2,
+    "mlflow_experiment": "mini-research-dataset",
+    "claim_rung": "L2"
+  },
+  "model_spec": {
+    "name": "barlow_twins",
+    "family": "representation",
+    "placement": "laptop",
+    "source": "models/rst_bt.py",
+    "available": true,
+    "note": ""
+  },
+  "seeds": [
+    13,
+    42
+  ],
+  "device": "cpu",
+  "n_seeds": 2,
+  "n_rotations": 1,
+  "claim_rung": "L2",
+  "claim_note": "Screening evidence only. No stress, generalization or baseline-superiority claim.",
+  "holdout_boundary": "2025-01-01",
+  "holdout_justification": "First day of last complete calendar year before partial 2026 (season_structure.json); configurable.",
+  "valid_patch_counts": {},
+  "metric_tracks": {
+    "reconstruction": [
+      "loss",
+      "clean_score_mean",
+      "deviated_score_mean",
+      "synthetic_deviation_auprc"
+    ],
+    "representation": [
+      "clean_score_mean",
+      "deviated_score_mean",
+      "synthetic_deviation_auprc"
+    ]
+  },
+  "aggregate": {
+    "clean_score": {
+      "mean": 0.30540303885936737,
+      "std": 0.014070257544517517,
+      "n": 2
+    },
+    "deviated_score": {
+      "mean": 0.3780905306339264,
+      "std": 0.0035611391067504883,
+      "n": 2
+    },
+    "synthetic_auprc": {
+      "mean": 0.6635030863533019,
+      "std": 0.01797635613907167,
+      "n": 2
+    },
+    "step_reference_auprc": {
+      "mean": 0.6487445735706961,
+      "std": 0.0,
+      "n": 2
+    },
+    "random_init_auprc": {
+      "mean": 0.6677057684839731,
+      "std": 0.007766729563956021,
+      "n": 2
+    },
+    "loss": {
+      "mean": 0.8491375000000001,
+      "std": 0.0959775,
+      "n": 2
+    }
+  },
+  "per_seed": [
+    {
+      "schema": "mini-run/v1",
+      "protocol": "single",
+      "seed": 13,
+      "model": "barlow_twins",
+      "family": "representation",
+      "param_count": 7762,
+      "n_train_units": 8,
+      "n_test_units": 16,
+      "train_date_range": [
+        "2013-03-30",
+        "2025-09-23"
+      ],
+      "test_date_range": [
+        "2013-03-30",
+        "2025-09-23"
+      ],
+      "train_farms": [
+        "R12-08"
+      ],
+      "test_farms": [
+        "R12-06",
+        "R12-10"
+      ],
+      "split_sha256": {
+        "train": "23960b10480e4fe8",
+        "test": "d203561866767011"
+      },
+      "losses": [
+        0.708116,
+        0.75316
+      ],
+      "clean_score_mean": 0.29133278131484985,
+      "deviated_score_mean": 0.3745293915271759,
+      "synthetic_deviation_auprc": 0.6814794424923736,
+      "step_reference_auprc": 0.6487445735706961,
+      "random_init_auprc": 0.6754724980479292,
+      "baseline_note": "Balanced clean/deviated sets (prevalence 0.5 by construction); random-init encoder and step detector are references, not trained models.",
+      "synthetic_deviation_note": "Controlled one-channel NDVI drop on held-out windows only; evidence for L2 controlled deviation, NOT stress detection.",
+      "n_imputed_features": 39,
+      "valid_patch_counts": {},
+      "device": "cpu",
+      "wall_s": 3.44,
+      "git_sha": "d60963e00121b60ac39015c3fb67511e30a63b64",
+      "data_source": "D:\\RS\\Thesis\\Data\\Processed\\mini_research_dataset",
+      "holdout_boundary": "2025-01-01",
+      "holdout_justification": "First day of last complete calendar year before partial 2026 (season_structure.json); configurable.",
+      "claim_rung": "L2",
+      "checkpoint": "D:\\RS\\Thesis\\Data\\Processed\\mini_research_dataset\\experiments_barlow_twins\\mini_smoke\\single\\seed_13\\last.pt",
+      "progress": "D:\\RS\\Thesis\\Data\\Processed\\mini_research_dataset\\experiments_barlow_twins\\mini_smoke\\single\\seed_13\\progress.jsonl"
+    },
+    {
+      "schema": "mini-run/v1",
+      "protocol": "single",
+      "seed": 42,
+      "model": "barlow_twins",
+      "family": "representation",
+      "param_count": 7762,
+      "n_train_units": 8,
+      "n_test_units": 16,
+      "train_date_range": [
+        "2013-03-30",
+        "2025-09-23"
+      ],
+      "test_date_range": [
+        "2013-03-30",
+        "2025-09-23"
+      ],
+      "train_farms": [
+        "R12-08"
+      ],
+      "test_farms": [
+        "R12-06",
+        "R12-10"
+      ],
+      "split_sha256": {
+        "train": "23960b10480e4fe8",
+        "test": "d203561866767011"
+      },
+      "losses": [
+        0.958149,
+        0.945115
+      ],
+      "clean_score_mean": 0.3194732964038849,
+      "deviated_score_mean": 0.3816516697406769,
+      "synthetic_deviation_auprc": 0.6455267302142302,
+      "step_reference_auprc": 0.6487445735706961,
+      "random_init_auprc": 0.6599390389200172,
+      "baseline_note": "Balanced clean/deviated sets (prevalence 0.5 by construction); random-init encoder and step detector are references, not trained models.",
+      "synthetic_deviation_note": "Controlled one-channel NDVI drop on held-out windows only; evidence for L2 controlled deviation, NOT stress detection.",
+      "n_imputed_features": 39,
+      "valid_patch_counts": {},
+      "device": "cpu",
+      "wall_s": 0.14,
+      "git_sha": "d60963e00121b60ac39015c3fb67511e30a63b64",
+      "data_source": "D:\\RS\\Thesis\\Data\\Processed\\mini_research_dataset",
+      "holdout_boundary": "2025-01-01",
+      "holdout_justification": "First day of last complete calendar year before partial 2026 (season_structure.json); configurable.",
+      "claim_rung": "L2",
+      "checkpoint": "D:\\RS\\Thesis\\Data\\Processed\\mini_research_dataset\\experiments_barlow_twins\\mini_smoke\\single\\seed_42\\last.pt",
+      "progress": "D:\\RS\\Thesis\\Data\\Processed\\mini_research_dataset\\experiments_barlow_twins\\mini_smoke\\single\\seed_42\\progress.jsonl"
+    }
+  ],
+  "optuna": {
+    "study_name": "no-name-5e2d4c90-c1d8-4353-a4eb-e60f528a496f",
+    "n_trials": 2,
+    "best_params": {
+      "lr": 0.0046302641253237265
+    },
+    "best_value": 1.0290461778640747,
+    "values": [
+      1.0503402948379517,
+      1.0290461778640747
+    ]
+  },
+  "wall_s": 9.11,
+  "output_dir": "D:\\RS\\Thesis\\Data\\Processed\\mini_research_dataset\\experiments_barlow_twins"
+}
