@@ -8,17 +8,26 @@ explicit, verbose verdict that says whether more training is needed.
 
 ## ADDED Requirements
 
-### Requirement: Plateau-driven stopping on a validation split
+### Requirement: Plateau-driven stopping on a multi-signal guard set (r2)
 
 The trainer SHALL evaluate every `eval_every` steps on a validation split
-disjoint from the test split and SHALL stop when the relative improvement over
-the best value stays below `min_rel_delta` for `patience` consecutive
-evaluations AND the EMA-smoothed validation slope over the last `window`
-evaluations is not steeper than `min_rel_delta / window`, after `min_steps`.
+disjoint from the test split and SHALL apply the plateau rule (relative
+improvement below `min_rel_delta` for `patience` consecutive evaluations AND an
+EMA-smoothed slope over the last `window` evaluations not steeper than
+`min_rel_delta / window`, after `min_steps`) to each guard signal separately —
+every individual objective's validation loss and the pre-registered primary
+probe metric — and SHALL NOT use the weighted total loss as the sole stopping
+signal. It SHALL stop when all guard signals have plateaued, or when the
+primary probe metric has plateaued and no objective is still improving beyond
+threshold.
 
 #### Scenario: Plateau stops early
-- **WHEN** the validation loss stops improving by more than 0.5 % for 8 evaluations and the smoothed slope is flat
+- **WHEN** every objective and the primary probe metric stop improving by more than 0.5 % for 8 evaluations with flat smoothed slopes
 - **THEN** training stops before the step cap with verdict `CONVERGED_PLATEAU`
+
+#### Scenario: Total loss flat, one objective still improving
+- **WHEN** the weighted total has plateaued but the forecast loss is still improving beyond threshold
+- **THEN** training continues
 
 #### Scenario: Noise does not stop training
 - **WHEN** the patience counter is reached but the smoothed slope is still clearly negative
@@ -83,3 +92,43 @@ their trained twin.
 #### Scenario: Two arms plateau at different steps
 - **WHEN** arm A plateaus at 2,000 steps and arm B at 6,000
 - **THEN** the report shows both arms at their plateau and both at 2,000 steps
+
+### Requirement: Per-objective and representation-quality monitoring (r2)
+
+At every evaluation the trainer SHALL log each objective's validation loss
+separately (reconstruction, forecast, JEPA, Barlow on- and off-diagonal
+terms), the effective rank of the embeddings, the fraction of embedding
+dimensions with std above a floor and the off-diagonal covariance energy; and
+every `probe_every` evaluations it SHALL run a fixed-budget frozen-encoder
+evaluation on the validation split (linear probe of season phase and next-
+observation NDVI, same-field-same-phase kNN retrieval, gap reconstruction from
+the frozen latent) and a stability check (linear CKA to the previous probe
+checkpoint, top-K score-rank correlation).
+
+#### Scenario: Probe logged
+- **WHEN** a probe evaluation runs
+- **THEN** its metrics appear in `progress.jsonl` and in the verbose line with the probe checkpoint step
+
+### Requirement: Objective-conflict guard (r2)
+
+The trainer SHALL flag `OBJECTIVE_CONFLICT` whenever any objective regresses
+more than `max_obj_regress` relative to its best value while the total
+improves, SHALL print the flag, SHALL make that checkpoint ineligible for
+`best.pt`, and SHALL stop for owner review if the conflict persists for
+`patience` evaluations.
+
+#### Scenario: Improving total hides a degrading objective
+- **WHEN** the total loss falls while the JEPA loss rises 8 % above its best
+- **THEN** the evaluation is flagged and its checkpoint cannot be selected as best
+
+### Requirement: Eligibility-filtered checkpoint selection (r2)
+
+`best.pt` SHALL be the checkpoint with the best pre-registered primary probe
+metric among checkpoints with no collapse flag, no objective conflict and every
+objective within `max_obj_regress` of its best; `best_loss.pt` (lowest total
+loss) and `last.pt` SHALL also be kept, and the eligibility log SHALL be
+written to the run manifest.
+
+#### Scenario: Lowest-loss checkpoint is collapsed
+- **WHEN** the lowest-total-loss checkpoint has effective rank below the floor
+- **THEN** it is saved as `best_loss.pt` but not as `best.pt`

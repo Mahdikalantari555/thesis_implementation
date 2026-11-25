@@ -1,11 +1,25 @@
 # Design — continual-hybrid-representation-design
 
-**Date:** 2026-11-26 · **Status:** PROPOSED · **Claim ceiling:** none (design only)
+**Date:** 2026-11-26 · **Revision:** r2 (owner revision request 2026-11-26 00:41) ·
+**Status:** PROPOSED · **Claim ceiling:** none (design only)
 
 Evidence tags used on every proposal:
 **[R]** research-backed (source named) · **[C]** exists in code (file named) ·
 **[D]** needs development · **[H]** experimental hypothesis, not yet supported.
 Nothing here is a result. No architecture is declared a winner.
+
+Decision status labels (r2): **[DEC]** confirmed owner decision ·
+**[HYP]** experimental hypothesis/arm · **[OPEN]** unresolved question.
+§13 is the decision register.
+
+**r2 changes:** §1A (input data contract: units, L8/L9 consistency,
+normalization) — new; §2.1 (learning streams and data categories) — new;
+§2.2 (anomaly score calibration and aggregation arms) — replaces the single
+"Anomaly score" paragraph; §4.1 (multi-signal monitoring and checkpoint
+selection) — rewritten; §5 Path A — redefined; §6.4 and §6.6–§6.7 (anomaly
+head, weak supervision, anomaly memory) — extended; §7.3 item 5 and §7.5
+(memories and normalization versioning) — extended; §8 E3/E6/E7 — added;
+§12 and §13 — updated.
 
 ---
 
@@ -83,6 +97,107 @@ Key properties:
 
 ---
 
+## 1A. Input data contract — Landsat 8/9 units, consistency, normalization
+
+Landsat 8 OLI/TIRS and Landsat 9 OLI-2/TIRS-2 Collection 2 Level-2 only.
+**Landsat 7 harmonization is out of scope [DEC]** and is not a requirement.
+
+### 1A.1 Physical units and scale [C partly; D verification]
+
+| Feature | Source | Conversion | Unit | Valid range (after conversion) | Fill / invalid |
+|---|---|---|---|---|---|
+| SR_B2…SR_B7 | C2 L2 SR | ρ = DN × 0.0000275 − 0.2 | unitless reflectance | ≈ 0 … 1 (DN 7273–43636); slightly negative values allowed only within a pre-registered tolerance, else invalid | DN 0 → invalid |
+| ST_B10 (LST) | C2 L2 ST | T = DN × 0.00341802 + 149.0 | Kelvin | ≈ 250 … 345 K plausibility window for this site (product valid DN 293–61440 → ≈150–359 K) | DN 0 → invalid |
+| NDVI, NDWI, NDMI | derived from converted ρ | normalized difference | unitless | −1 … 1; denominator ≈ 0 → invalid | propagated |
+| CWSI, TVDI | derived (METRIC/LST) | as defined in `docs/methods_explained.md` | unitless | 0 … 1 (clip flagged, not silent) | propagated |
+| ETa | METRIC | — | mm day⁻¹ | 0 … site maximum (pre-registered) | propagated |
+| Weather covariates | station / ERA5 | — | documented per variable (°C, mm, m s⁻¹, kPa) | per variable | NaN + mask |
+| Δt, DOY | dates | — | days | Δt ≥ 1; DOY 1…366 | — |
+
+- The scale factors, offsets, valid DN ranges and fill value above match the
+  USGS *Landsat 8-9 Collection 2 Level 2 Science Product Guide* (LSDS-1619
+  v6.0, 2024, table of band designations: SR UINT16 valid 7273–43636, fill 0,
+  ×0.0000275 −0.2; ST_B10 UINT16 Kelvin valid 293–61440, fill 0,
+  ×0.00341802 +149) [R] and the values in `config.py::IngestCfg` [C].
+  Task 0A.1 adds a unit test pinning these constants to the guide and
+  asserts that no code path re-applies them to already-converted data.
+- The mini builder reads METRIC scene rasters described as "reflectance 0..1
+  and LST Kelvin, already scaled" (`scripts/build_mini_dataset.py`) [C]; task
+  0A.2 asserts this with a range check, so raw DNs can never be mixed with
+  converted values (a DN-scale value is ≫ 1 and fails the check).
+- Every store, cache and model input carries a **feature manifest**: name,
+  unit, conversion applied (yes/no and which), valid range, source product
+  [D]. A loader refuses features whose manifest is missing or whose observed
+  range violates it beyond a tolerance.
+- QA: QA_PIXEL bits (fill, dilated cloud, cirrus, cloud, cloud shadow, snow)
+  are already configured [C, `config.py::QualityCfg`]; QA_RADSAT
+  (saturation) and ST_QA (LST uncertainty) are added as quality signals [D].
+  ST_QA becomes an optional per-observation uncertainty weight [HYP].
+
+### 1A.2 Landsat 8 vs Landsat 9 consistency
+
+- One product guide covers both sensors with identical band designations,
+  units and scaling (LSDS-1619) [R]; the pipeline fixes one band order and
+  asserts it per scene (task 0A.3).
+- Literature: L8/L9 underfly cross-calibration found band-level differences of
+  about 1 % [R: Gross et al. / underfly studies, summarized in GIScience &
+  Remote Sensing 2024, doi 10.1080/15481603.2024.2318071]; over China
+  landscapes, SR RMSE 0.010–0.025 for VNIR/SWIR and NDVI RMSE 0.042 [R:
+  Remote Sensing 15:4948, 2023]; differences grow slightly in multiband
+  products (+0.2–0.5 percentage points, JAG 2023) and are larger in dark/bright
+  targets due to 14-bit vs 12-bit quantization [R]. These are small relative to
+  stress signals of interest but **not negligible** relative to a subtle
+  anomaly score, hence the measured decision below. Exact numbers are to be
+  re-read from the papers before they are quoted in the thesis [OPEN].
+- Sensor id is kept per observation (`io/landsat.py` parses LC08/LC09 [C];
+  `io/patches.py` stores `sensor_id` [C]); the mini store does not yet carry it
+  [D].
+- Systematic difference is **measured, not assumed**: `io/sensor_offset.py`
+  [C] estimates per-band median offsets from near-coincident L8/L9 pairs
+  (≤ 3 days) with MAD CIs and refuses unresolved offsets. Decision rule
+  [DEC, reusing the existing code's rule]: apply a correction only if it is
+  resolved (CI excludes 0) **and** reduces the sensor-era score gap by ≥ 25 %
+  without raising the L8-only alarm rate; otherwise no transformation.
+- Arms [HYP]: (a) no correction, (b) offset correction, (c) sensor id as an
+  input token. Chosen by E7 on validation only.
+
+### 1A.3 Normalization [HYP arms; DEC on the constraints]
+
+Constraints [DEC]:
+- statistics from the **training split only** (time ≤ 2022 and training farms
+  only), never from validation/test years or held-out farms;
+- computed on **Normal-confident, QA-valid** observations; Suspected and
+  Verified-anomaly observations are excluded so anomalies cannot distort the
+  reference;
+- **missing/invalid values stay missing**: an observation mask channel is
+  always carried; no NaN→0 filling without the mask (finding of the real490
+  review);
+- normalization is invertible and versioned (§7.5).
+
+Arms compared in E7 (no arm is presumed best):
+| Arm | Definition | Expected strength | Risk |
+|---|---|---|---|
+| N0 z-score per feature | (x − μ)/σ global | simple baseline | σ inflated by outliers/clouds |
+| N1 robust per feature | (x − median)/(1.4826·MAD) or IQR | outlier-resistant | small MAD on flat features |
+| N2 physical-scale fixed | reflectance kept in ρ units (optionally ×k), LST as (T − T_ref)/s with fixed physical constants | preserves magnitude, no data dependence, trivially stable across updates | features on different scales |
+| N3 robust + clipped | N1 then clip to ±c, clip rate logged | bounded inputs | hides extreme real anomalies if c too small |
+| N4 per-field or per-pixel centring | subtract training median of that field/pixel | removes static soil/variety offsets | can remove real persistent anomalies; leak risk if computed on test years |
+
+- Indices (bounded −1…1) are left unnormalized or only scaled [HYP].
+- Any arm must keep meaningful magnitude changes detectable: the
+  augmentation-erasure style test (§8) is repeated as a "normalization
+  erasure" test.
+
+### 1A.4 Missing values and masks
+- Inputs: value channel (finite or 0 placeholder) **plus** a binary
+  observation mask per feature; Δt token carries irregular sampling.
+- Losses are computed only on observed entries; masked-out entries never
+  enter reconstruction targets or normalization statistics.
+- A window with fewer than `min_obs` valid observations is excluded and
+  counted.
+
+---
+
 ## 2. Role of every encoder, head and objective
 
 | Component | Role | Status | Evidence / note |
@@ -99,7 +214,8 @@ Key properties:
 | Barlow Twins objective | invariance to view perturbations + redundancy reduction | [C] `models/rst_bt.py`, `mini_lab/runner.py::_barlow_loss` | regularizer only; never the anomaly score (owner rule) [R: Barlow 2021; ST-BT note] |
 | Variance/covariance monitor (VICReg-style) | detect collapse | [C] `benchmarking/collapse.py` | effective rank 1.31–1.65 observed in mini probes → mandatory |
 | Normal memory | reference set of confident-normal embeddings | [C] `monitor/normal_bank.py` (immutable, cycle-based) | [D] versioned, pixel-window entries |
-| Anomaly memory | verified anomalies only | [D] | used for evaluation and few-shot heads, never for SSL training |
+| Anomaly memory | verified anomalies + unresolved Suspected (separate partitions), versioned | [D] | used for the anomaly head (Verified only), active learning and evaluation; never for encoder SSL (§6.7) |
+| Anomaly head | separate small head on the (frozen or slowly updated) encoder that learns from Verified anomalies | [D] | weak-supervision arms are [HYP] (§6.6) |
 
 **Barlow views (augmentation policy).** Allowed: random observation dropout,
 temporal sub-sampling, Δt jitter within one revisit, small radiometric noise
@@ -113,10 +229,62 @@ separable after the augmentation.
 Number of heads/losses is decided only by ablation (E1), starting from the
 single-loss arms that already exist.
 
-**Anomaly score.** S = robust-z of {recon residual, forecast residual, JEPA
-latent error, normal-memory kNN distance}, combined by a pre-registered rule
-(max of robust z per component, or rank mean). Barlow never contributes a
-score term.
+### 2.1 Learning streams and allowed data categories [DEC]
+
+Four streams with **separate protocols**; a stream may only use the data
+categories marked ✓.
+
+| Data category | Encoder SSL (representation) | Normal memory | Anomaly discovery (scoring) | Anomaly head (adaptation) | Calibration (score normalization) | Evaluation |
+|---|---|---|---|---|---|---|
+| Normal-confident (QA-valid, all sources low) | ✓ (confidence-weighted) | ✓ | ✓ | ✓ as negatives | ✓ | ✓ |
+| Unscreened unlabeled (before triage, training years) | ✓ only in the first pretraining pass, with robust/trimmed loss [HYP] | ✗ | ✓ | ✓ as **unlabeled** in PU arms only [HYP] | ✗ | ✗ |
+| Suspected (quarantined) | ✗ | ✗ | ✓ | ✓ as **unlabeled, down-weighted** in weak-supervision arms only [HYP]; never as positives | ✗ | ✓ (unresolved count) |
+| Unsure after review | ✗ | ✗ | ✓ | ✗ | ✗ | ✓ |
+| Verified anomaly (train part) | ✗ | ✗ | ✓ | ✓ as positives | ✗ | ✗ |
+| Verified anomaly (held-back eval part) | ✗ | ✗ | ✓ | ✗ | ✗ | ✓ only |
+| Verified normal (reviewed) | ✓ | ✓ | ✓ | ✓ as negatives | ✓ | ✓ |
+| Synthetic injections | ✗ for SSL; ✓ only in explicitly labelled synthetic arms | ✗ | ✓ | ✓ only in synthetic arms, never mixed with real positives | ✗ | ✓ labelled `synthetic-injection` |
+| Statistical detector outputs | ✗ | ✗ | ✓ as **evidence** | ✗ as targets | ✗ | ✓ agreement only |
+| Model's own scores / pseudo-labels | ✗ | ✗ | ✓ | ✗ as targets | ✗ | ✓ stability only |
+
+- **Encoder SSL protocol:** self-supervised objectives only; no anomaly labels,
+  no detector outputs; data = Normal-confident (+ verified normal), weighted by
+  normal confidence.
+- **Anomaly head protocol:** encoder frozen (default) or partially unfrozen in
+  the E4 arms; trained on Verified positives vs Normal-confident/verified
+  normal negatives; weak-supervision arms add unlabeled data (§6.6).
+- The anomaly head's gradients never update the encoder in the default arm;
+  an arm that lets them is [HYP] and must pass the forgetting gate (§7.4).
+
+### 2.2 Anomaly score calibration and aggregation [HYP arms]
+
+Raw residual magnitudes from different objectives are **not comparable**
+[DEC]. Each component c ∈ {recon residual, forecast residual, JEPA latent
+error, memory kNN distance} is calibrated before fusion:
+
+1. **Per-component reference distribution** from the calibration set:
+   Normal-confident observations of training years, held out from the data the
+   encoder was trained on (separate calibration farms/windows where possible).
+2. **Conditioning** [HYP arms]: none / per-field / per-DOY-window / per
+   observation-count class (sparse windows have larger residuals).
+3. **Calibrated value**: empirical CDF → upper-tail p-value (default) or
+   robust z = (r − median)/(1.4826·MAD); conformal p-values as an arm.
+4. Calibration statistics are versioned with the model (§7.5).
+
+Aggregation arms (all kept, none presumed):
+| Arm | Rule | Note |
+|---|---|---|
+| AG-max | max over calibrated components (or min p, with Bonferroni/Simes correction) | sensitive to one strong signal; more false alarms |
+| AG-rank | mean (or reciprocal-rank) of per-component ranks | robust to scale; loses magnitude |
+| AG-wcal | Σ w_c·z_c with weights fit on a **calibration objective that uses no test data** — e.g. maximizing separation on Verified-train only, or inverse-variance / stability weights when no verified set exists | needs a verified set for anything beyond stability weights |
+| AG-single | each component alone | ablation baseline |
+
+Score stability evaluation: rank correlation (Spearman/Kendall) of the top-K
+across seeds, across adjacent checkpoints, under observation dropout (10/30 %)
+and under phenology shifts; Jaccard overlap of top-K events. Final ranking
+validation: only against the held-back Verified set and blind review
+(Precision@K, AP) when it exists; otherwise stability and coherence only
+(§6.5). Barlow never contributes a score term [DEC].
 
 ---
 
@@ -144,12 +312,37 @@ Laptop CPU only. Every trainable arm uses one shared trainer.
 ### 4.1 Plateau-driven stopping
 - Evaluate every `eval_every` optimizer steps on a **validation split that is
   never the test split** (mini: dev year 2023; train ≤2022; test ≥2024).
-- Monitored metric: validation total loss (and each component logged).
-- **Plateau** = no relative improvement > `min_rel_delta` (default 0.5 %) of the
-  best value for `patience` consecutive evaluations (default 8), **and** the
-  slope of an EMA-smoothed validation curve over the last `window` evals
-  (default 10) is ≥ −`min_rel_delta`/window. Both conditions avoid stopping on
-  noise.
+- **r2: a lower weighted total loss is not evidence of a better
+  representation** [DEC]. Each evaluation logs a monitoring vector:
+  - **objective signals** — each validation loss separately (recon, forecast,
+    JEPA, Barlow on/off-diagonal terms), never only their sum;
+  - **collapse signals** — effective rank (entropy of normalized singular
+    values), per-dimension std (fraction of dims above a floor),
+    off-diagonal covariance energy (VICReg-style), JEPA target–prediction
+    variance [C `benchmarking/collapse.py`];
+  - **frozen-encoder quality** (every `probe_every` evals, cheaper than
+    eval): linear-probe R² for DOY/season-phase and NDVI-next-obs,
+    kNN retrieval of same-field-same-phase windows, and L1-a gap reconstruction
+    from the frozen latent; all on the validation split with a fixed small
+    probe budget;
+  - **stability** — CKA/linear-CKA between the current and previous probe
+    checkpoints, and top-K score-rank correlation (§2.2).
+- **Plateau (r2)** is declared on a **guard set**, not on the total loss:
+  each objective signal and the primary probe metric are tracked with the
+  same rule (relative improvement > `min_rel_delta`, default 0.5 %, for
+  `patience` evals, default 8, plus EMA slope over `window`, default 10).
+  Stop when **all** guard signals have plateaued, or when the primary probe
+  metric has plateaued and no objective is still improving beyond threshold.
+- **No hiding:** if any objective degrades by > `max_obj_regress` (default
+  5 % relative to its best) while the total improves, the evaluation is
+  flagged `OBJECTIVE_CONFLICT`, printed, and that checkpoint cannot become
+  `best.pt`.
+- **Checkpoint selection (r2):** `best.pt` = best primary probe metric among
+  checkpoints that pass the eligibility filter (no collapse flag, no objective
+  conflict, every objective within `max_obj_regress` of its best). Also kept:
+  `best_loss.pt` (lowest total loss, for diagnosis) and `last.pt`. Which
+  probe metric is primary is pre-registered per experiment [OPEN default:
+  linear-probe R² on season phase].
 - Hard budget cap: `max_steps` and `max_wall_minutes` (default unbounded steps,
   wall cap set by the owner per session).
 - `min_steps` before plateau can trigger (warm-up).
@@ -164,6 +357,7 @@ Laptop CPU only. Every trainable arm uses one shared trainer.
 | `BUDGET_EXHAUSTED_FLAT` | cap hit, curve flat but patience not reached | likely converged; optional resume |
 | `DIVERGED` | NaN/inf loss or val loss > `diverge_factor`×best | stop, keep best checkpoint |
 | `COLLAPSED` | effective rank < threshold or per-dim std below floor for `patience` evals | stop, flag representation collapse |
+| `OBJECTIVE_CONFLICT` (flag, not a stop) | one objective regresses > `max_obj_regress` while total improves | printed; checkpoint ineligible for `best.pt`; persistent conflict over `patience` evals stops the run for owner review |
 
 ### 4.3 Checkpointing (always)
 - `last.pt` every eval and every `ckpt_every_minutes` (default 5): model,
@@ -177,7 +371,7 @@ Laptop CPU only. Every trainable arm uses one shared trainer.
   re-initializes.
 
 ### 4.4 Verbose output
-- One line per eval: step, epoch, train loss (and components), val loss, best,
+- One line per eval: step, epoch, train loss (and components), each objective's val loss, total val loss, best, primary probe metric (when run), eligibility flags,
   relative improvement, patience counter k/P, smoothed slope, LR, effective
   rank, steps/s, RAM, ETA to cap.
 - `progress.jsonl` with the same fields (machine-readable).
@@ -206,9 +400,26 @@ step as their trained twin.
 
 ## 5. Phenology dual path (owner decision 2.2)
 
-- **Path A — phenology-agnostic** [D]: score from §2 with a calendar-free
-  normal reference (pooled normal memory; same-pixel previous years at any
-  stage). Works with no stage estimate.
+- **Path A — phenology-agnostic (r2 definition)** [DEC definition; D]:
+  *agnostic* means **no explicit stage labels and no dependence on a correctly
+  extracted phase** — it does **not** mean comparing observations from
+  different growth stages without temporal context (that definition in r1 is
+  withdrawn).
+  - The score is conditioned on the **pixel's own trajectory**: the residuals
+    of recon / forecast / JEPA are computed on windows that keep the temporal
+    order, Δt and the preceding observations, so "what is normal next" is
+    learned from the trajectory itself.
+  - The **reference** for memory distance and for calibration is the pixel's
+    (or field's) **own history at comparable temporal context**, found
+    implicitly: nearest neighbours in the encoder's latent of the preceding
+    window (trajectory-matched analogues), plus same-pixel prior years matched
+    by DOY window and by days-since-last-detected-harvest when available —
+    using these as soft context features, never as hard stage labels.
+  - Allowed implicit temporal inputs: DOY (sin/cos), Δt, time since series
+    start, days since last large NDVI drop (a raw signal, not a stage label),
+    shared weather. Each is an ablation item [HYP] in E1.
+  - Works when phenology extraction is missing, incomplete or wrong, because
+    nothing in Path A reads the extracted stage.
 - **Path B — phenology-aware** [D/H]: a stage posterior p(s | window) over
   literature stages {tillering, grand growth, maturity/ripening} plus
   fallow/harvest, with a confidence c. Score = Σ_s p(s)·dev_s, where dev_s
@@ -220,6 +431,9 @@ step as their trained twin.
   Uncertainty from the SOS/EOS RMSE (17–27 days) → soft stage boundaries.
 - The existing S1–S4 DSH bins stay as a pre-registered comparator arm [C]
   (`phenology/mini.py`).
+- **Combination [HYP]:** Path C = calibrated fusion of A and B (§2.2 arms),
+  with B's weight scaled by stage confidence c. A, B and C are evaluated
+  independently and in combination (E3).
 - **Robustness test:** shift stage estimates by ±16 and ±32 days, and randomly
   swap 10 % of cycles; Path B must degrade gracefully (pre-registered maximum
   drop) and never fall below Path A by more than a set margin.
@@ -250,7 +464,12 @@ on model inputs (LST, NIR) — never ground truth.
   or high disagreement), **Verified** (independent confirmation only: expert
   blind review or independent records — irrigation, ECe, yield, field reports).
 - Suspected items enter **quarantine**: excluded from normal memory, from replay,
-  and from SSL updates until resolved.
+  and from SSL updates until resolved. They are stored in the anomaly memory's
+  *unresolved* partition (§6.7) with their evidence vector, tier history and
+  the model version that flagged them.
+- Tier thresholds are pre-registered per release; an item can move only
+  Suspected → Verified/Normal/Unsure by review or independent record, never by
+  a model or detector score alone [DEC].
 
 ### 6.3 Active learning
 - Query score = uncertainty (disagreement + score near threshold) ×
@@ -268,6 +487,24 @@ on model inputs (LST, NIR) — never ground truth.
 - A held-back share of verified items is reserved for evaluation only.
 - Report agreement between model and detectors separately from agreement with
   verified labels.
+- **r2 — explicit anti-confirmation-loop rules [DEC]:**
+  1. No model score, detector score, or pseudo-label is ever written into a
+     label field; labels come only from review or independent records.
+  2. A sample flagged by version v and reviewed is used to train the anomaly
+     head of version v+1 only if it was reviewed blind; its review packet
+     records whether it was model-selected or randomly selected.
+  3. Active-learning selection bias is measured: Precision@K on randomly
+     selected reviewed items vs on model-selected items is reported
+     separately; positives are never only model-selected (fixed random share).
+  4. Weak-supervision arms (§6.6) treat uncertain candidates as *unlabeled*
+     with bounded weight, never as positives; their outputs never re-enter the
+     triage as evidence for the same items (no circular evidence).
+  5. The statistical detectors are frozen per release and never fitted to
+     model outputs; the model is never trained to predict detector outputs
+     (no distillation from detectors).
+  6. Audit: per update, the fraction of anomaly-head positives that were first
+     surfaced by the model itself is logged; a rising share with flat random
+     precision triggers an owner review.
 
 ### 6.5 Evaluation unit and claims
 - Units: **Pixel × time window** and **Spatial Anomaly Event** (connected
@@ -276,6 +513,43 @@ on model inputs (LST, NIR) — never ground truth.
   agreement, temporal/spatial coherence, cross-year recurrence and robustness
   to missing data — **no Precision/Recall/"stress detected"**.
 - Precision@K only on a valid blind-reviewed set.
+
+### 6.6 Anomaly learning — separate anomaly head and weak supervision
+
+- **Separation [DEC]:** representation learning (encoder, SSL, §2.1) and
+  anomaly learning (anomaly head) have separate data, losses, schedules and
+  version numbers. The anomaly head never trains before at least
+  `min_verified` (pre-registered, [OPEN] default 20 events across ≥ 2 farms
+  and ≥ 2 years) Verified positives exist; until then the system is discovery
+  only.
+- **Head [D]:** small MLP (or logistic) on frozen encoder features + calibrated
+  score components; output = anomaly probability with calibration
+  (Platt/isotonic on held-out Verified).
+- **Learning arms [HYP]:**
+  - H-sup: Verified positives vs Normal-confident negatives, class-weighted.
+  - H-cw: confidence-weighted — negatives weighted by normal confidence;
+    Suspected excluded.
+  - H-pu: Positive-Unlabeled learning (nnPU) with Verified as P and
+    Suspected + unscreened as U; class prior π estimated (e.g. from the
+    random-review share) and varied in a sensitivity sweep. Output never
+    becomes a label.
+  - H-none: no head; discovery score only (baseline).
+- **Evaluation:** only on the held-back Verified set and blind review; with
+  fewer than `min_verified` held-back events, report "insufficient labels",
+  not a metric.
+
+### 6.7 Anomaly memory [D]
+
+- Separate from normal memory; versioned with the model (§7.5).
+- Partitions: **verified** (event id, pixels, dates, evidence vector, reviewer,
+  independent source, review date), **unresolved** (Suspected and Unsure, with
+  evidence and the flagging model version), **rejected** (reviewed as normal;
+  kept to audit false positives).
+- Uses: training positives for the anomaly head (verified, train part);
+  active-learning pool (unresolved); evaluation (verified, held-back part);
+  exclusion list for normal memory, replay and normalization statistics
+  (verified + unresolved).
+- Never used for encoder SSL.
 
 ---
 
@@ -301,7 +575,8 @@ triage, then (only Normal-confident) to the update pool.
    embeddings; KS on input bands; large drift routes to review instead of a
    blind update.
 5. **Normal memory / anomaly memory** — separate, versioned; normal memory
-   only from Normal-confident; anomaly memory only Verified.
+   only from Normal-confident; anomaly memory holds Verified plus the
+   unresolved/rejected partitions (§6.7).
 6. **Anomaly quarantine** — §6.2.
 `train/incremental.py::fine_tune` already sketches trimming the top-scoring
 fraction [C stub]; it is replaced, not extended.
@@ -319,6 +594,23 @@ fraction [C stub]; it is replaced, not extended.
 
 ---
 
+### 7.5 Versioning of normalization and calibration statistics [DEC]
+
+- Each model version binds: normalization statistics (arm, values, the data
+  hash they were computed on), per-component calibration distributions
+  (§2.2), sensor-offset table (if applied, §1A.2), feature manifest (§1A.1).
+- **Default on update:** normalization statistics are **frozen** at the
+  parent's values so historical and new observations stay in one input space;
+  new statistics are only computed and compared, not applied.
+- **Re-normalization** is allowed only when a drift report (§7.3) shows a
+  persistent input shift; it creates a new major version, and the regression
+  set is re-scored under the new statistics before acceptance. Encoder
+  re-adaptation after re-normalization follows the same acceptance gate.
+- Calibration statistics **are** recomputed per version (residual scales change
+  with weights) on the calibration set, and both old and new are stored.
+- Old scores are never silently re-labelled: re-scoring history under a new
+  version writes a new score table with its version id.
+
 ## 8. Experiments, ablations, metrics
 
 All experiments: leakage control, time split (≤2022 / 2023 / ≥2024), farm
@@ -332,12 +624,20 @@ results reported apart from real results** (label `synthetic-injection` vs
 |---|---|---|---|---|
 | E1 | Representation learning | Recon, Barlow+recon, JEPA, JEPA+recon, Hybrid (all four) | L1-a real-gap reconstruction vs linear/Whittaker/harmonic; L1-b forecast vs persistence/DOY climatology; stage linear probe; effective rank; synthetic injection AUPRC (secondary) | number of heads/losses; λ weights; augmentation erasure |
 | E2 | Spatial–temporal modelling | pixel-only, context-CNN-only, hybrid early fusion, hybrid late fusion; k ∈ {3,5,7,9,11} | same as E1 + small-footprint injection sensitivity (1, 3×3, 9×9 px) | fusion type; k |
-| E3 | Real anomaly discovery | best 2–3 encoders from E1/E2 × Path A/B × statistical detectors | stability across seeds; cross-detector agreement; spatial/temporal coherence; cross-year recurrence; Precision@K **only** with blind review | detector subsets; fusion rule |
+| E3 | Real anomaly discovery | best 2–3 encoders from E1/E2 × Path A/B/C × statistical detectors × anomaly-head arms (H-none/H-sup/H-cw/H-pu, only once `min_verified` is met) | stability across seeds; cross-detector agreement; spatial/temporal coherence; cross-year recurrence; Precision@K **only** with blind review; random-vs-model-selected review precision | detector subsets; fusion rule; PU prior π sweep |
 | E4 | Adaptation | frozen encoder, linear probe, partial FT, full FT | stage probe, retrieval, few-shot head on verified set (if any) | label count {1,2,4,8,all cycles} |
-| E5 | Continual learning | scratch, warm start, warm + replay, warm + replay + distill, (+EWC) | BWT, forgetting, new-data perf, wall time, acceptance-gate pass rate | replay fraction; distill weight |
+| E5 | Continual learning | scratch, warm start, warm + replay, warm + replay + distill, (+EWC) | BWT, forgetting, new-data perf, wall time, acceptance-gate pass rate | replay fraction; distill weight; frozen vs re-computed normalization |
+| E6 | Score calibration and aggregation | AG-single ×4, AG-max, AG-rank, AG-wcal; conditioning arms | top-K stability (seeds, checkpoints, dropout, phenology shift); synthetic injection AUPRC (labelled synthetic); Precision@K only with verified set | calibration distribution (p-value vs robust z vs conformal) |
+| E7 | Input pipeline | normalization N0–N4 × sensor handling (none / offset / sensor token) | L1-a/L1-b, probe metrics, L8/L9 era score gap, normalization-erasure test, clip rate | indices normalized vs raw; ST_QA weighting |
+
+**Monitoring (r2):** every experiment reports per-objective curves,
+effective rank, probe metrics and the `best.pt` eligibility log, not only the
+total loss.
 
 **Sanity tests with known answers:** permuted temporal order must hurt
-L1-b; random-init must sit near DOY climatology on L1-c; an S6-strength
+L1-b; a DN-scale feature must be rejected by the loader; L8-only vs L9-only
+windows of the same field and phase must not differ beyond the measured
+sensor offset; random-init must sit near DOY climatology on L1-c; an S6-strength
 perturbation must be found by every arm; label permutation null for any
 probe; augmentation-erasure test (§2).
 
@@ -383,7 +683,12 @@ fewest losses / smallest k not meaningfully worse (CI of difference includes
 | Normal memory | `monitor/normal_bank.py` (immutable, cycle bins) [C] | versioned, pixel-window entries, quarantine [D] |
 | Contamination / trimming | `train/contamination.py` [C] | reuse for quarantine experiments |
 | Continual learning | `train/incremental.py` stub [C stub] | everything in §7 [D] |
-| Training loop | mini: fixed epochs/`max_steps`, `last.pt` per epoch [C]; 490: Lightning with `early_stop_patience` [C] | plateau verdicts, wall-time checkpoints, RNG/sampler state, verbose summary [D] |
+| Training loop | mini: fixed epochs/`max_steps`, `last.pt` per epoch [C]; 490: Lightning with `early_stop_patience` on loss [C] | multi-signal plateau, eligibility-filtered `best.pt`, per-objective curves, probes, verdicts, wall-time checkpoints, RNG/sampler state [D] |
+| Units / scale | constants in `config.py::IngestCfg` [C]; mini builder reads pre-scaled METRIC rasters [C] | pinned-constant test, range assertions, feature manifest [D] |
+| L8/L9 | `io/landsat.py` sensor parse, `io/patches.py` sensor_id, `io/sensor_offset.py` measured offsets with refusal rule [C] | mini store lacks sensor id; E7 arms [D] |
+| Normalization | mini: global mean/std over finite training values (`mini_lab/data.py` ~l.424) [C]; 490: `norm_stats_full.json` [C] | robust arms, anomaly-excluded statistics, versioning and freeze-on-update [D] |
+| Anomaly head / PU | none | §6.6 [D] |
+| Score calibration | robust-z in places (`monitor/scoring.py`) [C] | per-component calibration + AG arms [D] |
 | Phenology | `phenology/cycles.py` (harvest troughs), `phenology/mini.py` (S1–S4 DSH bins) [C] | literature stages with uncertainty [D]; owner visual check pending |
 | Field-id mapping | mini alias `archive_fid = reference_fid + 1` verified on 3 farms [C] | archive-wide verification on 490 [D] |
 | Synthetic vs real separation | finding 28 separates them by text [C] | enforce via report label field [D] |
@@ -392,16 +697,22 @@ fewest losses / smallest k not meaningfully worse (CI of difference includes
 
 ## 11. Prioritized roadmap (implementation, next sessions)
 
-1. **P0 — Trainer** (`training-convergence-control`): plateau + verdicts +
-   checkpoints + verbose; retrofit mini runner and sweep script. Unit tests
-   with synthetic curves (plateau, still-improving, diverge, collapse).
+0. **P0 — Input data contract** (§1A): pinned constants test, range
+   assertions, feature manifest, sensor id in the mini store, mask channel.
+1. **P0 — Trainer** (`training-convergence-control`): multi-signal plateau +
+   eligibility-filtered checkpoint selection + verdicts + checkpoints +
+   verbose; retrofit mini runner and sweep script. Unit tests with synthetic
+   curves (plateau, still-improving, diverge, collapse, objective conflict).
 2. **P0 — Hygiene**: de-duplicate `_cnn_mamba`; fix JEPA/Barlow full-field;
    mask + Δt tokens; capacity matching.
 3. **P1 — Archive-wide id verification** (extend `field-id-provenance-fix`).
 4. **P1 — E1 + E2 on mini** (CPU, owner runs, to plateau).
-5. **P1 — Statistical detectors + tiers + quarantine** (no model needed).
+5. **P1 — Statistical detectors + tiers + quarantine + anomaly memory**
+   (no model needed); score calibration and AG arms (E6); normalization and
+   sensor arms (E7).
 6. **P2 — Phenology Path B** after the owner's timeline check.
-7. **P2 — E3 discovery report + blind-review packet** (owner/expert).
+7. **P2 — E3 discovery report + blind-review packet** (owner/expert); the
+   anomaly head (§6.6) only after `min_verified` is met.
 8. **P2 — Continual protocol** (replay → distill → drift → EWC) and E5.
 9. **P3 — E4 adaptation**; scale to the 490 pixel store when it exists.
 
@@ -412,3 +723,25 @@ fewest losses / smallest k not meaningfully worse (CI of difference includes
 3. δ_forget and δ_new values for the acceptance gate.
 4. Regression-set composition (which farm × year × stage cells).
 5. Default wall-time cap per training session.
+6. Minimum Verified set before the anomaly head may train (`min_verified`; proposed 20 events, ≥ 2 farms, ≥ 2 years).
+7. Primary probe metric for checkpoint selection (proposed: linear-probe R² on season phase).
+8. Is any independent record available (irrigation logs, ECe, yield by field) for Verified status besides expert review?
+
+## 13. Decision register (r2)
+
+**Confirmed decisions [DEC]** (owner requirements 2026-11-26 and revision r2):
+- Framework = SSL + continual representation learning + anomaly discovery, not only a stress detector.
+- Hybrid statistical discovery + active learning; Normal-confident / Suspected / Verified tiers; quarantine; no confirmation loop (§6.4 rules 1–6).
+- Separate protocols: encoder SSL vs anomaly head (§2.1 data table).
+- Dual-path phenology with the r2 definition of phenology-agnostic (§5).
+- Hybrid pixel + spatial context; pixel is the scoring unit.
+- JEPA and Barlow are objectives, not backbones; Barlow never scores.
+- Continual updates are batched and gated by a fixed regression set; forgetting bounded and measured, not promised zero.
+- Laptop CPU training to plateau, mandatory checkpoints, verbose verdicts; plateau and checkpoint selection on multiple signals (§4.1 r2).
+- Raw residuals are calibrated before fusion (§2.2).
+- Landsat 8/9 C2 L2 only; no Landsat 7 harmonization; units and ranges contract (§1A.1); train-only, anomaly-excluded normalization statistics; masks always carried.
+
+**Experimental hypotheses / arms [HYP]:** Mamba-lite vs GRU vs Transformer; fusion type and k; head/loss count; aggregation AG-max/AG-rank/AG-wcal; calibration form; normalization N0–N4; sensor handling; anomaly-head arms H-sup/H-cw/H-pu; PU class prior; Path C fusion; CL mechanisms (replay, distillation, EWC); unscreened data in the first pretraining pass; ST_QA weighting; that SSL pretraining helps real anomaly discovery at all (currently unsupported, finding 28).
+
+**Unresolved [OPEN]:** §12 items 1–8; archive-wide field-id alias (490); owner cycle-timeline check; independent agronomic modality for L4; δ values; regression-set cells; whether METRIC-derived CWSI/ETa/TVDI are independent enough of model inputs to count as evidence.
+

@@ -7,14 +7,30 @@ growth stage as an uncertain estimate.
 
 ## ADDED Requirements
 
-### Requirement: Phenology-agnostic path
+### Requirement: Phenology-agnostic path (r2 definition)
 
-The system SHALL compute an anomaly score with no stage input, using a
-calendar-free normal reference.
+The system SHALL compute an anomaly score that uses no explicit stage label
+and does not depend on a correctly extracted growth phase, while preserving
+temporal trajectory information: residuals SHALL be computed on order-
+preserving windows with Δt and preceding observations, and the normal
+reference SHALL be the pixel's or field's own history at comparable temporal
+context (trajectory-matched latent neighbours, same-pixel prior years matched
+by DOY window), never a pool of observations from arbitrary growth stages
+without temporal or contextual matching. Implicit temporal inputs (DOY sin/cos,
+Δt, time since series start, days since last large NDVI drop, weather) are
+allowed and ablated.
 
 #### Scenario: Stage unavailable
 - **WHEN** no stage estimate exists for a window
-- **THEN** the agnostic score is still produced
+- **THEN** the agnostic score is still produced from trajectory and temporal context
+
+#### Scenario: Stage estimate is wrong
+- **WHEN** the extracted stage is shifted by 32 days
+- **THEN** the agnostic score is identical, because it never reads the stage
+
+#### Scenario: No cross-stage pooling
+- **WHEN** the reference set for a grand-growth window is built
+- **THEN** it contains only trajectory- or DOY-matched observations, not early-tillering or post-harvest observations chosen without temporal context
 
 ### Requirement: Uncertainty-aware phenology path
 
@@ -46,3 +62,13 @@ cycle-timeline check is recorded.
 #### Scenario: Timeline check missing
 - **WHEN** the owner check is not recorded
 - **THEN** aware-path results are labelled provisional
+
+### Requirement: Independent and combined evaluation (r2)
+
+The agnostic path, the aware path and a confidence-weighted combination
+SHALL each be evaluated independently and in combination under identical
+splits, calibration and metrics.
+
+#### Scenario: Three-path report
+- **WHEN** an E3 report is generated
+- **THEN** it contains separate rows for agnostic, aware and combined scores

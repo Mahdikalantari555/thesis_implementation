@@ -2,6 +2,7 @@
 
 **Change ID:** `continual-hybrid-representation-design` · **Created:** 2026-11-26 ·
 **Status:** PROPOSED (design only, no code in this change's first phase) ·
+**Revision:** r2 2026-11-26 00:41 (owner revision request; direction approved) ·
 **Owner:** Mahdi · **Source:** owner requirements document
 "Research & Architecture Requirements — Next Design Iteration" (2026-11-26, chat),
 plus the owner's training directive of 2026-11-26 (train to plateau, always
@@ -58,6 +59,18 @@ checkpoint, verbose convergence verdict, laptop CPU only).
 No code, data, split, checkpoint or finding is modified by this change's design
 phase. No architecture is declared a winner.
 
+**r2 additions:** separate anomaly head trained only on Verified anomalies,
+confidence-weighted and PU learning as experimental arms, versioned anomaly
+memory (verified / unresolved / rejected), strengthened anti-confirmation-loop
+rules; phenology-agnostic redefined as "no explicit stage labels" while
+keeping trajectory and temporal context; multi-signal monitoring and
+eligibility-filtered checkpoint selection; Landsat 8/9 input data contract
+(units, valid ranges, sensor consistency by measurement, leak-free
+anomaly-excluded robust normalization arms, versioning); per-component score
+calibration with max / rank / calibrated-weighted aggregation arms; decision
+register separating confirmed decisions, hypotheses and open questions.
+Landsat 7 harmonization is explicitly out of scope.
+
 ## Capabilities
 
 - New: `training-convergence-control` — plateau-driven training, mandatory
@@ -69,7 +82,10 @@ phase. No architecture is declared a winner.
 - New: `anomaly-discovery-triage` — model-independent statistical detectors,
   rank fusion, Normal / Suspected / Verified tiers, quarantine, active learning.
 - New: `continual-update-protocol` — versioned updates, replay, distillation,
-  EWC (optional), drift detection, regression-set acceptance gate.
+  EWC (optional), drift detection, regression-set acceptance gate; r2:
+  versioned normalization and calibration statistics.
+- New (r2): `input-data-contract` — Landsat 8/9 C2 L2 units, valid ranges,
+  feature manifest, sensor consistency, masks, leak-free normalization.
 
 ## Relation to other changes
 

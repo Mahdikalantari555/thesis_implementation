@@ -22,7 +22,9 @@ alarm, never per observation.
 
 The update SHALL support stratified experience replay (farm × year × stage ×
 pattern), teacher–student distillation from the parent version, optional EWC,
-and separate versioned normal and anomaly memories.
+and separate versioned normal and anomaly memories (the anomaly memory with
+verified, unresolved and rejected partitions); replay SHALL draw only from
+normal memory.
 
 #### Scenario: Warm start with replay and distillation
 - **WHEN** an update runs with `--init-from parent`
@@ -57,3 +59,19 @@ recorded reason, legitimate only as a pre-registered baseline arm.
 #### Scenario: Compatible checkpoint exists
 - **WHEN** a run starts without `--init-from` while a compatible parent exists
 - **THEN** it fails closed unless `--from-scratch` is given
+
+### Requirement: Versioned normalization and calibration statistics (r2)
+
+Each model version SHALL bind its normalization statistics (arm, values, data
+hash), per-component calibration distributions, sensor-offset table and
+feature manifest. On update, normalization statistics SHALL stay frozen at the
+parent's values by default; re-normalization SHALL require a drift report
+showing a persistent input shift, SHALL create a new major version, and SHALL
+re-score the regression set under the new statistics before acceptance.
+Calibration statistics SHALL be recomputed per version with old and new
+stored, and historical scores SHALL only be re-scored into a new versioned
+table.
+
+#### Scenario: Update without drift
+- **WHEN** a seasonal update is trained and no persistent drift is reported
+- **THEN** the new version uses the parent's normalization statistics unchanged
