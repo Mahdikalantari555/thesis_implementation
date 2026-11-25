@@ -24,6 +24,71 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
 
 ## In progress
 
+- ▶ **NEXT SESSION — owner cycle-timeline visual check (2026-11-25)** —
+  The PNGs are **local review artifacts only** (not committed; regenerate with
+  `PYTHONPATH=src <geo>/python -X utf8 scripts/visualize_mini_timeline.py`):
+  - `reports/mini_dataset/figures/timeline_seasonal.png` — **start here.** Per
+    farm (L02-02, R12-08, R15-18): NDVI/LST curves, detected cycle start/end
+    bands, weak-suspicion flags. **Owner question: "Are all detectable cycles
+    detected?"** Look for missed winter harvests, phantom cycles, false merges,
+    and harvest dates off by one scene (~16 days).
+  - `reports/mini_dataset/figures/timeline_anomaly_score.png` — derived,
+    phase-conditioned robust deviation (S1–S4, train ≤2022 baseline). Check that
+    high deviations land inside plausible phases. **Not model inference.**
+  - `reports/mini_dataset/figures/timeline_flagged_dates.png` — flagged dates
+    + year×month heatmap; flags on the **same date in all three farms** indicate
+    a scene/METRIC-calibration effect, not farm stress.
+  - `reports/mini_dataset/figures/timeline_readme.md` — provenance and caveats.
+  **After the visual confirmation** (not before): replace the fixed S1–S4
+  DSH bins with literature stages **tillering → grand growth →
+  maturity/ripening** (Joshi 2024 SOS/EOS via BISE→FFT→DoG, FAO two-crop model;
+  finding 13; Nie/Albahli stage-conditioned windows). Keep the DSH-bin arm as a
+  pre-registered comparator, then rerun the architecture/target sweep with a
+  **phase-aware** injection. Do not rebuild splits or claim cycle correctness
+  before this check is recorded.
+- ✅ **mini CPU architecture screening — finding 28 (2026-11-25)** — after the
+  provenance fix, screen (9 archs × 8 spatial units, 100 equal steps, 1 seed:
+  70/72 ok) then confirm (3 seeds, 400 steps, bigger d_model 64 / latent 32 /
+  2 layers, 12/12 ok). **Defensible L2 result:** pixel-level `mamba_ae` beats
+  same-architecture random init by **+0.171 AUPRC, t95 CI [0.120, 0.221]**, all
+  3 seeds positive; patch11 mamba +0.152 [0.086, 0.219]; highest absolute AUPRC
+  patch11 mamba 0.711. Counter-result: on real weak labels SSL = random-init
+  (0.1108) and raw features 0.1782; retrieval SSL below chance. No stress / L3+
+  claim. `_mamba` and `_cnn_mamba` are the same model under the confirm config
+  (models.py:168-193) — not a replication; flagged in finding 28. Details:
+  `docs/findings/28_mini_cpu_architecture_screening.md`,
+  `reports/mini_dataset/arch_sweep/{screen,confirm}/sweep.json`. Gates: 18 mini
+  + 51 platform unit tests green; failures recorded verbatim.
+- ▶ **field-id-provenance-fix (2026-11-25, openspec change created)** — the
+  2026-11-25 rebuild confirmed an off-by-one field ID: archive pixels for fid k
+  are polygon k−1 (IoU 1.0 / 0.0 own) in all three `3farms-dev` farms. Fixed
+  **additively for the mini store** via measured alias `archive_fid =
+  reference_fid + 1` (rasterize-verified IoU 1.0 own / 0.0 neighbours), stored
+  in attrs/manifest; fail-closed when evidence is missing. Mini store and
+  downstream artifacts rebuilt; parity passes 11,242/11,242 — the earlier 2
+  "QA mismatch" failures were the same shift. `docs/audits/mini_rebuild_3farms_probe_2026-11-25.md`
+  carries a supersession banner. **Owner-gated:** whether to correct the
+  canonical 490-field archive (its splits/findings are hash-bound) — no silent
+  re-index. Research brief/report: `research/ssl_advantage_2026-11-25/REPORT.md`
+  (no peer-reviewed support for asserting SSL advantage on this task;
+  random-init + collapse + permutation nulls + equal compute are mandatory).
+  CPU sweep on 1–2 farms: `scripts/sweep_mini_architectures.py` (all 9 archs ×
+  pixel/patch1/3/5/7/9/11/full-field, equal 100-step budget, 3-seed confirm).
+- ▶ **mini rebuild on 3 separated farms + corrected probe (2026-11-25)** —
+  Ran the full mini pipeline from `RoI/3farms-dev.geojson` (L02-02/R12-08/R15-18,
+  three blocks) after fixing the retrieval-control bug, split boundary
+  (2024+ test), NaN→0, patch/grid alignment, window-boundary crossing and the
+  non-convergent probe. Record: `docs/audits/mini_rebuild_3farms_probe_2026-11-25.md`
+  + `reports/mini_dataset/rebuild_run_2026-11-25.json`. Gates: 51 platform + 16
+  mini unit tests green; smoke read. **Findings awaiting owner decisions:**
+  (1) `archive_alignment` confirms an **archive-wide off-by-one field ID** in all
+  3 farms (fid k pixels = polygon k−1, IoU 1.0 vs 0.0 own) — blocks every
+  variety/age/L4 claim, needs a dedicated provenance change, never a silent
+  re-index; (2) 2/11,256 parity checks fail (L02-02 2020-09-01 SWIR, zonal
+  n=129 vs store QA n=84) — accept with exception or fix canonical zonal stats.
+  Corrected probe: SSL R@1 0.2083 vs chance 0.1275 but inside null band
+  (p97.5 0.2917); SSL AUPRC 0.4038 CI [0.324,0.599] overlaps random-init
+  0.3487 CI [0.294,0.422]; effective rank 1.31 (near-collapse). No SSL claim.
 - ▶ **compute-placement policy: local → Colab escalation (owner directive, 2026-11-20)** —
   From now on, **every long job runs on Colab, not just training**: training, full
   evaluation, σ calibration, and any export expected to exceed the local ~2 min budget.

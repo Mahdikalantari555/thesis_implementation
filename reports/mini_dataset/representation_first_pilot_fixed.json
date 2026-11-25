@@ -1,0 +1,128 @@
+{
+  "schema": "mini-representation-first-pilot/v1",
+  "created_utc": "2026-11-25T19:24:50.008132+00:00",
+  "git_sha": "7dfeaa64298a2a520267bcfe5df72b249577c770",
+  "data_source": "/home/mahdi/RS/Thesis/Data/Processed/mini_research_dataset",
+  "claim_rung": "L2",
+  "claim_note": "Suspected weak labels; no stress or generalization claim.",
+  "n_windows": 480,
+  "n_features": 20,
+  "n_suspected_windows": 110,
+  "prevalence": 0.22916666666666666,
+  "train_rule": "year <= 2022",
+  "dev_rule": "year == 2023 (excluded from retrieval and probes)",
+  "test_rule": "year >= 2024",
+  "split_counts": {
+    "train": 300,
+    "dev": 30,
+    "test": 150,
+    "boundary_crossing_dropped": 30
+  },
+  "audit_fixes": [
+    "retrieval control now uses test-year queries + candidate label permutation",
+    "NaN kept unobserved; observation mask fed to the encoder",
+    "patches sampled on 5x5 label grid and spread across field",
+    "windows crossing train/dev/test boundaries dropped",
+    "converged sklearn logistic probe + farm x year cluster bootstrap CI"
+  ],
+  "cysp_rg": {
+    "ssl": {
+      "r_at_1": 0.1533,
+      "n_queries": 150,
+      "chance_level": 0.18
+    },
+    "raw": {
+      "r_at_1": 0.1933,
+      "n_queries": 150,
+      "chance_level": 0.18
+    },
+    "gain": -0.04,
+    "shuffled_year_control": 0.1765,
+    "null_control": {
+      "r_at_1": 0.1533,
+      "chance_level": 0.18,
+      "null_mean": 0.1765,
+      "null_p97_5": 0.3002,
+      "n_queries": 150,
+      "n_permutations": 200
+    },
+    "control_definition": "candidate (farm, stage) label permutation; queries = years >= 2024, candidates = years <= 2022; dev year 2023 excluded"
+  },
+  "cysp_rg_random_init": {
+    "ssl": {
+      "r_at_1": 0.2867,
+      "n_queries": 150,
+      "chance_level": 0.18
+    },
+    "raw": {
+      "r_at_1": 0.1933,
+      "n_queries": 150,
+      "chance_level": 0.18
+    },
+    "gain": 0.0934,
+    "shuffled_year_control": 0.1827,
+    "null_control": {
+      "r_at_1": 0.2867,
+      "chance_level": 0.18,
+      "null_mean": 0.1827,
+      "null_p97_5": 0.3335,
+      "n_queries": 150,
+      "n_permutations": 200
+    },
+    "control_definition": "candidate (farm, stage) label permutation; queries = years >= 2024, candidates = years <= 2022; dev year 2023 excluded"
+  },
+  "probe_ssl_embedding": {
+    "auprc": 0.1108,
+    "prevalence": 0.2,
+    "n_test": 150,
+    "n_positive_test": 30,
+    "solver": "sklearn.LogisticRegression(lbfgs, max_iter=3000, C=1.0)",
+    "converged": true,
+    "ci95": [
+      0.0349,
+      0.1772
+    ],
+    "n_bootstrap_clusters": 6
+  },
+  "probe_raw_features": {
+    "auprc": 0.1782,
+    "prevalence": 0.2,
+    "n_test": 150,
+    "n_positive_test": 30,
+    "solver": "sklearn.LogisticRegression(lbfgs, max_iter=3000, C=1.0)",
+    "converged": true,
+    "ci95": [
+      0.0639,
+      0.2753
+    ],
+    "n_bootstrap_clusters": 6
+  },
+  "probe_random_embedding": {
+    "auprc": 0.1108,
+    "prevalence": 0.2,
+    "n_test": 150,
+    "n_positive_test": 30,
+    "solver": "sklearn.LogisticRegression(lbfgs, max_iter=3000, C=1.0)",
+    "converged": true,
+    "ci95": [
+      0.0349,
+      0.1772
+    ],
+    "n_bootstrap_clusters": 6
+  },
+  "collapse": {
+    "effective_rank": 1.647,
+    "mean_pairwise_cosine": 0.0423,
+    "per_dim_std_min": 0.03046,
+    "per_dim_std_max": 0.17207
+  },
+  "label_source": "/home/mahdi/RS/Thesis/Data/Processed/mini_research_dataset/suspected_stress/suspected_patches.parquet",
+  "embeddings": "reports/mini_dataset/representation_first_pilot_fixed_embeddings.npz",
+  "caveats": [
+    "CWSI_ET shared-input with LST; ETaDaily is a METRIC model product.",
+    "Suspicion is not stress; no water/salinity typing.",
+    "3 separated farms (R15-18/R12-08/L02-02) - L1/L2 screening only, no geographic generalization claim.",
+    "n is small: 3 farms x 13 years, farm x year clusters; report CIs, do not read point estimates as effects."
+  ],
+  "wall_s": 34.2
+}

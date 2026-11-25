@@ -1,0 +1,714 @@
+{
+  "schema": "mini-arch-sweep/v1",
+  "stage": "confirm",
+  "created_utc": "2026-11-25T19:53:02Z",
+  "farms": [
+    "L02-02",
+    "R12-08"
+  ],
+  "git_sha": "7dfeaa64298a2a520267bcfe5df72b249577c770",
+  "store": "/home/mahdi/RS/Thesis/Data/Processed/mini_research_dataset",
+  "manifest_sha256": "853ce5c265d45b8349a52d88ebc278ec1e600b073b081be456627151a3fb917f",
+  "target_steps_per_run": 400,
+  "seeds": [
+    13,
+    42,
+    2026
+  ],
+  "d_model": 64,
+  "latent_dim": 32,
+  "n_layers": 2,
+  "n_configs": 12,
+  "n_success": 12,
+  "n_failed": 0,
+  "ranking_by_gain_over_random_init": [
+    "pixel__mamba_ae",
+    "pixel__cnn_mamba",
+    "patch11__mamba_ae",
+    "patch11__cnn_mamba",
+    "patch9__mamba_ae",
+    "patch9__cnn_mamba",
+    "patch9__gru_ae",
+    "pixel__gru_ae",
+    "patch11__gru_ae",
+    "full_field__mamba_ae",
+    "full_field__cnn_mamba",
+    "full_field__gru_ae"
+  ],
+  "rows": [
+    {
+      "unit": "pixel",
+      "spatial": "pixel",
+      "patch_size": null,
+      "model": "mamba_ae",
+      "n_train": 1088,
+      "n_test": 1088,
+      "d_in": 22,
+      "epochs_cap": 3,
+      "steps": 400,
+      "seeds": [
+        13,
+        42,
+        2026
+      ],
+      "params": 293174,
+      "family": "reconstruction",
+      "placement": "colab",
+      "synthetic_auprc": {
+        "mean": 0.6916996668798022,
+        "std": 0.02047775747799389,
+        "n": 3
+      },
+      "random_init_auprc": {
+        "mean": 0.5209582145251251,
+        "std": 0.004184332022501332,
+        "n": 3
+      },
+      "step_reference_auprc": {
+        "mean": 0.6598529973364062,
+        "std": 0.0,
+        "n": 3
+      },
+      "ssl_gain_over_random": 0.1707,
+      "wall_s": 155.12,
+      "per_seed": [
+        {
+          "seed": 13,
+          "synthetic_auprc": 0.6879254521047905,
+          "random_init_auprc": 0.5181639439887893,
+          "gain": 0.1698
+        },
+        {
+          "seed": 42,
+          "synthetic_auprc": 0.6687206466211433,
+          "random_init_auprc": 0.5178379400444303,
+          "gain": 0.1509
+        },
+        {
+          "seed": 2026,
+          "synthetic_auprc": 0.718452901913473,
+          "random_init_auprc": 0.5268727595421556,
+          "gain": 0.1916
+        }
+      ]
+    },
+    {
+      "unit": "pixel",
+      "spatial": "pixel",
+      "patch_size": null,
+      "model": "gru_ae",
+      "n_train": 1088,
+      "n_test": 1088,
+      "d_in": 22,
+      "epochs_cap": 3,
+      "steps": 400,
+      "seeds": [
+        13,
+        42,
+        2026
+      ],
+      "params": 159830,
+      "family": "reconstruction",
+      "placement": "laptop",
+      "synthetic_auprc": {
+        "mean": 0.6415241680445268,
+        "std": 0.0028459596348399193,
+        "n": 3
+      },
+      "random_init_auprc": {
+        "mean": 0.5315774623022721,
+        "std": 0.005838643348451556,
+        "n": 3
+      },
+      "step_reference_auprc": {
+        "mean": 0.6598529973364062,
+        "std": 0.0,
+        "n": 3
+      },
+      "ssl_gain_over_random": 0.1099,
+      "wall_s": 78.38,
+      "per_seed": [
+        {
+          "seed": 13,
+          "synthetic_auprc": 0.6455485297999665,
+          "random_init_auprc": 0.525406137973997,
+          "gain": 0.1201
+        },
+        {
+          "seed": 42,
+          "synthetic_auprc": 0.6395631116298713,
+          "random_init_auprc": 0.5394139876776647,
+          "gain": 0.1001
+        },
+        {
+          "seed": 2026,
+          "synthetic_auprc": 0.6394608627037428,
+          "random_init_auprc": 0.5299122612551546,
+          "gain": 0.1095
+        }
+      ]
+    },
+    {
+      "unit": "pixel",
+      "spatial": "pixel",
+      "patch_size": null,
+      "model": "cnn_mamba",
+      "n_train": 1088,
+      "n_test": 1088,
+      "d_in": 22,
+      "epochs_cap": 3,
+      "steps": 400,
+      "seeds": [
+        13,
+        42,
+        2026
+      ],
+      "params": 293174,
+      "family": "reconstruction",
+      "placement": "colab",
+      "synthetic_auprc": {
+        "mean": 0.6916996668798022,
+        "std": 0.02047775747799389,
+        "n": 3
+      },
+      "random_init_auprc": {
+        "mean": 0.5209582145251251,
+        "std": 0.004184332022501332,
+        "n": 3
+      },
+      "step_reference_auprc": {
+        "mean": 0.6598529973364062,
+        "std": 0.0,
+        "n": 3
+      },
+      "ssl_gain_over_random": 0.1707,
+      "wall_s": 141.99,
+      "per_seed": [
+        {
+          "seed": 13,
+          "synthetic_auprc": 0.6879254521047905,
+          "random_init_auprc": 0.5181639439887893,
+          "gain": 0.1698
+        },
+        {
+          "seed": 42,
+          "synthetic_auprc": 0.6687206466211433,
+          "random_init_auprc": 0.5178379400444303,
+          "gain": 0.1509
+        },
+        {
+          "seed": 2026,
+          "synthetic_auprc": 0.718452901913473,
+          "random_init_auprc": 0.5268727595421556,
+          "gain": 0.1916
+        }
+      ]
+    },
+    {
+      "unit": "patch9",
+      "spatial": "patch",
+      "patch_size": 9,
+      "model": "mamba_ae",
+      "n_train": 1768,
+      "n_test": 1768,
+      "d_in": 21,
+      "epochs_cap": 2,
+      "steps": 400,
+      "seeds": [
+        13,
+        42,
+        2026
+      ],
+      "params": 292917,
+      "family": "reconstruction",
+      "placement": "colab",
+      "synthetic_auprc": {
+        "mean": 0.684062488246612,
+        "std": 0.05370977025559233,
+        "n": 3
+      },
+      "random_init_auprc": {
+        "mean": 0.5564186736737647,
+        "std": 0.008846054157042657,
+        "n": 3
+      },
+      "step_reference_auprc": {
+        "mean": 0.6023273040323749,
+        "std": 0.0,
+        "n": 3
+      },
+      "ssl_gain_over_random": 0.1276,
+      "wall_s": 157.27,
+      "per_seed": [
+        {
+          "seed": 13,
+          "synthetic_auprc": 0.6667021288867454,
+          "random_init_auprc": 0.56747386239922,
+          "gain": 0.0992
+        },
+        {
+          "seed": 42,
+          "synthetic_auprc": 0.7567822851453808,
+          "random_init_auprc": 0.5559621849998808,
+          "gain": 0.2008
+        },
+        {
+          "seed": 2026,
+          "synthetic_auprc": 0.6287030507077096,
+          "random_init_auprc": 0.5458199736221935,
+          "gain": 0.0829
+        }
+      ]
+    },
+    {
+      "unit": "patch9",
+      "spatial": "patch",
+      "patch_size": 9,
+      "model": "gru_ae",
+      "n_train": 1768,
+      "n_test": 1768,
+      "d_in": 21,
+      "epochs_cap": 2,
+      "steps": 400,
+      "seeds": [
+        13,
+        42,
+        2026
+      ],
+      "params": 159189,
+      "family": "reconstruction",
+      "placement": "laptop",
+      "synthetic_auprc": {
+        "mean": 0.646533402180597,
+        "std": 0.022664908225385545,
+        "n": 3
+      },
+      "random_init_auprc": {
+        "mean": 0.5308413991020885,
+        "std": 0.00547247774317159,
+        "n": 3
+      },
+      "step_reference_auprc": {
+        "mean": 0.6023273040323749,
+        "std": 0.0,
+        "n": 3
+      },
+      "ssl_gain_over_random": 0.1157,
+      "wall_s": 55.67,
+      "per_seed": [
+        {
+          "seed": 13,
+          "synthetic_auprc": 0.6785206560015729,
+          "random_init_auprc": 0.5243947090065819,
+          "gain": 0.1541
+        },
+        {
+          "seed": 42,
+          "synthetic_auprc": 0.6323170743563822,
+          "random_init_auprc": 0.5303563537869435,
+          "gain": 0.102
+        },
+        {
+          "seed": 2026,
+          "synthetic_auprc": 0.6287624761838356,
+          "random_init_auprc": 0.5377731345127399,
+          "gain": 0.091
+        }
+      ]
+    },
+    {
+      "unit": "patch9",
+      "spatial": "patch",
+      "patch_size": 9,
+      "model": "cnn_mamba",
+      "n_train": 1768,
+      "n_test": 1768,
+      "d_in": 21,
+      "epochs_cap": 2,
+      "steps": 400,
+      "seeds": [
+        13,
+        42,
+        2026
+      ],
+      "params": 292917,
+      "family": "reconstruction",
+      "placement": "colab",
+      "synthetic_auprc": {
+        "mean": 0.684062488246612,
+        "std": 0.05370977025559233,
+        "n": 3
+      },
+      "random_init_auprc": {
+        "mean": 0.5564186736737647,
+        "std": 0.008846054157042657,
+        "n": 3
+      },
+      "step_reference_auprc": {
+        "mean": 0.6023273040323749,
+        "std": 0.0,
+        "n": 3
+      },
+      "ssl_gain_over_random": 0.1276,
+      "wall_s": 141.79,
+      "per_seed": [
+        {
+          "seed": 13,
+          "synthetic_auprc": 0.6667021288867454,
+          "random_init_auprc": 0.56747386239922,
+          "gain": 0.0992
+        },
+        {
+          "seed": 42,
+          "synthetic_auprc": 0.7567822851453808,
+          "random_init_auprc": 0.5559621849998808,
+          "gain": 0.2008
+        },
+        {
+          "seed": 2026,
+          "synthetic_auprc": 0.6287030507077096,
+          "random_init_auprc": 0.5458199736221935,
+          "gain": 0.0829
+        }
+      ]
+    },
+    {
+      "unit": "patch11",
+      "spatial": "patch",
+      "patch_size": 11,
+      "model": "mamba_ae",
+      "n_train": 816,
+      "n_test": 816,
+      "d_in": 21,
+      "epochs_cap": 4,
+      "steps": 400,
+      "seeds": [
+        13,
+        42,
+        2026
+      ],
+      "params": 292917,
+      "family": "reconstruction",
+      "placement": "colab",
+      "synthetic_auprc": {
+        "mean": 0.7107949228947691,
+        "std": 0.015641457933742116,
+        "n": 3
+      },
+      "random_init_auprc": {
+        "mean": 0.5585418539793212,
+        "std": 0.008412517178263615,
+        "n": 3
+      },
+      "step_reference_auprc": {
+        "mean": 0.6022401508041691,
+        "std": 0.0,
+        "n": 3
+      },
+      "ssl_gain_over_random": 0.1523,
+      "wall_s": 133.07,
+      "per_seed": [
+        {
+          "seed": 13,
+          "synthetic_auprc": 0.6899041546915903,
+          "random_init_auprc": 0.5686124999279554,
+          "gain": 0.1213
+        },
+        {
+          "seed": 42,
+          "synthetic_auprc": 0.7275382957507408,
+          "random_init_auprc": 0.5589921700329402,
+          "gain": 0.1685
+        },
+        {
+          "seed": 2026,
+          "synthetic_auprc": 0.7149423182419762,
+          "random_init_auprc": 0.5480208919770682,
+          "gain": 0.1669
+        }
+      ]
+    },
+    {
+      "unit": "patch11",
+      "spatial": "patch",
+      "patch_size": 11,
+      "model": "gru_ae",
+      "n_train": 816,
+      "n_test": 816,
+      "d_in": 21,
+      "epochs_cap": 4,
+      "steps": 400,
+      "seeds": [
+        13,
+        42,
+        2026
+      ],
+      "params": 159189,
+      "family": "reconstruction",
+      "placement": "laptop",
+      "synthetic_auprc": {
+        "mean": 0.6395078051538025,
+        "std": 0.026503127944426098,
+        "n": 3
+      },
+      "random_init_auprc": {
+        "mean": 0.5328944306410673,
+        "std": 0.006940468623527279,
+        "n": 3
+      },
+      "step_reference_auprc": {
+        "mean": 0.6022401508041691,
+        "std": 0.0,
+        "n": 3
+      },
+      "ssl_gain_over_random": 0.1066,
+      "wall_s": 78.86,
+      "per_seed": [
+        {
+          "seed": 13,
+          "synthetic_auprc": 0.6728801897556818,
+          "random_init_auprc": 0.5247183998150353,
+          "gain": 0.1482
+        },
+        {
+          "seed": 42,
+          "synthetic_auprc": 0.6375978317787625,
+          "random_init_auprc": 0.532279303804472,
+          "gain": 0.1053
+        },
+        {
+          "seed": 2026,
+          "synthetic_auprc": 0.6080453939269631,
+          "random_init_auprc": 0.5416855883036948,
+          "gain": 0.0664
+        }
+      ]
+    },
+    {
+      "unit": "patch11",
+      "spatial": "patch",
+      "patch_size": 11,
+      "model": "cnn_mamba",
+      "n_train": 816,
+      "n_test": 816,
+      "d_in": 21,
+      "epochs_cap": 4,
+      "steps": 400,
+      "seeds": [
+        13,
+        42,
+        2026
+      ],
+      "params": 292917,
+      "family": "reconstruction",
+      "placement": "colab",
+      "synthetic_auprc": {
+        "mean": 0.7107949228947691,
+        "std": 0.015641457933742116,
+        "n": 3
+      },
+      "random_init_auprc": {
+        "mean": 0.5585418539793212,
+        "std": 0.008412517178263615,
+        "n": 3
+      },
+      "step_reference_auprc": {
+        "mean": 0.6022401508041691,
+        "std": 0.0,
+        "n": 3
+      },
+      "ssl_gain_over_random": 0.1523,
+      "wall_s": 151.66,
+      "per_seed": [
+        {
+          "seed": 13,
+          "synthetic_auprc": 0.6899041546915903,
+          "random_init_auprc": 0.5686124999279554,
+          "gain": 0.1213
+        },
+        {
+          "seed": 42,
+          "synthetic_auprc": 0.7275382957507408,
+          "random_init_auprc": 0.5589921700329402,
+          "gain": 0.1685
+        },
+        {
+          "seed": 2026,
+          "synthetic_auprc": 0.7149423182419762,
+          "random_init_auprc": 0.5480208919770682,
+          "gain": 0.1669
+        }
+      ]
+    },
+    {
+      "unit": "full_field",
+      "spatial": "full_field",
+      "patch_size": null,
+      "model": "mamba_ae",
+      "n_train": 17,
+      "n_test": 17,
+      "d_in": 26,
+      "epochs_cap": 133,
+      "steps": 400,
+      "seeds": [
+        13,
+        42,
+        2026
+      ],
+      "params": 294202,
+      "family": "reconstruction",
+      "placement": "colab",
+      "synthetic_auprc": {
+        "mean": 0.662343305759812,
+        "std": 0.006610858399703605,
+        "n": 3
+      },
+      "random_init_auprc": {
+        "mean": 0.5832053206527713,
+        "std": 0.006932604000416639,
+        "n": 3
+      },
+      "step_reference_auprc": {
+        "mean": 0.6067562067902771,
+        "std": 0.0,
+        "n": 3
+      },
+      "ssl_gain_over_random": 0.0791,
+      "wall_s": 147.86,
+      "per_seed": [
+        {
+          "seed": 13,
+          "synthetic_auprc": 0.6694090198526311,
+          "random_init_auprc": 0.5918436001840077,
+          "gain": 0.0776
+        },
+        {
+          "seed": 42,
+          "synthetic_auprc": 0.6641125177850293,
+          "random_init_auprc": 0.574870388014624,
+          "gain": 0.0892
+        },
+        {
+          "seed": 2026,
+          "synthetic_auprc": 0.6535083796417758,
+          "random_init_auprc": 0.5829019737596823,
+          "gain": 0.0706
+        }
+      ]
+    },
+    {
+      "unit": "full_field",
+      "spatial": "full_field",
+      "patch_size": null,
+      "model": "gru_ae",
+      "n_train": 17,
+      "n_test": 17,
+      "d_in": 26,
+      "epochs_cap": 133,
+      "steps": 400,
+      "seeds": [
+        13,
+        42,
+        2026
+      ],
+      "params": 162394,
+      "family": "reconstruction",
+      "placement": "laptop",
+      "synthetic_auprc": {
+        "mean": 0.6282696778659672,
+        "std": 0.0054806867557889325,
+        "n": 3
+      },
+      "random_init_auprc": {
+        "mean": 0.5528529934016119,
+        "std": 0.013807460301567254,
+        "n": 3
+      },
+      "step_reference_auprc": {
+        "mean": 0.6067562067902771,
+        "std": 0.0,
+        "n": 3
+      },
+      "ssl_gain_over_random": 0.0754,
+      "wall_s": 77.1,
+      "per_seed": [
+        {
+          "seed": 13,
+          "synthetic_auprc": 0.6357056328735184,
+          "random_init_auprc": 0.5473726491373551,
+          "gain": 0.0883
+        },
+        {
+          "seed": 42,
+          "synthetic_auprc": 0.6264455907541827,
+          "random_init_auprc": 0.5393622287145682,
+          "gain": 0.0871
+        },
+        {
+          "seed": 2026,
+          "synthetic_auprc": 0.6226578099702006,
+          "random_init_auprc": 0.5718241023529123,
+          "gain": 0.0508
+        }
+      ]
+    },
+    {
+      "unit": "full_field",
+      "spatial": "full_field",
+      "patch_size": null,
+      "model": "cnn_mamba",
+      "n_train": 17,
+      "n_test": 17,
+      "d_in": 26,
+      "epochs_cap": 133,
+      "steps": 400,
+      "seeds": [
+        13,
+        42,
+        2026
+      ],
+      "params": 294202,
+      "family": "reconstruction",
+      "placement": "colab",
+      "synthetic_auprc": {
+        "mean": 0.662343305759812,
+        "std": 0.006610858399703605,
+        "n": 3
+      },
+      "random_init_auprc": {
+        "mean": 0.5832053206527713,
+        "std": 0.006932604000416639,
+        "n": 3
+      },
+      "step_reference_auprc": {
+        "mean": 0.6067562067902771,
+        "std": 0.0,
+        "n": 3
+      },
+      "ssl_gain_over_random": 0.0791,
+      "wall_s": 121.8,
+      "per_seed": [
+        {
+          "seed": 13,
+          "synthetic_auprc": 0.6694090198526311,
+          "random_init_auprc": 0.5918436001840077,
+          "gain": 0.0776
+        },
+        {
+          "seed": 42,
+          "synthetic_auprc": 0.6641125177850293,
+          "random_init_auprc": 0.574870388014624,
+          "gain": 0.0892
+        },
+        {
+          "seed": 2026,
+          "synthetic_auprc": 0.6535083796417758,
+          "random_init_auprc": 0.5829019737596823,
+          "gain": 0.0706
+        }
+      ]
+    }
+  ],
+  "wall_s": 1451.58,
+  "claim": "CPU screening only; equal optimiser steps, random-init control recorded; no claim above L2 and no SSL-advantage claim without CI excluding zero."
+}

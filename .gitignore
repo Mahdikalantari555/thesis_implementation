@@ -99,3 +99,9 @@ reports/mini_dataset/arch_sweep/**/*.db
 
 # Full parity dump is large and regenerable; keep the summary.
 reports/mini_dataset/parity.json
+
+# Per-run dirs are regenerable; all numbers are folded into sweep.json.
+reports/mini_dataset/arch_sweep/*/*/
+
+# Cycle-review PNGs are local review artifacts; never commit images.
+reports/mini_dataset/figures/*.png
