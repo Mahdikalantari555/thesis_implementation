@@ -32,6 +32,25 @@ def _dataset(n_dates: int = 40) -> MiniDataset:
     return ds
 
 
+def test_max_steps_caps_compute_independent_of_dataset_size(tmp_path):
+    """Equal-compute gate: both dataset sizes stop at the same step count."""
+    seen = []
+    for n in (4, 12):
+        ds = _dataset()
+        ds.samples = [ds.samples[0]] * n
+        cfg = RunConfig(name=f"cap_{n}", claim_rung="L2")
+        cfg.protocol.name = "intra_farm_temporal"
+        cfg.protocol.holdout_boundary = "2015-01-21"  # fixture dates are 2015-01-01..02-09
+        cfg.model.epochs = 50
+        cfg.model.max_steps = 3
+        cfg.model.seeds = (13,)
+        cfg.n_trials = 1
+        cfg.mlflow_experiment = "mini-lab-cap"
+        summary = run_experiment(cfg, ds, out_root=tmp_path / f"cap_{n}")
+        seen.append(summary["per_seed"][0]["steps_done"])
+    assert seen == [3, 3]
+
+
 def test_registry_exposes_all_nine_architectures():
     specs = model_specs()
     assert {s["name"] for s in specs} == set(MODEL_REGISTRY)

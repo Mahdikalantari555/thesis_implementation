@@ -49,5 +49,25 @@ def test_cysp_gain_is_signed_against_raw_baseline():
     stages = np.array(["S1", "S2"])[rng.integers(0, 2, n)]
     years = rng.integers(2013, 2027, n)
     out = probe._cysp_rg(z, raw, farms, stages, years)
-    assert set(out) >= {"ssl", "raw", "gain", "shuffled_year_control"}
+    assert set(out) >= {"ssl", "raw", "gain", "shuffled_year_control", "null_control"}
     assert out["gain"] == round(out["ssl"]["r_at_1"] - out["raw"]["r_at_1"], 4)
+
+
+def test_cysp_control_reports_chance_and_excludes_dev_year():
+    rng = np.random.default_rng(7)
+    n = 900
+    z = rng.normal(size=(n, 8))
+    raw = rng.normal(size=(n, 12))
+    farms = np.array(["a", "b", "c"])[rng.integers(0, 3, n)]
+    stages = np.array(["S1", "S2"])[rng.integers(0, 2, n)]
+    years = np.array([2018 + int(i % 9) for i in range(n)])  # 2018..2026
+    out = probe._cysp_rg(z, raw, farms, stages, years)
+    null = out["null_control"]
+    assert null["n_queries"] == int(np.sum(years >= 2024))
+    assert out["ssl"]["chance_level"] is not None
+    assert 0.0 <= null["null_mean"] <= 1.0
+    assert null["null_p97_5"] >= null["null_mean"]
+    assert out["shuffled_year_control"] == null["null_mean"]
+    assert out["control_definition"].startswith("candidate (farm, stage) label permutation")
+    # The dev year contributes neither queries nor candidates.
+    assert out["ssl"]["n_queries"] == null["n_queries"] == int(np.sum(years >= 2024))

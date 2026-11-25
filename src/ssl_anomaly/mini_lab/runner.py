@@ -156,6 +156,7 @@ def _one_seed(
     obs_te = torch.from_numpy(test.observed).to(device)
 
     losses: list[float] = []
+    steps_done = 0
     for epoch in range(start_epoch, cfg.model.epochs):
         model.train()
         perm = torch.randperm(xtr.shape[0], generator=torch.Generator().manual_seed(seed + epoch))
@@ -183,7 +184,10 @@ def _one_seed(
                 opt.step()
                 total += float(loss.detach().cpu())
                 n_batches += 1
+                steps_done += 1
                 bar.set_postfix(loss=round(total / n_batches, 5))
+                if cfg.model.max_steps is not None and steps_done >= cfg.model.max_steps:
+                    break
         mean_loss = total / max(1, n_batches)
         losses.append(mean_loss)
         rec = {
@@ -194,7 +198,10 @@ def _one_seed(
         with progress.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(rec) + "\n")
         _save_checkpoint(ck_path, model, opt, epoch + 1, seed)
-        print(f"  {split_name} seed {seed} epoch {epoch+1}/{cfg.model.epochs}: loss={mean_loss:.5f}", flush=True)
+        print(f"  {split_name} seed {seed} epoch {epoch+1}/{cfg.model.epochs}: "
+              f"loss={mean_loss:.5f} steps={steps_done}", flush=True)
+        if cfg.model.max_steps is not None and steps_done >= cfg.model.max_steps:
+            break
 
     train_emb = _train_embeddings(model, xtr) if spec.family == "representation" else None
     clean = _scores(model, xte, obs_te, spec.family, train_emb)
@@ -251,6 +258,8 @@ def _one_seed(
         "n_imputed_features": int((~torch.from_numpy(test.observed).bool()).sum().item()),
         "valid_patch_counts": valid_patch_counts,
         "device": str(device),
+        "max_steps": cfg.model.max_steps,
+        "steps_done": steps_done,
         "wall_s": round(time.monotonic() - t0, 2),
         "git_sha": get_git_commit_sha(),
         "data_source": str(cfg.store_root),

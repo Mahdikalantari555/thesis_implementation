@@ -255,7 +255,15 @@ def _temporal_units(
     return out
 
 
-def build_dataset(cfg: RunConfig, store_root: Path | None = None) -> MiniDataset:
+def build_dataset(
+    cfg: RunConfig, store_root: Path | None = None, farm_ids: tuple[str, ...] | None = None
+) -> MiniDataset:
+    """Build the mini dataset; ``farm_ids`` optionally narrows the store view.
+
+    Narrowing is additive: it never rewrites the store, it only skips groups
+    that are not part of the requested local sweep (e.g. 1-2 fields of the
+    three-field selection layer).
+    """
     root = store_root or cfg.store_root
     weather, weather_cols = _weather_features(root, cfg.representation.weather_group)
     ds = MiniDataset()
@@ -272,6 +280,8 @@ def build_dataset(cfg: RunConfig, store_root: Path | None = None) -> MiniDataset
         "weather_group": cfg.representation.weather_group,
     }
     for farm_id, group in _farm_groups(root):
+        if farm_ids is not None and farm_id not in farm_ids:
+            continue
         dates = [str(d) for d in group["dates"][:]]
         day_nums = np.array([(np.datetime64(d, "D") - np.datetime64("2013-03-30", "D")).astype(int) for d in dates])
         delta_t = np.diff(day_nums, prepend=day_nums[0]).astype(np.float32)

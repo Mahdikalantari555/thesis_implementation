@@ -7,8 +7,15 @@ Produces three things from real artifacts only:
    stress patch-windows vs matched raw-feature and B1-style baselines.
 3. Collapse diagnostics (effective rank, per-dim std, mean pairwise cosine).
 
-All splits are by YEAR (train < 2023, test >= 2023). No gate is modified;
-results are L1/L2 screening evidence only.
+Split (accepted 2026-11-25): train <= 2022, dev 2023, test >= 2024. The dev
+year is excluded from retrieval and probes. Fixes to the 2026-11-25 audit:
+chance level and a label-permutation null are reported (the old
+"shuffled-year" control used train years as queries and reported R@1=0.999);
+NaN is never turned into an observed zero (an explicit observation mask is a
+model input); patches are sampled on the 5x5 label grid and spread over the
+field; windows that cross a split boundary are dropped; the logistic probe is
+fit with a converged solver and a farm x year cluster-bootstrap CI. Results
+are L1/L2 screening evidence only, never stress validation.
 
 Usage::
 
@@ -40,8 +47,9 @@ if str(ROOT / "src") not in sys.path:
 from ssl_anomaly.mini_lab.models import build_model  # noqa: E402
 from ssl_anomaly.utils.seeds import seed_everything  # noqa: E402
 from ssl_anomaly.utils.tracking import get_git_commit_sha  # noqa: E402
+from ssl_anomaly.utils.paths import localize  # noqa: E402
 
-DATA = Path("D:/RS/Thesis/Data/Processed/mini_research_dataset")
+DATA = localize("D:/RS/Thesis/Data/Processed/mini_research_dataset")
 STORE = DATA / "satellite.zarr"
 PATCH_LABELS = DATA / "suspected_stress" / "suspected_patches.parquet"
 WEATHER = DATA / "weather" / "weather_aligned_mini.parquet"
@@ -77,28 +85,52 @@ def _auprc(y: np.ndarray, scores: np.ndarray) -> float:
     return float(precision[ys == 1].mean()) if ys.sum() > 0 else float("nan")
 
 
-def _logistic_probe(features: np.ndarray, y: np.ndarray, train: np.ndarray) -> dict[str, Any]:
-    """Small logistic regression in pure NumPy; avoids the Windows BLAS crash."""
-    xtr, ytr = features[train], y[train].astype(np.float32)
-    xte, yte = features[~train], y[~train]
-    w = np.zeros(xtr.shape[1], dtype=np.float32)
-    b = 0.0
-    lr = 0.1
-    for _ in range(200):
-        logits = np.einsum("nd,d->n", xtr, w, optimize=False) + b
-        p = 1.0 / (1.0 + np.exp(-np.clip(logits, -30, 30)))
-        err = (p - ytr) / len(ytr)
-        w -= lr * (np.einsum("nd,n->d", xtr, err, optimize=False) + 0.01 * w)
-        b -= lr * float(err.sum())
-    prob = 1.0 / (
-        1.0 + np.exp(-np.clip(np.einsum("nd,d->n", xte, w, optimize=False) + b, -30, 30))
-    )
-    return {
+def _logistic_probe(
+    features: np.ndarray,
+    y: np.ndarray,
+    train: np.ndarray,
+    groups: np.ndarray | None = None,
+    test: np.ndarray | None = None,
+) -> dict[str, Any]:
+    """Converged logistic probe + farm x year cluster-bootstrap CI.
+
+    The previous 200-step hand-rolled gradient descent did not converge and
+    reversed the arm ordering under a converged solver (audit 2026-11-25 §3).
+    """
+    from sklearn.linear_model import LogisticRegression
+
+    evaluation = ~train if test is None else test
+    xtr, ytr = features[train], y[train]
+    xte, yte, te_idx = features[evaluation], y[evaluation], np.flatnonzero(evaluation)
+    clf = LogisticRegression(max_iter=3000, solver="lbfgs", C=1.0)
+    clf.fit(xtr, ytr)
+    prob = clf.predict_proba(xte)[:, 1]
+    result: dict[str, Any] = {
         "auprc": round(_auprc(yte, prob), 4),
         "prevalence": round(float(yte.mean()), 4),
         "n_test": int(len(yte)),
         "n_positive_test": int(yte.sum()),
+        "solver": "sklearn.LogisticRegression(lbfgs, max_iter=3000, C=1.0)",
+        "converged": bool(clf.n_iter_[0] < 3000),
     }
+    if groups is not None and len(yte) > 0:
+        gte = groups[te_idx]
+        uniq = np.unique(gte)
+        rng = np.random.default_rng(13)
+        scores: list[float] = []
+        for _ in range(500):
+            pick = rng.choice(uniq, size=len(uniq), replace=True)
+            idx = np.concatenate([np.flatnonzero(gte == g) for g in pick])
+            if len(np.unique(yte[idx])) < 2:
+                continue
+            s = _auprc(yte[idx], prob[idx])
+            if np.isfinite(s):
+                scores.append(s)
+        if scores:
+            lo, hi = np.percentile(scores, [2.5, 97.5])
+            result["ci95"] = [round(float(lo), 4), round(float(hi), 4)]
+            result["n_bootstrap_clusters"] = int(len(uniq))
+    return result
 
 
 def _collapse(z: np.ndarray) -> dict[str, float]:
@@ -121,53 +153,93 @@ def _collapse(z: np.ndarray) -> dict[str, float]:
     }
 
 
+TRAIN_YEAR_END = 2022
+DEV_YEAR = 2023
+TEST_YEAR_START = 2024
+
+
+def _cysp_rg_raw(
+    e: np.ndarray, farms: np.ndarray, stages: np.ndarray, years: np.ndarray, n_perm: int = 200
+) -> dict[str, Any]:
+    """Corrected negative control for cross-year same-phase retrieval.
+
+    The old version set ``train, test = perm_years < 2023, years < 2023``:
+    queries came from TRAIN years and could be their own candidates, yielding
+    R@1 = 0.999. Here queries are test years (>= 2024), candidates are train
+    years (<= 2022), and the null is a permutation of candidate (farm, stage)
+    labels. Both observed R@1 and the null are reported with chance level.
+    """
+    cand = np.flatnonzero(years <= TRAIN_YEAR_END)
+    queries = np.flatnonzero(years >= TEST_YEAR_START)
+    if cand.size < 2 or queries.size == 0:
+        return {"r_at_1": None, "chance_level": None, "null_mean": None,
+                "null_p97_5": None, "n_queries": 0, "n_permutations": n_perm}
+    tops: list[int] = []
+    chance = 0.0
+    for i in queries:
+        sims = np.sum(e[cand] * e[i], axis=1)
+        tops.append(int(np.argmax(sims)))
+        chance += float(np.mean((farms[cand] == farms[i]) & (stages[cand] == stages[i])))
+    cand_farms, cand_stages = farms[cand], stages[cand]
+    observed = float(np.mean([
+        (cand_farms[t] == farms[i] and cand_stages[t] == stages[i])
+        for i, t in zip(queries, tops)
+    ]))
+    rng = np.random.default_rng(13)
+    null: list[float] = []
+    for _ in range(n_perm):
+        pf = rng.permutation(cand_farms)
+        ps = rng.permutation(cand_stages)
+        null.append(float(np.mean([
+            (pf[t] == farms[i] and ps[t] == stages[i]) for i, t in zip(queries, tops)
+        ])))
+    return {
+        "r_at_1": round(observed, 4),
+        "chance_level": round(chance / len(queries), 4),
+        "null_mean": round(float(np.mean(null)), 4),
+        "null_p97_5": round(float(np.percentile(null, 97.5)), 4),
+        "n_queries": int(len(queries)),
+        "n_permutations": n_perm,
+    }
+
+
 def _cysp_rg(z: np.ndarray, raw: np.ndarray, farms: np.ndarray, stages: np.ndarray, years: np.ndarray) -> dict[str, Any]:
-    """R@1 with hard negatives; query = test year, candidates = train years."""
-    train = years < 2023
-    test = ~train
+    """R@1 with hard negatives; query = test year (>=2024), candidates = train (<=2022)."""
     out: dict[str, Any] = {}
     for name, emb in (("ssl", z), ("raw", raw)):
         e = emb / (np.linalg.norm(emb, axis=1, keepdims=True) + 1e-8)
-        correct, total = 0, 0
-        for i in np.flatnonzero(test):
-            cand = np.flatnonzero(train)
+        correct, total, chance = 0, 0, 0.0
+        for i in np.flatnonzero(years >= TEST_YEAR_START):
+            cand = np.flatnonzero(years <= TRAIN_YEAR_END)
             if cand.size < 2:
                 continue
-            # Elementwise dot avoids a native BLAS crash on repeated small
-            # matrix-vector products with the installed NumPy build.
             sims = np.sum(e[cand] * e[i], axis=1)
             top = cand[int(np.argmax(sims))]
-            if farms[top] == farms[i] and stages[top] == stages[i]:
-                correct += 1
+            correct += int(farms[top] == farms[i] and stages[top] == stages[i])
+            chance += float(np.mean((farms[cand] == farms[i]) & (stages[cand] == stages[i])))
             total += 1
-        out[name] = {"r_at_1": round(correct / total, 4) if total else None, "n_queries": int(total)}
+        out[name] = {
+            "r_at_1": round(correct / total, 4) if total else None,
+            "n_queries": int(total),
+            "chance_level": round(chance / total, 4) if total else None,
+        }
     out["gain"] = (
         round((out["ssl"]["r_at_1"] or 0) - (out["raw"]["r_at_1"] or 0), 4)
         if out["ssl"]["r_at_1"] is not None and out["raw"]["r_at_1"] is not None
         else None
     )
-    # Shuffled-year negative control: permute candidate years, expect R@1 to fall.
-    rng = np.random.default_rng(13)
-    perm = rng.permutation(len(years))
-    out["shuffled_year_control"] = _cysp_rg_raw(
-        z / (np.linalg.norm(z, axis=1, keepdims=True) + 1e-8),
-        farms, stages, years, years[perm],
+    # Legacy key kept for compatibility; the value is now the corrected
+    # label-permutation null mean, not the broken shuffled-year R@1.
+    control = _cysp_rg_raw(
+        z / (np.linalg.norm(z, axis=1, keepdims=True) + 1e-8), farms, stages, years
+    )
+    out["shuffled_year_control"] = control["null_mean"]
+    out["null_control"] = control
+    out["control_definition"] = (
+        "candidate (farm, stage) label permutation; queries = years >= 2024, "
+        "candidates = years <= 2022; dev year 2023 excluded"
     )
     return out
-
-
-def _cysp_rg_raw(e: np.ndarray, farms, stages, years, perm_years) -> float | None:
-    train, test = perm_years < 2023, years < 2023
-    correct = total = 0
-    for i in np.flatnonzero(test):
-        cand = np.flatnonzero(train)
-        if cand.size < 2:
-            continue
-        sims = np.sum(e[cand] * e[i], axis=1)
-        top = cand[int(np.argmax(sims))]
-        correct += int(farms[top] == farms[i] and stages[top] == stages[i])
-        total += 1
-    return round(correct / total, 4) if total else None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -205,12 +277,13 @@ def main(argv: list[str] | None = None) -> int:
     }
 
     X: list[np.ndarray] = []
+    OBS: list[np.ndarray] = []
     raw_sum: list[np.ndarray] = []
     farm_ids: list[str] = []
     stage_ids: list[str] = []
     years: list[int] = []
     y_susp: list[int] = []
-    d_in: int | None = None
+    n_crossing = 0
     for d in sorted(p for p in STORE.iterdir() if p.is_dir() and (p / ".zgroup").exists()):
         g = zarr.open_group(str(d), mode="r")
         farm = str(g.attrs["farm_id"])
@@ -221,66 +294,114 @@ def main(argv: list[str] | None = None) -> int:
         cube = np.asarray(g["data"][:], dtype=np.float32)
         valid = np.asarray(g["pixel_valid"][:], dtype=bool)
         in_field = np.asarray(g["in_field"][:], dtype=bool)
-        # Deterministic subset of 5x5 patches.
-        coords = [(r, c) for r in range(0, in_field.shape[0] - 4) for c in range(0, in_field.shape[1] - 4)]
-        coords = coords[: args.max_patches]
+        # Patches on the 5x5 label grid, spread over the whole field. The old
+        # stride-1 `coords[:80]` took only top rows and was misaligned with the
+        # label tiles (audit 2026-11-25 §6.2/6.3).
+        h, w = in_field.shape
+        # Offset by the global tile phase so each patch covers exactly one
+        # 5x5 label tile (row0/col0 are not multiples of 5 for these farms).
+        r0tile, c0tile = (-row0) % 5, (-col0) % 5
+        grid = [
+            (r, c)
+            for r in range(r0tile, max(1, h - 4), 5)
+            for c in range(c0tile, max(1, w - 4), 5)
+        ]
+        if len(grid) > args.max_patches:
+            pick = np.linspace(0, len(grid) - 1, args.max_patches).astype(int)
+            coords = [grid[int(i)] for i in pick]
+        else:
+            coords = grid
         for r, c in coords:
-            series = []
+            series: list[list[float]] = []
+            oseries: list[list[float]] = []
             for di, date in enumerate(dates):
                 m = valid[di, r : r + 5, c : c + 5] & in_field[r : r + 5, c : c + 5]
-                vals = []
+                vals: list[float] = []
+                obs: list[float] = []
                 for bi in range(7):
                     v = cube[di, bi, r : r + 5, c : c + 5][m]
                     v = v[np.isfinite(v)]
-                    vals.append(float(np.median(v)) if v.size else np.nan)
+                    vals.append(float(np.median(v)) if v.size else float("nan"))
+                    obs.append(1.0 if v.size else 0.0)
                 nir, red = vals[3], vals[2]
-                vals.append(float((nir - red) / (nir + red + 1e-8)) if np.isfinite(nir + red) and abs(nir + red) > 1e-8 else np.nan)
+                if np.isfinite(nir) and np.isfinite(red) and abs(nir + red) > 1e-8:
+                    vals.append(float((nir - red) / (nir + red + 1e-8)))
+                    obs.append(1.0)
+                else:
+                    vals.append(float("nan"))
+                    obs.append(0.0)
                 wrow = weather_map.get(date, np.full(len(groups), np.nan, dtype=np.float32))
                 vals.extend(wrow.tolist())
+                obs.extend(np.isfinite(wrow).astype(float).tolist())
                 series.append(vals)
+                oseries.append(obs)
             arr = np.asarray(series, dtype=np.float32)
-            arr = np.where(np.isfinite(arr), arr, 0.0)
-            d_in = arr.shape[1]
+            obsarr = np.asarray(oseries, dtype=np.float32)
             for s in range(0, max(1, len(dates) - args.window + 1), args.window):
                 win = arr[s : s + args.window]
+                obs_win = obsarr[s : s + args.window]
                 if win.shape[0] < 2:
                     continue
                 wdates = dates[s : s + args.window]
-                stages = [stage_map.get((farm, dt), "unknown") for dt in wdates]
-                stage_counts = Counter(stages)
-                stage = stage_counts.most_common(1)[0][0]
-                # Patch labels are keyed by global 5x5 tile origin (floor/5*5).
+                wyears = np.array([int(dt[:4]) for dt in wdates])
+                # A window must lie wholly on one side of each split boundary.
+                if ((wyears.min() <= TRAIN_YEAR_END and wyears.max() >= DEV_YEAR)
+                        or (wyears.min() <= DEV_YEAR and wyears.max() >= TEST_YEAR_START)):
+                    n_crossing += 1
+                    continue
+                stage_list = [stage_map.get((farm, dt), "unknown") for dt in wdates]
+                stage = Counter(stage_list).most_common(1)[0][0]
+                # Global 5x5 tile origin; patch origin is already on the grid.
                 pr = ((row0 + r) // 5) * 5
                 pc = ((col0 + c) // 5) * 5
                 labels = [label_map.get((farm, dt, pr, pc), "control") for dt in wdates]
+                with np.errstate(invalid="ignore"):
+                    mu_w = np.nanmean(win, axis=0)
+                    sd_w = np.nanstd(win, axis=0)
                 X.append(win)
-                raw_sum.append(np.concatenate([win.mean(0), win.std(0)]))
+                OBS.append(obs_win)
+                raw_sum.append(np.concatenate([
+                    np.where(np.isfinite(mu_w), mu_w, 0.0),
+                    np.where(np.isfinite(sd_w), sd_w, 0.0),
+                    obs_win.mean(0),
+                ]))
                 farm_ids.append(farm)
                 stage_ids.append(stage)
-                years.append(int(wdates[0][:4]))
+                years.append(int(wyears[0]))
                 y_susp.append(int(any(lab == "suspected" for lab in labels)))
 
-    x = np.stack(X).astype(np.float32)
+    x = np.stack(X).astype(np.float32)          # NaN = unobserved
+    obs_mask = np.stack(OBS).astype(np.float32)  # 1 = observed, 0 = missing
     raw = np.stack(raw_sum).astype(np.float32)
     farms = np.asarray(farm_ids)
     stages = np.asarray(stage_ids)
     years = np.asarray(years)
     y = np.asarray(y_susp, dtype=int)
-    print(f"Windows: {len(x)} features={x.shape[-1]} suspected={y.sum()} prevalence={y.mean():.4f}", flush=True)
+    groups = np.array([f"{f}:{yr}" for f, yr in zip(farms, years)])
+    print(
+        f"Windows: {len(x)} features={x.shape[-1]} suspected={y.sum()} "
+        f"prevalence={y.mean():.4f} boundary-crossing windows dropped={n_crossing}",
+        flush=True,
+    )
     if y.sum() < 5 or (1 - y).sum() < 5:
         raise RuntimeError("Insufficient suspected/control windows for a probe")
 
-    train = years < 2023
-    # Train-only standardization per channel; raw baseline uses the same scale.
-    mu = x[train].reshape(-1, x.shape[-1]).mean(0)
-    sd = x[train].reshape(-1, x.shape[-1]).std(0)
+    train = years <= TRAIN_YEAR_END
+    if not np.any(years >= TEST_YEAR_START) or not np.any(train):
+        raise RuntimeError("Missing train (<=2022) or test (>=2024) windows after split")
+    flat_train = x[train].reshape(-1, x.shape[-1])
+    mu = np.nanmean(flat_train, axis=0)
+    sd = np.nanstd(flat_train, axis=0)
     sd = np.where(np.isfinite(sd) & (sd > 1e-6), sd, 1.0)
-    x = np.where(np.isfinite(x), (x - mu) / sd, 0.0).astype(np.float32)
+    # Missing values stay missing: the observation mask is a separate model
+    # input, never an observed zero (audit 2026-11-25 §6.1).
+    x_norm = np.where(obs_mask > 0, (x - mu) / sd, 0.0).astype(np.float32)
+    model_input = np.concatenate([x_norm, obs_mask], axis=-1).astype(np.float32)
     rmu, rsd = raw[train].mean(0), raw[train].std(0)
     rsd = np.where(np.isfinite(rsd) & (rsd > 1e-6), rsd, 1.0)
-    raw = np.where(np.isfinite(raw), (raw - rmu) / rsd, 0.0).astype(np.float32)
-    xt = torch.from_numpy(x[train]).to(device)
-    model = _WindowEncoder(x.shape[-1], d_model=32, latent=16).to(device)
+    raw = ((raw - rmu) / rsd).astype(np.float32)
+    xt = torch.from_numpy(model_input[train]).to(device)
+    model = _WindowEncoder(model_input.shape[-1], d_model=32, latent=16).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=1e-3)
     for epoch in tqdm(range(args.epochs), desc="train encoder", unit="epoch"):
         model.train()
@@ -306,16 +427,16 @@ def main(argv: list[str] | None = None) -> int:
         return np.concatenate(out)
 
     print("  extracting embeddings", flush=True)
-    z = embed(model, x)
+    z = embed(model, model_input)
     seed_everything(args.seed)
-    random_model = _WindowEncoder(x.shape[-1], d_model=32, latent=16).to(device)
-    z_rand = embed(random_model, x)
+    random_model = _WindowEncoder(model_input.shape[-1], d_model=32, latent=16).to(device)
+    z_rand = embed(random_model, model_input)
     print("  embeddings done", flush=True)
 
     emb_path = args.out.parent / (args.out.stem + "_embeddings.npz")
     np.savez_compressed(
         emb_path, z=z, z_rand=z_rand, raw=raw, farms=farms, stages=stages,
-        years=years, y=y,
+        years=years, y=y, groups=groups, obs_mask=obs_mask,
     )
     cysp = _cysp_rg(z, raw, farms, stages, years)
     print("  cysp done", flush=True)
@@ -323,8 +444,10 @@ def main(argv: list[str] | None = None) -> int:
 
     print("  fitting probes", flush=True)
 
+    test_mask = years >= TEST_YEAR_START
+
     def probe(features: np.ndarray) -> dict[str, Any]:
-        return _logistic_probe(features, y, train)
+        return _logistic_probe(features, y, train, groups, test_mask)
 
     result = {
         "schema": "mini-representation-first-pilot/v1",
@@ -337,8 +460,22 @@ def main(argv: list[str] | None = None) -> int:
         "n_features": int(x.shape[-1]),
         "n_suspected_windows": int(y.sum()),
         "prevalence": float(y.mean()),
-        "train_rule": "year < 2023",
-        "test_rule": "year >= 2023",
+        "train_rule": "year <= 2022",
+        "dev_rule": "year == 2023 (excluded from retrieval and probes)",
+        "test_rule": "year >= 2024",
+        "split_counts": {
+            "train": int(train.sum()),
+            "dev": int(np.sum(years == DEV_YEAR)),
+            "test": int(np.sum(years >= TEST_YEAR_START)),
+            "boundary_crossing_dropped": n_crossing,
+        },
+        "audit_fixes": [
+            "retrieval control now uses test-year queries + candidate label permutation",
+            "NaN kept unobserved; observation mask fed to the encoder",
+            "patches sampled on 5x5 label grid and spread across field",
+            "windows crossing train/dev/test boundaries dropped",
+            "converged sklearn logistic probe + farm x year cluster bootstrap CI",
+        ],
         "cysp_rg": cysp,
         "cysp_rg_random_init": cysp_random,
         "probe_ssl_embedding": probe(z),
@@ -350,7 +487,10 @@ def main(argv: list[str] | None = None) -> int:
         "caveats": [
             "CWSI_ET shared-input with LST; ETaDaily is a METRIC model product.",
             "Suspicion is not stress; no water/salinity typing.",
-            "3 adjacent farms only; no geographic generalization claim.",
+            "3 separated farms (R15-18/R12-08/L02-02) - L1/L2 screening only, "
+            "no geographic generalization claim.",
+            "n is small: 3 farms x 13 years, farm x year clusters; report CIs, "
+            "do not read point estimates as effects.",
         ],
         "wall_s": round(time.monotonic() - t0, 2),
     }

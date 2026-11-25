@@ -8,6 +8,8 @@ from typing import Any
 
 import yaml
 
+from ssl_anomaly.utils.paths import localize
+
 DEFAULTS = Path(__file__).resolve().parents[3] / "Data" / "Processed" / "mini_research_dataset"
 
 
@@ -33,10 +35,13 @@ class ProtocolConfig:
     # single_farm, an empty test_farms means "every other farm in the store".
     train_farms: tuple[str, ...] = ()
     test_farms: tuple[str, ...] = ()
-    holdout_boundary: str = "2025-01-01"
+    # Accepted 2026-11-25 split for the mini lab (parent plan §9): train <= 2022,
+    # dev 2023, test 2024+. The temporal holdout is therefore 2024-01-01, not
+    # 2025-01-01 (which mixed dev into test and contradicted the 490 split).
+    holdout_boundary: str = "2024-01-01"
     justification: str = (
-        "First day of the last complete calendar year before the partial 2026 year "
-        "(see phenology/season_structure.json); configurable per run."
+        "Accepted 2026-11-25 mini split: train <= 2022, dev 2023, test 2024+ "
+        "(docs/mini_lab_regional_eval_plan.md §9); configurable per run."
     )
 
 
@@ -48,6 +53,9 @@ class ModelConfig:
     n_layers: int = 1
     dropout: float = 0.1
     epochs: int = 3
+    # Equal-compute gate: stop after this many optimiser steps regardless of
+    # dataset size. ``None`` keeps the legacy epoch-only behaviour.
+    max_steps: int | None = None
     batch_size: int = 8
     lr: float = 1e-3
     seeds: tuple[int, ...] = (13, 42)
@@ -69,7 +77,7 @@ class RunConfig:
 
 
 def _as_path(value: Any, default: Path) -> Path:
-    return Path(value) if value is not None else default
+    return localize(value) if value is not None else default
 
 
 def load_run_config(path: str | Path) -> RunConfig:
@@ -98,7 +106,7 @@ def load_run_config(path: str | Path) -> RunConfig:
             name=str(proto.get("name", "lodo")),
             train_farms=tuple(proto.get("train_farms", ()) or ()),
             test_farms=tuple(proto.get("test_farms", ()) or ()),
-            holdout_boundary=str(proto.get("holdout_boundary", "2025-01-01")),
+            holdout_boundary=str(proto.get("holdout_boundary", ProtocolConfig.holdout_boundary)),
             justification=str(proto.get("justification", ProtocolConfig.justification)),
         ),
         model=ModelConfig(
@@ -108,6 +116,7 @@ def load_run_config(path: str | Path) -> RunConfig:
             n_layers=int(model.get("n_layers", 1)),
             dropout=float(model.get("dropout", 0.1)),
             epochs=int(model.get("epochs", 3)),
+            max_steps=(int(model["max_steps"]) if model.get("max_steps") is not None else None),
             batch_size=int(model.get("batch_size", 8)),
             lr=float(model.get("lr", 1e-3)),
             seeds=tuple(int(v) for v in model.get("seeds", (13, 42))),
