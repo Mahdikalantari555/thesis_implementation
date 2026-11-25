@@ -19,6 +19,7 @@ application.
 
 | Change | Tasks | Status | Notes |
 |---|---|---|---|
+| `continual-hybrid-representation-design` | 3/38 | PROPOSED — design (2026-11-26) | Owner requirements: SSL + continual representation learning and anomaly discovery; hybrid pixel+context, dual-path phenology, statistical discovery + active learning, regression-set gated updates; plateau-driven CPU training with mandatory checkpoints and verdicts. Feeds the capstone; does not edit its gates |
 | `regional-ssl-representation-evaluation` | 15/42 | PROPOSED — the capstone | Level-1/Level-2 evaluation of a light regional SSL representation; five-level ladders; pre-registered gates G-A…G-E; owner decisions registered 2026-11-23 (advantage = undecided; priority = both + applied ambition; Madeline path = tracked future change) |
 | `benchmark-latent-reconstruction-prediction-architectures` | 0/37 | PROPOSED — heavy counterpart | Architecture/suppression/synthetic breadth benchmark (Colab T4, budget-aware); feeds the capstone, no capstone gate depends on it |
 | `cycle-detection-v3-multindex` | 26/27 | ACTIVE — v2 producer; nearly closed | Only open item is an optional follow-up: the gate FAILED, so no switch; production path stays off; owner call whether to re-gate with `--sweep` after the v2 store completes |

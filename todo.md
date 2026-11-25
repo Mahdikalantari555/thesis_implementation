@@ -24,6 +24,14 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
 
 ## In progress
 
+- ▶ **continual-hybrid-representation-design (openspec, 2026-11-26)** — design
+  from the owner's requirements document: hybrid pixel + spatial context,
+  dual-path phenology, statistical discovery + active learning with quarantine,
+  continual updates gated by a fixed regression set. Training policy: laptop
+  CPU only, train to plateau, checkpoint always, verbose verdict
+  (`CONVERGED_PLATEAU` / `BUDGET_EXHAUSTED_STILL_IMPROVING` / …). Next session:
+  owner answers design.md §12, then tasks 1.x (trainer) and 2.x (hygiene).
+
 - ▶ **NEXT SESSION — owner cycle-timeline visual check (2026-11-25)** —
   The PNGs are **local review artifacts only** (not committed; regenerate with
   `PYTHONPATH=src <geo>/python -X utf8 scripts/visualize_mini_timeline.py`):
