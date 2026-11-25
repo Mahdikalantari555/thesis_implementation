@@ -37,8 +37,9 @@ if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
 from ssl_anomaly.utils.tracking import get_git_commit_sha  # noqa: E402
+from ssl_anomaly.utils.paths import localize  # noqa: E402
 
-DATA = Path("D:/RS/Thesis/Data")
+DATA = localize("D:/RS/Thesis/Data")
 PRODUCTS = DATA / "Metric" / "products"
 MINI_ROOT = DATA / "Processed" / "mini_research_dataset"
 STORE = MINI_ROOT / "satellite.zarr"

@@ -31,8 +31,9 @@ if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
 from ssl_anomaly.utils.tracking import get_git_commit_sha  # noqa: E402
+from ssl_anomaly.utils.paths import localize  # noqa: E402
 
-DATA = Path("D:/RS/Thesis/Data")
+DATA = localize("D:/RS/Thesis/Data")
 WEATHER_ALIGNED = DATA / "Processed" / "weather" / "weather_aligned.parquet"
 HOURLY = DATA / "Weather" / "raw" / "point_01_raw_hourly.parquet"
 INVENTORY = DATA / "Processed" / "satellite" / "scene_inventory.parquet"

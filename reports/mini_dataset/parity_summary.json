@@ -1,0 +1,14 @@
+{
+  "schema": "mini-parity-summary/v1",
+  "date": "2026-11-25",
+  "git_sha": "c4a89c1",
+  "full_report": "not committed (2.3 MB; regenerate with scripts/build_mini_dataset.py --check-parity)",
+  "passed": true,
+  "n_checks": 11242,
+  "n_failed": 0,
+  "tolerances": {
+    "reflectance": {"atol": 0.02, "rtol": 0.05},
+    "lst": {"atol": 1.0, "rtol": 0.01}
+  },
+  "note": "The 2 prior failures (L02-02 2020-09-01 SWIR) were another symptom of the off-by-one field ID; after applying archive_fid = reference_fid + 1 parity is clean."
+}

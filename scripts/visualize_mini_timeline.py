@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 import warnings
 from pathlib import Path
 
@@ -43,7 +44,11 @@ import zarr
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
-MINI = Path("D:/RS/Thesis/Data/Processed/mini_research_dataset")
+if str(ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(ROOT / "src"))
+from ssl_anomaly.utils.paths import localize  # noqa: E402
+
+MINI = localize("D:/RS/Thesis/Data/Processed/mini_research_dataset")
 STORE = MINI / "satellite.zarr"
 CYCLES = MINI / "phenology" / "cycles_mini.parquet"
 PATCHES = MINI / "suspected_stress" / "suspected_patches.parquet"

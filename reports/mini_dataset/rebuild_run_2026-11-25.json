@@ -1,0 +1,94 @@
+{
+  "schema": "mini-rebuild-run/v1",
+  "created_utc": "2026-11-25",
+  "git_sha": "7dfeaa64298a2a520267bcfe5df72b249577c770",
+  "environment": {
+    "python": "3.11.18",
+    "env_path": "/home/mahdi/micromamba/envs/geo",
+    "numpy": "2.4.6",
+    "zarr": "3.1.6",
+    "torch": "2.15.0+cu132",
+    "device": "cpu"
+  },
+  "selection_layer": "/home/mahdi/RS/Thesis/Data/RoI/3farms-dev.geojson",
+  "selected_farms": ["L02-02", "R12-08", "R15-18"],
+  "store": "/home/mahdi/RS/Thesis/Data/Processed/mini_research_dataset/satellite.zarr",
+  "previous_store": "/home/mahdi/RS/Thesis/Data/Processed/.mini_research_dataset_old_2026-11-25",
+  "manifest_sha256": "f3f8adeffc9e7f26113992daf8ecb328530ea559982d8e06fcba86b01065e07c",
+  "n_dates": 538,
+  "date_range": ["2013-03-30", "2026-09-10"],
+  "date_list_sha256": "8688c5c163202c659e9da88a69afd91c1997afaedc12201da1b2f4dd8f4fca5f",
+  "archive_alignment": {
+    "verdict": "off-by-one field ID confirmed for all three farms; pixels of fid k are polygon fid k-1",
+    "farms": [
+      {"farm": "L02-02", "archive_fid": 300, "best_fid": 299, "best_farm": "R10-31", "iou_best": 1.0, "iou_own": 0.0},
+      {"farm": "R12-08", "archive_fid": 245, "best_fid": 244, "best_farm": "R12-06", "iou_best": 1.0, "iou_own": 0.0},
+      {"farm": "R15-18", "archive_fid": 17, "best_fid": 16, "best_farm": "R15-20", "iou_best": 1.0, "iou_own": 0.0}
+    ],
+    "scope": "archive-wide provenance issue; not corrected in this run"
+  },
+  "parity": {
+    "report": "reports/mini_dataset/parity.json",
+    "n_checks": 11256,
+    "n_failed": 2,
+    "failed": [
+      {"farm": "L02-02", "date": "2020-09-01", "band": "swir1", "stored_median": 0.357788, "zonal_median": 0.280672, "abs_diff": 0.077116, "zonal_n_pixels": 129, "store_n_valid": 84},
+      {"farm": "L02-02", "date": "2020-09-01", "band": "swir2", "stored_median": 0.308960, "zonal_median": 0.218523, "abs_diff": 0.090437, "zonal_n_pixels": 129, "store_n_valid": 84}
+    ]
+  },
+  "split": {"train": "year <= 2022", "dev": "year == 2023", "test": "year >= 2024"},
+  "smoke_experiment": {
+    "report": "Data/Processed/mini_research_dataset/experiments/report.json",
+    "experiment": "mini_smoke_smoke",
+    "model": "gru_ae",
+    "seeds": 1,
+    "epochs": 2,
+    "n_units": 24,
+    "n_features": 26,
+    "synthetic_auprc": 0.5555,
+    "random_init_auprc": 0.5540,
+    "step_reference_auprc": 0.5752,
+    "claim": "plumbing smoke only; no performance claim"
+  },
+  "corrected_probe": {
+    "report": "reports/mini_dataset/representation_first_pilot.json",
+    "embeddings": "reports/mini_dataset/representation_first_pilot_embeddings.npz",
+    "n_windows": 384,
+    "n_features": 20,
+    "n_suspected": 126,
+    "prevalence": 0.328125,
+    "split_counts": {"train": 240, "dev": 24, "test": 120, "boundary_crossing_dropped": 24},
+    "retrieval": {
+      "ssl_r_at_1": 0.2083,
+      "raw_r_at_1": 0.15,
+      "random_init_r_at_1": 0.1583,
+      "chance_level": 0.1275,
+      "null_mean": 0.1317,
+      "null_p97_5": 0.2917,
+      "n_permutations": 200,
+      "significant": false
+    },
+    "probes_test_2024plus": {
+      "n_test": 120,
+      "n_positive": 39,
+      "prevalence": 0.325,
+      "n_clusters": 6,
+      "ssl_auprc": 0.4038,
+      "ssl_ci95": [0.3242, 0.5992],
+      "raw_auprc": 0.1886,
+      "raw_ci95": [0.1363, 0.234],
+      "random_auprc": 0.3487,
+      "random_ci95": [0.2935, 0.4222],
+      "ssl_vs_random_distinguishable": false
+    },
+    "collapse": {"effective_rank": 1.31, "mean_pairwise_cosine": 0.0508, "per_dim_std_min": 0.04437, "per_dim_std_max": 0.22097},
+    "claim_rung": "L1/L2 screening, provisional pending ID-mapping decision"
+  },
+  "gates": {
+    "platform_contract_bilingual": "51 passed",
+    "mini_units": "16 passed",
+    "builder_smoke": "passed (3 farms, 5 dates)",
+    "probe": "passed, all metrics finite"
+  },
+  "details": "docs/audits/mini_rebuild_3farms_probe_2026-11-25.md"
+}

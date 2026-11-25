@@ -91,3 +91,11 @@ platform/src/data/series_khuzestan.json
 
 # Downloaded Google Drive archives (contents live under data/processed/, gitignored)
 /google_drive/
+
+# Mini sweep run artifacts - binaries and tracking DBs stay local (Drive if needed).
+# Keep the text reports (report.json / progress.jsonl / sweep.json) committed.
+reports/mini_dataset/arch_sweep/**/*.pt
+reports/mini_dataset/arch_sweep/**/*.db
+
+# Full parity dump is large and regenerable; keep the summary.
+reports/mini_dataset/parity.json

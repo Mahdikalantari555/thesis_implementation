@@ -15,8 +15,8 @@ protocol:
   # Empty train_farms = first farm in the store; empty test_farms = all others.
   train_farms: []
   test_farms: []
-  holdout_boundary: "2025-01-01"
-  justification: "First day of last complete calendar year before partial 2026 (season_structure.json); configurable."
+  holdout_boundary: "2024-01-01"
+  justification: "Accepted mini split 2026-11-25: train <= 2022, dev 2023, test 2024+ (docs/mini_lab_regional_eval_plan.md §9)."
 model:
   name: gru_ae
   d_model: 16

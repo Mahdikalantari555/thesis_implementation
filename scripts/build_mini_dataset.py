@@ -49,8 +49,9 @@ if str(ROOT / "src") not in sys.path:
 from ssl_anomaly.config import QualityCfg  # noqa: E402
 from ssl_anomaly.io.landsat import quality_mask  # noqa: E402
 from ssl_anomaly.utils.tracking import get_git_commit_sha  # noqa: E402
+from ssl_anomaly.utils.paths import localize  # noqa: E402
 
-DATA = Path("D:/RS/Thesis/Data")
+DATA = localize("D:/RS/Thesis/Data")
 # Farm selection layer (owner decision 2026-11-25): the mini dataset uses the
 # three farms of ``3farms_dev.geojson``, never a hard-coded name list. The full
 # ``Farms.geojson`` is only the ID reference that maps each farm name to the
@@ -61,6 +62,21 @@ FARMS_LAYER_CANDIDATES = (
 )
 FARMS_REFERENCE = DATA / "RoI" / "Farms.geojson"
 EXPECTED_FARMS = 3
+
+# Field-id alias, measured 2026-11-25 (openspec change `field-id-provenance-fix`).
+# The canonical pixel archive stores the physical field of reference fid k under
+# field_id k+1: archive id k had IoU 1.0 with polygon k-1 and 0.0 with k, while
+# archive id k+1 has IoU 1.0 with polygon k and 0.0 with k+-1. Verified for all
+# three farms of the selection layer with rasterio rasterize (all_touched=False).
+# The canonical 490-field archive is NOT re-indexed; this alias is mini-only.
+ID_ALIAS_EVIDENCE: dict[str, dict[str, Any]] = {
+    "L02-02": {"reference_fid": 300, "archive_fid": 301, "iou_own_after_alias": 1.0,
+               "matched_fid_before_alias": 299, "iou_neighbour_before_alias": 1.0},
+    "R12-08": {"reference_fid": 245, "archive_fid": 246, "iou_own_after_alias": 1.0,
+               "matched_fid_before_alias": 244, "iou_neighbour_before_alias": 1.0},
+    "R15-18": {"reference_fid": 17, "archive_fid": 18, "iou_own_after_alias": 1.0,
+               "matched_fid_before_alias": 16, "iou_neighbour_before_alias": 1.0},
+}
 INVENTORY = DATA / "Processed" / "satellite" / "scene_inventory.parquet"
 SCENES_ROOT = DATA / "Metric" / "scenes"
 ZONAL_DIR = DATA / "Processed" / "satellite" / "zonal_stats"
@@ -124,15 +140,17 @@ def resolve_farms(
     reference: "Any",
     names: tuple[str, ...] | None = None,
     expected_count: int | None = EXPECTED_FARMS,
+    alias_evidence: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Resolve the selection layer against the ID reference.
 
     ``layer`` and ``reference`` are GeoDataFrames already in EPSG:32639.
     The farm set comes from the layer; ``names`` only narrows it (smoke runs).
-    The archive id (``ogc_fid``) always comes from the reference by farm name,
-    because an exported layer may carry re-indexed OGC_FIDs. Geometry comes
-    from the layer; the layer-vs-reference centroid distance is recorded so a
-    silent geometry mismatch is visible.
+    ``ogc_fid`` is the reference polygon id (farm identity); when
+    ``alias_evidence`` is supplied, ``archive_fid`` is the measured pixel id and
+    a farm without evidence fails closed. Geometry comes from the layer; the
+    layer-vs-reference centroid distance is recorded so a silent geometry
+    mismatch is visible.
     """
     from shapely import force_2d
 
@@ -170,10 +188,29 @@ def resolve_farms(
             if k not in ("geometry",)
         }
         area = row["area"] if "area" in lay.columns else ref_row.get("area", geom.area / 1e4)
+        reference_fid = int(ref_row["OGC_FID"])
+        archive_fid = reference_fid
+        alias = None
+        if alias_evidence is not None:
+            if name not in alias_evidence:
+                raise RuntimeError(
+                    f"No measured field-id alias evidence for farm {name!r}; "
+                    "refusing to guess the archive pixel id (openspec field-id-provenance-fix R2)"
+                )
+            alias = dict(alias_evidence[name])
+            if int(alias["reference_fid"]) != reference_fid:
+                raise RuntimeError(
+                    f"Alias evidence for {name!r} targets fid {alias['reference_fid']} "
+                    f"but the reference says {reference_fid}; refusing to apply it"
+                )
+            archive_fid = int(alias["archive_fid"])
         farms.append(
             {
                 "farm_id": name,
-                "ogc_fid": int(ref_row["OGC_FID"]),
+                "ogc_fid": reference_fid,
+                "reference_fid": reference_fid,
+                "archive_fid": archive_fid,
+                "id_alias": alias,
                 "layer_ogc_fid": _attr_value(layer_fid),
                 "area_ha": float(area),
                 "geometry": geom,
@@ -201,7 +238,8 @@ def load_farms(
         )
     layer = gpd.read_file(layer_path).to_crs("EPSG:32639")
     reference = gpd.read_file(reference_path).to_crs("EPSG:32639")
-    return resolve_farms(layer, reference, names, expected_count), reference
+    farms = resolve_farms(layer, reference, names, expected_count, ID_ALIAS_EVIDENCE)
+    return farms, reference
 
 
 def archive_alignment(
@@ -366,7 +404,7 @@ def build_farm(
     # error prone and natively unstable on this GDAL build.
     window, grid_transform, grid_reference, in_field_mask, grid_bbox = (
         derive_canonical_grid(
-            farm_id, farm["ogc_fid"], dates, scene_transform, pixels_dir
+            farm_id, farm.get("archive_fid", farm["ogc_fid"]), dates, scene_transform, pixels_dir
         )
     )
     h, w = int(window.height), int(window.width)
@@ -410,6 +448,9 @@ def build_farm(
         {
             "farm_id": farm_id,
             "ogc_fid": farm["ogc_fid"],
+            "reference_fid": farm.get("reference_fid", farm["ogc_fid"]),
+            "archive_fid": farm.get("archive_fid", farm["ogc_fid"]),
+            "id_alias": farm.get("id_alias"),
             "layer_ogc_fid": farm.get("layer_ogc_fid"),
             "source_attributes": farm.get("source_attributes", {}),
             "layer_vs_reference_centroid_m": farm.get("layer_vs_reference_centroid_m"),
@@ -508,6 +549,8 @@ def build_farm(
     return {
         "farm_id": farm_id,
         "ogc_fid": farm["ogc_fid"],
+        "reference_fid": farm.get("reference_fid", farm["ogc_fid"]),
+        "archive_fid": farm.get("archive_fid", farm["ogc_fid"]),
         "n_dates": len(dates),
         "n_present_dates": n_present,
         "n_absent_dates": n_missing,
@@ -563,10 +606,19 @@ def write_manifest(
         "date_list_sha256": _sha256_text("\n".join(dates)),
         "farms_source": str(farms_source),
         "farms_id_reference": str(FARMS_REFERENCE),
+        "id_alias_rule": "archive_fid = reference_fid + 1 (measured 2026-11-25, mini-only)",
+        "id_alias_caveat": (
+            "The canonical 490-field archive still stores field k's pixels under "
+            "field_id k+1; only this mini store has the alias applied. No L4 "
+            "attribute claim is made from the shifted canonical ids."
+        ),
         "farms": [
             {
                 "farm_id": f["farm_id"],
                 "ogc_fid": f["ogc_fid"],
+                "reference_fid": f.get("reference_fid", f["ogc_fid"]),
+                "archive_fid": f.get("archive_fid", f["ogc_fid"]),
+                "id_alias": f.get("id_alias"),
                 "area_ha": f["area_ha"],
                 "bbox": list(f["bbox"]),
                 "layer_ogc_fid": f.get("layer_ogc_fid"),
@@ -609,7 +661,11 @@ def check_parity(store: Path, results: list[dict[str, Any]], out_json: Path) -> 
         "passed": True,
     }
     for res in results:
-        farm_id, fid = res["farm_id"], res["ogc_fid"]
+        farm_id = res["farm_id"]
+        # Parity compares pixels with the canonical zonal table, which is keyed
+        # by the ARCHIVE field id (the alias target), not the reference polygon
+        # id. Using ogc_fid here would compare two different physical fields.
+        fid = res.get("archive_fid", res["ogc_fid"])
         group = zarr.open_group(str(store / farm_id), mode="r")
         dates = [str(d) for d in group["dates"][:]]
         data = group["data"]

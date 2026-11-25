@@ -38,8 +38,9 @@ from ssl_anomaly.phenology.mini import (  # noqa: E402
     multi_band_harvest_score,
 )
 from ssl_anomaly.utils.tracking import get_git_commit_sha  # noqa: E402
+from ssl_anomaly.utils.paths import localize  # noqa: E402
 
-DATA = Path("D:/RS/Thesis/Data")
+DATA = localize("D:/RS/Thesis/Data")
 MINI_ROOT = DATA / "Processed" / "mini_research_dataset"
 STORE = MINI_ROOT / "satellite.zarr"
 WEATHER = MINI_ROOT / "weather" / "weather_aligned_mini.parquet"
@@ -140,7 +141,9 @@ def build_phenology(store: Path, weather_path: Path, out_dir: Path) -> dict[str,
                 and cyc["length_days"] <= 450
             ):
                 candidate_cycles.append({"farm": farm, **{k: cyc[k] for k in ("start_date", "end_date", "length_days")}})
-    boundary = "2025-01-01"
+    # Accepted mini split (docs/mini_lab_regional_eval_plan.md §9): the
+    # temporal holdout starts at 2024-01-01 (train <= 2022, dev 2023, test 2024+).
+    boundary = "2024-01-01"
     all_dates = sorted(
         {
             str(d)
@@ -157,9 +160,9 @@ def build_phenology(store: Path, weather_path: Path, out_dir: Path) -> dict[str,
         "n_dates_after": n_after,
         "complete_cycle_candidates": candidate_cycles,
         "rule": (
-            "First day of the last complete calendar year before the partial "
-            "2026 year (~2 seasons). Configurable per run; never hard-coded "
-            "into the harness and always justified in the run report."
+            "Accepted mini split 2026-11-25: train <= 2022, dev 2023, "
+            "test 2024+. Boundary is configurable per run and always "
+            "justified in the run report."
         ),
         "justification": (
             "Covers complete growth cycles while keeping the partial 2026 year "

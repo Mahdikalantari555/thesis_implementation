@@ -99,6 +99,37 @@ def test_alignment_detects_own_fid_and_off_by_one():
     assert off["selection_layer_iou"] < 0.2
 
 
+def test_alias_resolution_is_evidence_backed_and_fails_closed():
+    alias = {
+        "A-01": {"reference_fid": 10, "archive_fid": 11, "iou_own_after_alias": 1.0},
+        "B-07": {"reference_fid": 12, "archive_fid": 13, "iou_own_after_alias": 1.0},
+    }
+    farms = B.resolve_farms(
+        _layer(["A-01", "B-07"]), _reference(), names=("A-01", "B-07"), alias_evidence=alias
+    )
+    assert [(f["reference_fid"], f["archive_fid"]) for f in farms] == [(10, 11), (12, 13)]
+    assert all(f["ogc_fid"] == f["reference_fid"] for f in farms)
+    with pytest.raises(RuntimeError, match="No measured field-id alias evidence"):
+        B.resolve_farms(
+            _layer(["A-01", "C-04"]), _reference(), names=("A-01", "C-04"), alias_evidence=alias
+        )
+    bad = dict(alias)
+    bad["A-01"] = {"reference_fid": 99, "archive_fid": 11}
+    with pytest.raises(RuntimeError, match="Alias evidence"):
+        B.resolve_farms(_layer(["A-01"]), _reference(), alias_evidence=bad, expected_count=None)
+
+
+def test_alignment_verifies_alias_applied_mask():
+    ref = _reference()
+    transform = Affine(30.0, 0, 236700.0, 0, -30.0, 3435900.0)
+    shape = (50, 60)
+    # Physical field of fid 12 lives under archive id 13.
+    physical = ref.loc[ref["OGC_FID"] == 12].geometry.iloc[0]
+    ok = B.archive_alignment(_mask_for(physical, transform, shape), transform, ref, 12, physical)
+    assert ok["best_is_own_fid"] and ok["best_reference_fid"] == 12
+    assert ok["by_reference_fid"]["12"]["iou"] > 0.9
+
+
 def test_label_crop_kind_uses_age_attribute_not_farm_name():
     spec = importlib.util.spec_from_file_location("label_mini", ROOT / "scripts" / "label_mini_suspected_stress.py")
     mod = importlib.util.module_from_spec(spec)
