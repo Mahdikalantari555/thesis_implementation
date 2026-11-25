@@ -6,12 +6,17 @@ per farm. Each group holds seven physical bands ``(D, 7, H_i, W_i)`` in fp16,
 the real acquisition dates and pixel-grid metadata. Zarr format v2 is used for
 portability (design.md §1).
 
+The farm set comes from the selection layer ``RoI/3farms_dev.geojson`` (owner
+decision 2026-11-25); ``Farms.geojson`` is used only to map each farm name to
+the archive id. Each group records ``archive_alignment``: IoU of the archive's
+pixel membership against the farm's own polygon and its neighbouring ids.
+
 The date list comes from ``scene_inventory.parquet`` acquisition dates, never
 from ``stats.zarr`` day-numbers (docs/mini_research_dataset.md §2).
 
 Usage::
 
-    python scripts/build_mini_dataset.py --smoke 5 --only-farm R12-08
+    python scripts/build_mini_dataset.py --smoke 5 --only-farm <FARM>
     python scripts/build_mini_dataset.py --resume
     python scripts/build_mini_dataset.py --check-parity
 """
@@ -46,13 +51,21 @@ from ssl_anomaly.io.landsat import quality_mask  # noqa: E402
 from ssl_anomaly.utils.tracking import get_git_commit_sha  # noqa: E402
 
 DATA = Path("D:/RS/Thesis/Data")
-FARMS_GEOJSON = DATA / "RoI" / "Farms.geojson"
+# Farm selection layer (owner decision 2026-11-25): the mini dataset uses the
+# three farms of ``3farms_dev.geojson``, never a hard-coded name list. The full
+# ``Farms.geojson`` is only the ID reference that maps each farm name to the
+# archive ``field_id`` (OGC_FID) used by ``pixels/`` and ``zonal_stats/``.
+FARMS_LAYER_CANDIDATES = (
+    DATA / "RoI" / "3farms_dev.geojson",
+    DATA / "RoI" / "3farms-dev.geojson",
+)
+FARMS_REFERENCE = DATA / "RoI" / "Farms.geojson"
+EXPECTED_FARMS = 3
 INVENTORY = DATA / "Processed" / "satellite" / "scene_inventory.parquet"
 SCENES_ROOT = DATA / "Metric" / "scenes"
 ZONAL_DIR = DATA / "Processed" / "satellite" / "zonal_stats"
 PIXELS_DIR = DATA / "Processed" / "satellite" / "pixels"
 OUT_ROOT = DATA / "Processed" / "mini_research_dataset"
-DEFAULT_FARMS = ("R12-06", "R12-08", "R12-10")
 
 FILE_MAP = OrderedDict(
     [
@@ -82,34 +95,159 @@ def _sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def load_farms(geojson: Path, names: tuple[str, ...]) -> list[dict[str, Any]]:
-    import geopandas as gpd
+def default_farms_layer() -> Path:
+    """First existing candidate of the 3-farm selection layer."""
+    for cand in FARMS_LAYER_CANDIDATES:
+        if cand.exists():
+            return cand
+    return FARMS_LAYER_CANDIDATES[0]
 
+
+def _attr_value(value: Any) -> Any:
+    """JSON-safe scalar for zarr attrs / manifest (NaN -> None)."""
+    if value is None:
+        return None
+    if isinstance(value, float) and not np.isfinite(value):
+        return None
+    if isinstance(value, (np.integer,)):
+        return int(value)
+    if isinstance(value, (np.floating,)):
+        v = float(value)
+        return v if np.isfinite(v) else None
+    if isinstance(value, (int, float, bool, str)):
+        return value
+    return str(value)
+
+
+def resolve_farms(
+    layer: "Any",
+    reference: "Any",
+    names: tuple[str, ...] | None = None,
+    expected_count: int | None = EXPECTED_FARMS,
+) -> list[dict[str, Any]]:
+    """Resolve the selection layer against the ID reference.
+
+    ``layer`` and ``reference`` are GeoDataFrames already in EPSG:32639.
+    The farm set comes from the layer; ``names`` only narrows it (smoke runs).
+    The archive id (``ogc_fid``) always comes from the reference by farm name,
+    because an exported layer may carry re-indexed OGC_FIDs. Geometry comes
+    from the layer; the layer-vs-reference centroid distance is recorded so a
+    silent geometry mismatch is visible.
+    """
     from shapely import force_2d
 
-    gdf = gpd.read_file(geojson)
-    gdf = gdf[gdf["Farm"].isin(names)].copy()
-    if gdf.empty:
-        raise RuntimeError(f"No target farms found in {geojson}: {names}")
-    gdf = gdf.to_crs("EPSG:32639")
+    if "Farm" not in layer.columns:
+        raise RuntimeError("Selection layer has no 'Farm' column")
+    lay = layer.copy()
+    lay["Farm"] = lay["Farm"].astype(str)
+    if lay["Farm"].duplicated().any():
+        raise RuntimeError(f"Duplicate farm names in selection layer: {sorted(lay.loc[lay['Farm'].duplicated(), 'Farm'])}")
+    if names:
+        missing = set(names) - set(lay["Farm"])
+        if missing:
+            raise RuntimeError(f"Requested farms not in selection layer: {sorted(missing)}")
+        lay = lay[lay["Farm"].isin(names)]
+    elif expected_count is not None and len(lay) != expected_count:
+        raise RuntimeError(
+            f"Selection layer has {len(lay)} farms, expected {expected_count}: {sorted(lay['Farm'])}"
+        )
+
+    ref = reference.copy()
+    ref["Farm"] = ref["Farm"].astype(str)
     farms = []
-    for _, row in gdf.iterrows():
+    for _, row in lay.iterrows():
+        name = row["Farm"]
+        hits = ref[ref["Farm"] == name]
+        if len(hits) != 1:
+            raise RuntimeError(f"Farm {name!r} matches {len(hits)} rows in the ID reference (need exactly 1)")
+        ref_row = hits.iloc[0]
         geom = force_2d(row.geometry)  # 3D polygons are not accepted by GDAL rasterize
+        ref_geom = force_2d(ref_row.geometry)
+        layer_fid = row["OGC_FID"] if "OGC_FID" in lay.columns else None
+        attrs = {
+            str(k): _attr_value(v)
+            for k, v in row.items()
+            if k not in ("geometry",)
+        }
+        area = row["area"] if "area" in lay.columns else ref_row.get("area", geom.area / 1e4)
         farms.append(
             {
-                "farm_id": str(row["Farm"]),
-                "ogc_fid": int(row["OGC_FID"]),
-                "area_ha": float(row["area"]),
+                "farm_id": name,
+                "ogc_fid": int(ref_row["OGC_FID"]),
+                "layer_ogc_fid": _attr_value(layer_fid),
+                "area_ha": float(area),
                 "geometry": geom,
                 "bbox": tuple(float(v) for v in geom.bounds),
+                "layer_vs_reference_centroid_m": round(float(geom.centroid.distance(ref_geom.centroid)), 2),
+                "source_attributes": attrs,
             }
         )
     farms.sort(key=lambda f: f["farm_id"])
-    found = {f["farm_id"] for f in farms}
-    missing = set(names) - found
-    if missing:
-        raise RuntimeError(f"Missing requested farms: {sorted(missing)}")
     return farms
+
+
+def load_farms(
+    layer_path: Path,
+    reference_path: Path,
+    names: tuple[str, ...] | None = None,
+    expected_count: int | None = EXPECTED_FARMS,
+) -> tuple[list[dict[str, Any]], "Any"]:
+    """Read both GeoJSONs, reproject to EPSG:32639, resolve. Returns (farms, reference)."""
+    import geopandas as gpd
+
+    if not layer_path.exists():
+        raise FileNotFoundError(
+            f"Farm selection layer not found: {layer_path} (tried {[str(c) for c in FARMS_LAYER_CANDIDATES]})"
+        )
+    layer = gpd.read_file(layer_path).to_crs("EPSG:32639")
+    reference = gpd.read_file(reference_path).to_crs("EPSG:32639")
+    return resolve_farms(layer, reference, names, expected_count), reference
+
+
+def archive_alignment(
+    in_field_mask: np.ndarray,
+    grid_transform: Affine,
+    reference: "Any",
+    ogc_fid: int,
+    layer_geometry: Any = None,
+    neighbours: int = 1,
+) -> dict[str, Any]:
+    """Compare the archive's pixel membership with candidate polygons.
+
+    Reports IoU of the archive in-field mask against the reference polygons of
+    ``ogc_fid`` and its +-``neighbours`` ids, plus the selection-layer polygon.
+    A best match at a neighbouring id is evidence for an id off-by-one in the
+    archive rather than a georeferencing shift. Diagnostic only: the pixel grid
+    itself is not changed (parity with the frozen archive is preserved).
+    """
+    from rasterio.features import rasterize
+    from shapely import force_2d
+
+    shape = in_field_mask.shape
+    arch = in_field_mask.astype(bool)
+
+    def iou(geom: Any) -> float:
+        m = rasterize([(force_2d(geom), 1)], out_shape=shape, transform=grid_transform,
+                      fill=0, dtype="uint8", all_touched=False).astype(bool)
+        union = (m | arch).sum()
+        return round(float((m & arch).sum() / union), 4) if union else 0.0
+
+    out: dict[str, Any] = {"by_reference_fid": {}}
+    for d in range(-neighbours, neighbours + 1):
+        fid = ogc_fid + d
+        hits = reference[reference["OGC_FID"] == fid]
+        if len(hits) == 1:
+            out["by_reference_fid"][str(fid)] = {
+                "farm": str(hits.iloc[0]["Farm"]),
+                "iou": iou(hits.iloc[0].geometry),
+            }
+    if layer_geometry is not None:
+        out["selection_layer_iou"] = iou(layer_geometry)
+    if out["by_reference_fid"]:
+        best = max(out["by_reference_fid"].items(), key=lambda kv: kv[1]["iou"])
+        out["best_reference_fid"] = int(best[0])
+        out["best_is_own_fid"] = int(best[0]) == ogc_fid
+    return out
 
 
 def load_dates(inventory: Path, limit: int | None = None) -> tuple[list[str], dict[str, str]]:
@@ -203,6 +341,7 @@ def build_farm(
     pixels_dir: Path,
     qcfg: QualityCfg,
     progress_path: Path,
+    reference: Any = None,
 ) -> dict[str, Any]:
     farm_id = farm["farm_id"]
     group_path = store / farm_id
@@ -254,17 +393,35 @@ def build_farm(
     in_field_arr = group.create_array("in_field", shape=(h, w), dtype="uint8", fill_value=0)
     in_field_arr[:] = in_field_mask
 
+    alignment: dict[str, Any] = {}
+    if reference is not None:
+        alignment = archive_alignment(
+            in_field_mask, grid_transform, reference, farm["ogc_fid"], farm["geometry"]
+        )
+        if not alignment.get("best_is_own_fid", True):
+            print(
+                f"  WARNING {farm_id}: archive pixels match reference fid "
+                f"{alignment['best_reference_fid']} better than own fid {farm['ogc_fid']} "
+                f"({alignment['by_reference_fid']})",
+                flush=True,
+            )
+
     group.attrs.update(
         {
             "farm_id": farm_id,
             "ogc_fid": farm["ogc_fid"],
+            "layer_ogc_fid": farm.get("layer_ogc_fid"),
+            "source_attributes": farm.get("source_attributes", {}),
+            "layer_vs_reference_centroid_m": farm.get("layer_vs_reference_centroid_m"),
+            "archive_alignment": alignment,
             "area_ha": farm["area_ha"],
             "bbox": list(grid_bbox),
             "bbox_geojson_utm": list(farm["bbox"]),
             "geometry_source": grid_reference,
             "geometry_offset_note": (
-                "Canonical processed pixels are shifted vs current Farms.geojson; "
-                "in_field comes from processed pixel membership to preserve parity."
+                "Canonical processed pixels may be shifted vs the farm polygon (see "
+                "archive_alignment); in_field comes from processed pixel membership "
+                "to preserve parity."
             ),
             "H": h,
             "W": w,
@@ -358,6 +515,7 @@ def build_farm(
         "W": w,
         "n_in_field_pixels": int(in_field_arr[:].sum()),
         "bbox_grid": list(grid_bbox),
+        "archive_alignment": alignment,
         "grid_reference": grid_reference,
         "wall_s": wall,
         "zarr_path": str(group_path),
@@ -389,6 +547,7 @@ def write_manifest(
     results: list[dict[str, Any]],
     wall_s: float,
     smoke: int | None,
+    farms_source: Path | None = None,
 ) -> Path:
     manifest = {
         "schema": "mini-research-dataset/v1",
@@ -402,13 +561,16 @@ def write_manifest(
         "first_date": dates[0],
         "last_date": dates[-1],
         "date_list_sha256": _sha256_text("\n".join(dates)),
-        "farms_source": str(FARMS_GEOJSON),
+        "farms_source": str(farms_source),
+        "farms_id_reference": str(FARMS_REFERENCE),
         "farms": [
             {
                 "farm_id": f["farm_id"],
                 "ogc_fid": f["ogc_fid"],
                 "area_ha": f["area_ha"],
                 "bbox": list(f["bbox"]),
+                "layer_ogc_fid": f.get("layer_ogc_fid"),
+                "source_attributes": f.get("source_attributes", {}),
             }
             for f in farms
         ],
@@ -495,8 +657,13 @@ def check_parity(store: Path, results: list[dict[str, Any]], out_json: Path) -> 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--farms-geojson", type=Path, default=FARMS_GEOJSON)
-    ap.add_argument("--farms", nargs="+", default=list(DEFAULT_FARMS), help="Farm names")
+    ap.add_argument("--farms-geojson", type=Path, default=None,
+                    help="Farm selection layer (default: RoI/3farms_dev.geojson)")
+    ap.add_argument("--id-reference", type=Path, default=FARMS_REFERENCE,
+                    help="Full Farms.geojson used only to map farm name -> archive OGC_FID")
+    ap.add_argument("--farms", nargs="+", default=None,
+                    help="Optional subset of farm names from the selection layer")
+    ap.add_argument("--expected-count", type=int, default=EXPECTED_FARMS)
     ap.add_argument("--only-farm", default=None, help="Restrict to one farm (smoke)")
     ap.add_argument("--inventory", type=Path, default=INVENTORY)
     ap.add_argument("--scenes", type=Path, default=SCENES_ROOT)
@@ -508,8 +675,20 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     t0 = time.monotonic()
-    names = tuple([args.only_farm] if args.only_farm else args.farms)
-    farms = load_farms(args.farms_geojson, names)
+    if args.farms_geojson is None:
+        args.farms_geojson = default_farms_layer()
+    if args.only_farm:
+        names: tuple[str, ...] | None = (args.only_farm,)
+    elif args.farms:
+        names = tuple(args.farms)
+    else:
+        names = None
+    farms, reference = load_farms(args.farms_geojson, args.id_reference, names, args.expected_count)
+    print(
+        "Farm selection layer: "
+        f"{args.farms_geojson} -> {[(f['farm_id'], f['ogc_fid']) for f in farms]}",
+        flush=True,
+    )
     dates, scene_ids = load_dates(args.inventory, args.smoke)
     print(
         f"Loaded {len(farms)} farms and {len(dates)} dates "
@@ -519,6 +698,18 @@ def main(argv: list[str] | None = None) -> int:
 
     out = args.out
     store = out / "satellite.zarr"
+    selected = {f["farm_id"] for f in farms}
+    if store.exists():
+        stale = sorted(
+            p.name for p in store.iterdir()
+            if p.is_dir() and (p / ".zgroup").exists() and p.name not in selected
+        )
+        if stale:
+            raise RuntimeError(
+                f"{store} already holds farms outside the selection layer {stale}. "
+                "Move the old store aside (or pass a new --out) before rebuilding; "
+                "mixing farm sets in one store is refused."
+            )
     store.mkdir(parents=True, exist_ok=True)
     progress = out / "progress_extraction.jsonl"
     manifest_lines = store / ".manifest.jsonl"
@@ -535,7 +726,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  Skipping {farm['farm_id']} (already in manifest)", flush=True)
             continue
         res = build_farm(
-            farm, dates, scene_ids, store, args.scenes, PIXELS_DIR, qcfg, progress
+            farm, dates, scene_ids, store, args.scenes, PIXELS_DIR, qcfg, progress, reference
         )
         results.append(res)
         with manifest_lines.open("a", encoding="utf-8") as fh:
@@ -552,7 +743,7 @@ def main(argv: list[str] | None = None) -> int:
         print("No farms processed (all already complete on --resume).", flush=True)
         return 0
     farms_geojson = write_farms_geojson(out, farms)
-    manifest = write_manifest(out, farms, dates, results, wall, args.smoke)
+    manifest = write_manifest(out, farms, dates, results, wall, args.smoke, args.farms_geojson)
     parity_ok: bool | None = None
     if args.check_parity:
         parity_ok = check_parity(store, results, args.parity_out)

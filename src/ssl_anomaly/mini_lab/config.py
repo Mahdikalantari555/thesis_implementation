@@ -29,8 +29,10 @@ class RepresentationConfig:
 @dataclass
 class ProtocolConfig:
     name: str = "lodo"  # single_farm | lodo | intra_farm_temporal
-    train_farms: tuple[str, ...] = ("R12-08",)
-    test_farms: tuple[str, ...] = ("R12-06", "R12-10")
+    # Farm names come from the store (selection layer 3farms_dev). For
+    # single_farm, an empty test_farms means "every other farm in the store".
+    train_farms: tuple[str, ...] = ()
+    test_farms: tuple[str, ...] = ()
     holdout_boundary: str = "2025-01-01"
     justification: str = (
         "First day of the last complete calendar year before the partial 2026 year "
@@ -94,8 +96,8 @@ def load_run_config(path: str | Path) -> RunConfig:
         ),
         protocol=ProtocolConfig(
             name=str(proto.get("name", "lodo")),
-            train_farms=tuple(proto.get("train_farms", ("R12-08",))),
-            test_farms=tuple(proto.get("test_farms", ("R12-06", "R12-10"))),
+            train_farms=tuple(proto.get("train_farms", ()) or ()),
+            test_farms=tuple(proto.get("test_farms", ()) or ()),
             holdout_boundary=str(proto.get("holdout_boundary", "2025-01-01")),
             justification=str(proto.get("justification", ProtocolConfig.justification)),
         ),

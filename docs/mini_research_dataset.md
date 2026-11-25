@@ -9,6 +9,16 @@ Verified 2026-11-24 with the `geo` conda environment against the real archive.
 
 ## 1. Companion farms (task 0.1)
 
+> **Superseded 2026-11-25 (owner decision):** the mini dataset must use the
+> farms of `D:\RS\Thesis\Data\RoI\3farms_dev.geojson` (three separated farms).
+> The R12-06/R12-08/R12-10 selection below (adjacent strips, FID 244–246) was
+> the wrong layer. `scripts/build_mini_dataset.py` now reads the farm set from
+> that layer, maps names to archive ids via `Farms.geojson`, refuses to mix farm
+> sets in one store, and records `archive_alignment` (IoU of archive pixels vs
+> own and ±1 neighbour polygons) to test the ~270 m offset / id off-by-one
+> hypothesis. The table below is kept as history.
+
+
 Source: `D:\RS\Thesis\Data\RoI\Farms.geojson` (490 rows, EPSG:4979, 3D polygons),
 reprojected to EPSG:32639 before any pixel geometry.
 

@@ -86,6 +86,26 @@ def stage_of(date: str, cycles: pd.DataFrame) -> str | None:
     return None
 
 
+AGE_KEYS = ("Age", "age", "AGE", "Age_Class", "age_class", "سن")
+
+
+def crop_kind(attrs: dict[str, Any]) -> tuple[str, str]:
+    """Plant vs ratoon from the farm's age class ("P" = plant, "Rnn" = ratoon).
+
+    Falls back to "ratoon" (the majority class among cultivated farms) and says
+    so, instead of keying on a farm name.
+    """
+    for key in AGE_KEYS:
+        val = attrs.get(key)
+        if isinstance(val, str) and val.strip():
+            v = val.strip().upper()
+            if v.startswith("P"):
+                return "plant", f"attr:{key}={val}"
+            if v.startswith("R"):
+                return "ratoon", f"attr:{key}={val}"
+    return "ratoon", "fallback:no_age_attribute"
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
@@ -106,7 +126,7 @@ def main(argv: list[str] | None = None) -> int:
         g = zarr.open_group(str(d), mode="r")
         farm = str(g.attrs["farm_id"])
         fid = int(g.attrs["ogc_fid"])
-        kind = "plant" if farm == "R12-06" else "ratoon"  # documented approximation
+        kind, kind_source = crop_kind(dict(g.attrs.get("source_attributes", {}) or {}))
         threshold = args.cwsi_plant if kind == "plant" else args.cwsi_ratoon
         dates = [str(x) for x in g["dates"][:]]
         if args.min_dates:
@@ -148,6 +168,7 @@ def main(argv: list[str] | None = None) -> int:
                     "date": date,
                     "stage": stage,
                     "kind": kind,
+                    "kind_source": kind_source,
                     "row_base": row0,
                     "col_base": col0,
                     "mask": mask,
@@ -266,7 +287,7 @@ def main(argv: list[str] | None = None) -> int:
             "CWSI is equifinal (water and salinity share the thermal signature); no stress typing.",
             "CWSI_ET/TVDI share LST/NIR inputs with an SSL model consuming those bands; proxy only.",
             "ETaDaily is a METRIC model product, not a measurement; agreement, not validation.",
-            "kind is approximated from farm id because ratoon_no is absent from cycles_mini.",
+            "kind comes from the farm's current age-class attribute (P = plant, Rnn = ratoon; fallback ratoon). It is a snapshot applied to all years, so it is still an approximation because ratoon_no is absent from cycles_mini.",
         ],
         "pixels": str(pixels_path),
         "patches": str(patch_path),

@@ -342,7 +342,16 @@ def split_datasets(ds: MiniDataset, cfg: RunConfig) -> list[tuple[str, Split, Sp
     """Create protocol splits. Normalization is fitted on train samples only."""
     proto = cfg.protocol
     if proto.name == "single_farm":
-        rotations = [("single", tuple(proto.train_farms), tuple(proto.test_farms))]
+        store_farms = sorted({s.farm_id for s in ds.samples})
+        train_farms = tuple(proto.train_farms) or tuple(store_farms[:1])
+        missing = set(train_farms) - set(store_farms)
+        if missing:
+            raise ValueError(f"train_farms not in store: {sorted(missing)} (store has {store_farms})")
+        test_farms = tuple(proto.test_farms) or tuple(f for f in store_farms if f not in train_farms)
+        missing = set(test_farms) - set(store_farms)
+        if missing:
+            raise ValueError(f"test_farms not in store: {sorted(missing)} (store has {store_farms})")
+        rotations = [("single", train_farms, test_farms)]
     elif proto.name == "lodo":
         farms = sorted({s.farm_id for s in ds.samples})
         rotations = [(f"lodo_holdout_{f}", tuple(x for x in farms if x != f), (f,)) for f in farms]

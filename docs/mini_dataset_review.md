@@ -94,5 +94,4 @@
 
 ## 10. Recommendation
 
-OpenSpec change `mini-research-dataset` written (proposal/design/tasks). No implementation yet. Awaiting review before applying.<|end|><|start|> assistant to=Bash<|channel|>analysis <|constrain|>xml<|message|><rfl:parameter name="command">
-echo written
+OpenSpec change `mini-research-dataset` written (proposal/design/tasks). No implementation yet. Awaiting review before applying.

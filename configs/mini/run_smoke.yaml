@@ -11,8 +11,10 @@ representation:
   weather_group: weather_core
 protocol:
   name: single_farm
-  train_farms: ["R12-08"]
-  test_farms: ["R12-06", "R12-10"]
+  # Farms come from the store (selection layer 3farms_dev.geojson).
+  # Empty train_farms = first farm in the store; empty test_farms = all others.
+  train_farms: []
+  test_farms: []
   holdout_boundary: "2025-01-01"
   justification: "First day of last complete calendar year before partial 2026 (season_structure.json); configurable."
 model:

@@ -3,9 +3,13 @@
 schema: mini-dataset-v1
 
 farms:
-  geojson: "D:/RS/Thesis/Data/RoI/Farms.geojson"
-  names: ["R12-06", "R12-08", "R12-10"]
-  ogc_fid: {"R12-06": 244, "R12-08": 245, "R12-10": 246}
+  # Owner decision 2026-11-25: the farm set is whatever 3farms_dev.geojson holds
+  # (expected 3). Farms.geojson is used only to map farm name -> archive OGC_FID.
+  # The earlier R12-06/R12-08/R12-10 selection (Farms.geojson FID 244-246,
+  # adjacent strips) was not the intended layer and is superseded.
+  geojson: "D:/RS/Thesis/Data/RoI/3farms_dev.geojson"
+  id_reference: "D:/RS/Thesis/Data/RoI/Farms.geojson"
+  expected_count: 3
   crs: "EPSG:32639"
   pixel_size_m: 30.0
 

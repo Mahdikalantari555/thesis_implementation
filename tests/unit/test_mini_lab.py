@@ -82,10 +82,23 @@ def test_temporal_protocol_preserves_boundary_and_pads_absent_values():
 def test_single_farm_and_protocol_validation(tmp_path):
     cfg = RunConfig()
     cfg.protocol.name = "single_farm"
+    cfg.protocol.train_farms = ("R12-08",)
     splits = split_datasets(_dataset(), cfg)
     assert len(splits) == 1
     assert set(splits[0][1].farm_ids) == {"R12-08"}
+    # Empty test_farms = every other farm in the store.
     assert set(splits[0][2].farm_ids) == {"R12-06", "R12-10"}
+    # Empty train_farms = first farm in the store (names are never hard-coded).
+    cfg.protocol.train_farms = ()
+    splits = split_datasets(_dataset(), cfg)
+    assert set(splits[0][1].farm_ids) == {"R12-06"}
+    cfg.protocol.train_farms = ("NOT-A-FARM",)
+    try:
+        split_datasets(_dataset(), cfg)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("unknown train farm must be rejected")
     bad = tmp_path / "bad.yaml"
     bad.write_text("claim_rung: L5\n", encoding="utf-8")
     try:

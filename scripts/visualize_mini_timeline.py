@@ -55,8 +55,16 @@ STAGE_EDGES = (0.0, 0.25, 0.60, 0.85, 1.0001)
 STAGE_NAMES = ("S1", "S2", "S3", "S4")
 TRAIN_CUTOFF = np.datetime64("2023-01-01", "D")
 TRAIN_DAY = int(TRAIN_CUTOFF.astype("datetime64[D]").astype(int))
-FARMS = ("R12-06", "R12-08", "R12-10")
-FARM_COLORS = {"R12-06": (31, 119, 180), "R12-08": (255, 127, 14), "R12-10": (44, 160, 44)}
+PALETTE = [(31, 119, 180), (255, 127, 14), (44, 160, 44), (214, 39, 40), (148, 103, 189)]
+# Farm names come from the store (selection layer 3farms_dev), never hard-coded.
+FARMS: tuple[str, ...] = ()
+FARM_COLORS: dict[str, tuple[int, int, int]] = {}
+
+
+def set_farms(names: list[str]) -> None:
+    global FARMS, FARM_COLORS
+    FARMS = tuple(sorted(names))
+    FARM_COLORS = {f: PALETTE[i % len(PALETTE)] for i, f in enumerate(FARMS)}
 
 FONT_CANDIDATES = [
     Path("D:/Dev/Miniforge3/envs/geo/Lib/site-packages/matplotlib/mpl-data/fonts/ttf/DejaVuSans.ttf"),
@@ -340,6 +348,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
     args = ap.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
+    set_farms([p.name for p in STORE.iterdir() if p.is_dir() and (p / ".zgroup").exists()])
+    if not FARMS:
+        raise SystemExit(f"No farm groups found in {STORE}")
 
     cycles = pd.read_parquet(CYCLES)
     patches = pd.read_parquet(PATCHES)

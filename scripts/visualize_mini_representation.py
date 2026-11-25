@@ -43,7 +43,8 @@ DEFAULT_NPZ = ROOT / "reports" / "mini_dataset" / "representation_first_pilot_em
 DEFAULT_REPORT = ROOT / "reports" / "mini_dataset" / "representation_first_pilot.json"
 DEFAULT_DIR = ROOT / "reports" / "mini_dataset" / "figures"
 
-FARM_COLORS = {"R12-06": (31, 119, 180), "R12-08": (255, 127, 14), "R12-10": (44, 160, 44)}
+PALETTE = [(31, 119, 180), (255, 127, 14), (44, 160, 44), (214, 39, 40), (148, 103, 189)]
+FARM_COLORS: dict[str, tuple[int, int, int]] = {}  # filled from the embeddings' farm names
 STAGE_COLORS = {"S1": (78, 121, 167), "S2": (242, 142, 43), "S3": (225, 87, 89), "S4": (89, 161, 79)}
 
 FONT_CANDIDATES = [
@@ -137,6 +138,7 @@ def main(argv=None) -> int:
     ap.add_argument("--npz", type=Path, default=DEFAULT_NPZ)
     ap.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     ap.add_argument("--out", type=Path, default=DEFAULT_DIR)
+    ap.add_argument("--target-farm", default=None, help="Farm for the cross-year panel (default: first farm)")
     args = ap.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
 
@@ -145,6 +147,8 @@ def main(argv=None) -> int:
     z, z_rand, raw = d["z"], d["z_rand"], d["raw"]
     farms, stages = d["farms"], d["stages"]
     years = d["years"]
+    FARM_COLORS.clear()
+    FARM_COLORS.update({str(f): PALETTE[i % len(PALETTE)] for i, f in enumerate(sorted(set(map(str, farms))))})
 
     # --- Figure 1: structure, farm (top) + stage (bottom) -----------------
     c = Canvas(1820, 1040,
@@ -186,7 +190,8 @@ def main(argv=None) -> int:
     x0, y0, x1, y1 = box
     xL, xR, yT, yB = x0 + 30, x1 - 12, y0 + 30, y1 - 12
     c2.rect(box, fill=(255, 255, 255), outline=(215, 220, 226))
-    target_farm, target_stage = "R12-08", "S3"
+    target_farm = args.target_farm or sorted(FARM_COLORS)[0]
+    target_stage = "S3"
     sel = (farms == target_farm) & (stages == target_stage)
     for is_test, color in ((False, (31, 119, 180)), (True, (225, 87, 89))):
         m = sel & ((years >= 2023) if is_test else (years < 2023))
@@ -232,7 +237,7 @@ def main(argv=None) -> int:
         "**Renderer note:** UMAP and t-SNE crash natively in this conda environment, so a deterministic "
         "pure-Python 2-D projection (top-2 Fisher-ratio dimensions) is used instead. Do not label it UMAP/t-SNE.\n\n"
         "**Do not claim:** stress detection, early warning, geographic generalization, or SSL superiority. "
-        "L1/L2 screening on 3 adjacent farms with weak suspicion labels; CWSI shares inputs with the model. "
+        "L1/L2 screening on the 3 mini farms with weak suspicion labels; CWSI shares inputs with the model. "
         "The retrieval metric has a failed negative control and the embedding has low effective rank.\n",
         encoding="utf-8",
     )
