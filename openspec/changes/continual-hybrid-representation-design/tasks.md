@@ -11,8 +11,8 @@ with a convergence verdict. Synthetic and real results are reported separately.
 - [x] 0.2 Review repository components (models, mini_lab, incremental.py, normal_bank, collapse, phenology, field-id status) — design.md §10.
 - [x] 0.3 Write proposal, design and five capability specs with evidence tags.
 - [x] 0.3b Revision r2 (owner request 2026-11-26 00:41): anomaly head + weak supervision + anomaly memory; r2 phenology-agnostic definition; multi-signal monitoring and checkpoint selection; input data contract (units, L8/L9, normalization); score calibration arms; decision register. Documentation only.
-- [ ] 0.4 Owner answers design.md §12 (CPU/RAM, reviewer, δ values, regression set, wall cap, `min_verified`, primary probe metric, independent records).
-- [ ] 0.5 Owner records the cycle-timeline visual check (prerequisite for §5 Path B).
+- [ ] 0.4 Owner answers design.md §12 — answered 2026-11-26 except items 3–4 (δ values after E5, regression-set cells after E1, frozen before E5); this task closes when those two are decided.
+- [x] 0.5 Owner records the cycle-timeline visual check (prerequisite for §5 Path B) — recorded 2026-11-26, artifacts at `reports/mini_dataset/figures/timeline_{seasonal,anomaly_score,flagged_dates}.png`. **Verdict: NOT all cycles detected** (`todo.md:44-64`, `docs/audits/cycle_gap_diagnosis_2026-11-26.md`); owner answers 2026-11-26: L02-02 gaps unresolved, R15-18 has multiple missed cycles (detection defect), `overlong_unresolved` flag approved. Path B and stage mapping stay blocked until cycle detection is repaired and re-reviewed.
 
 ## 0A. P0 — Input data contract (`input-data-contract`)
 

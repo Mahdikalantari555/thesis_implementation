@@ -118,9 +118,13 @@ Landsat 8 OLI/TIRS and Landsat 9 OLI-2/TIRS-2 Collection 2 Level-2 only.
   USGS *Landsat 8-9 Collection 2 Level 2 Science Product Guide* (LSDS-1619
   v6.0, 2024, table of band designations: SR UINT16 valid 7273–43636, fill 0,
   ×0.0000275 −0.2; ST_B10 UINT16 Kelvin valid 293–61440, fill 0,
-  ×0.00341802 +149) [R] and the values in `config.py::IngestCfg` [C].
-  Task 0A.1 adds a unit test pinning these constants to the guide and
-  asserts that no code path re-applies them to already-converted data.
+  ×0.00341802 +149) [R]. **Only the four scale/offset constants are pinned in
+  code** (`config.py::IngestCfg:124-127`) [C]; the valid DN ranges (SR
+  7273–43636, ST 293–61440) and fill value 0 are **not** pinned anywhere —
+  the literals are duplicated in `io/landsat.py`, `io/zonal.py` and
+  `scripts/extract_patches.py` [D]. Task 0A.1 consolidates all of them in one
+  place, adds a unit test against the guide, and asserts that no code path
+  re-applies them to already-converted data.
 - The mini builder reads METRIC scene rasters described as "reflectance 0..1
   and LST Kelvin, already scaled" (`scripts/build_mini_dataset.py`) [C]; task
   0A.2 asserts this with a range check, so raw DNs can never be mixed with
@@ -149,9 +153,10 @@ Landsat 8 OLI/TIRS and Landsat 9 OLI-2/TIRS-2 Collection 2 Level-2 only.
   stress signals of interest but **not negligible** relative to a subtle
   anomaly score, hence the measured decision below. Exact numbers are to be
   re-read from the papers before they are quoted in the thesis [OPEN].
-- Sensor id is kept per observation (`io/landsat.py` parses LC08/LC09 [C];
-  `io/patches.py` stores `sensor_id` [C]); the mini store does not yet carry it
-  [D].
+- Sensor id is parsed **per scene** (`io/landsat.py` parses LC08/LC09 [C]);
+  `io/patches.py` stores a **majority sensor per bin**, not per observation [C];
+  the mini store does not carry it [D]. Task 0A.3 therefore adds a
+  per-observation `sensor_id` channel rather than surfacing an existing one.
 - Systematic difference is **measured, not assumed**: `io/sensor_offset.py`
   [C] estimates per-band median offsets from near-coincident L8/L9 pairs
   (≤ 3 days) with MAD CIs and refuses unresolved offsets. Decision rule
@@ -317,9 +322,10 @@ Laptop CPU only. Every trainable arm uses one shared trainer.
   - **objective signals** — each validation loss separately (recon, forecast,
     JEPA, Barlow on/off-diagonal terms), never only their sum;
   - **collapse signals** — effective rank (entropy of normalized singular
-    values), per-dimension std (fraction of dims above a floor),
-    off-diagonal covariance energy (VICReg-style), JEPA target–prediction
-    variance [C `benchmarking/collapse.py`];
+    values) and per-dimension std are already implemented [C
+    `benchmarking/collapse.py:89-130`]; off-diagonal covariance energy
+    (VICReg-style) and JEPA target–prediction variance are **new monitors** [D]
+    to be added by task 1.1b;
   - **frozen-encoder quality** (every `probe_every` evals, cheaper than
     eval): linear-probe R² for DOY/season-phase and NDVI-next-obs,
     kNN retrieval of same-field-same-phase windows, and L1-a gap reconstruction
@@ -429,8 +435,11 @@ step as their trained twin.
   DoG troughs; FAO two-crop growth stages) [R: Joshi 2024, finding 13];
   plant/ratoon from the **corrected** age attribute (after the id fix).
   Uncertainty from the SOS/EOS RMSE (17–27 days) → soft stage boundaries.
-- The existing S1–S4 DSH bins stay as a pre-registered comparator arm [C]
-  (`phenology/mini.py`).
+- The existing four DSH-fraction phases (`PHASE_ORDER` = germination,
+  tillering, grand growth, maturation; `phenology/mini.py:124`) stay as a
+  pre-registered comparator arm [C]. "S1–S4" is **not** a phenology label in
+  code — it denotes severity levels in findings — so the comparator's naming
+  is decided before E1 [OPEN].
 - **Combination [HYP]:** Path C = calibrated fusion of A and B (§2.2 arms),
   with B's weight scaled by stage confidence c. A, B and C are evaluated
   independently and in combination (E3).
@@ -684,12 +693,12 @@ fewest losses / smallest k not meaningfully worse (CI of difference includes
 | Contamination / trimming | `train/contamination.py` [C] | reuse for quarantine experiments |
 | Continual learning | `train/incremental.py` stub [C stub] | everything in §7 [D] |
 | Training loop | mini: fixed epochs/`max_steps`, `last.pt` per epoch [C]; 490: Lightning with `early_stop_patience` on loss [C] | multi-signal plateau, eligibility-filtered `best.pt`, per-objective curves, probes, verdicts, wall-time checkpoints, RNG/sampler state [D] |
-| Units / scale | constants in `config.py::IngestCfg` [C]; mini builder reads pre-scaled METRIC rasters [C] | pinned-constant test, range assertions, feature manifest [D] |
-| L8/L9 | `io/landsat.py` sensor parse, `io/patches.py` sensor_id, `io/sensor_offset.py` measured offsets with refusal rule [C] | mini store lacks sensor id; E7 arms [D] |
-| Normalization | mini: global mean/std over finite training values (`mini_lab/data.py` ~l.424) [C]; 490: `norm_stats_full.json` [C] | robust arms, anomaly-excluded statistics, versioning and freeze-on-update [D] |
+| Units / scale | scale/offset constants in `config.py::IngestCfg:124-127` [C]; mini builder reads pre-scaled METRIC rasters [C]; DN ranges and fill **absent** [D] | pin all constants in one place, unit test, range assertions, feature manifest [D] |
+| L8/L9 | `io/landsat.py` per-scene sensor parse, `io/patches.py` majority-per-bin `sensor_id`, `io/sensor_offset.py` measured offsets with refusal rule [C] | per-observation `sensor_id` in mini store; E7 arms [D] |
+| Normalization | mini: global mean/std over finite training values (`mini_lab/data.py:422-449`) [C]; 490: `norm_stats_full.json` [C] | robust arms, anomaly-excluded statistics, versioning and freeze-on-update [D] |
 | Anomaly head / PU | none | §6.6 [D] |
-| Score calibration | robust-z in places (`monitor/scoring.py`) [C] | per-component calibration + AG arms [D] |
-| Phenology | `phenology/cycles.py` (harvest troughs), `phenology/mini.py` (S1–S4 DSH bins) [C] | literature stages with uncertainty [D]; owner visual check pending |
+| Score calibration | robust-z in `monitor/indicators.py:151` and `benchmarking/calibration.py:95`; `monitor/scoring.py` uses q95/causal-median normalizers [C] | per-component calibration + AG arms [D] |
+| Phenology | `phenology/cycles.py` (harvest troughs), `phenology/mini.py` (four named DSH-fraction phases, `PHASE_ORDER:124`) [C] | literature stages with uncertainty [D]; owner visual check pending |
 | Field-id mapping | mini alias `archive_fid = reference_fid + 1` verified on 3 farms [C] | archive-wide verification on 490 [D] |
 | Synthetic vs real separation | finding 28 separates them by text [C] | enforce via report label field [D] |
 
@@ -716,16 +725,45 @@ fewest losses / smallest k not meaningfully worse (CI of difference includes
 8. **P2 — Continual protocol** (replay → distill → drift → EWC) and E5.
 9. **P3 — E4 adaptation**; scale to the 490 pixel store when it exists.
 
-## 12. Open questions for the owner
+## 12. Owner questions and answers (2026-11-26)
 
-1. Laptop CPU cores and RAM (sets batch size, k and the wall cap).
-2. Who can do blind review, and how many candidates per session (K)?
-3. δ_forget and δ_new values for the acceptance gate.
-4. Regression-set composition (which farm × year × stage cells).
-5. Default wall-time cap per training session.
-6. Minimum Verified set before the anomaly head may train (`min_verified`; proposed 20 events, ≥ 2 farms, ≥ 2 years).
-7. Primary probe metric for checkpoint selection (proposed: linear-probe R² on season phase).
-8. Is any independent record available (irrigation logs, ECe, yield by field) for Verified status besides expert review?
+Items 3 and 4 stay **[OPEN]** by the owner's explicit decision to defer.
+
+1. **CPU/RAM — answered (measured in this workspace):** Fedora Linux, 12th-gen
+   Intel Core i7-12700H, 14 physical / 20 logical cores, 23 GiB RAM (~18 GiB
+   available), torch sees no GPU (`cuda=False`); micromamba env `geo` is Python
+   3.11.18. The owner confirmed this is their **only** system (no Windows, no
+   dual boot, no WSL), so old Windows-only paths in `AGENTS.md` are stale.
+2. **Blind review — answered:** owner only, K=10 candidates per session, with
+   the fixed random-Normal mix-in required by §6.3/§6.4.
+3. **δ_forget / δ_new — OPEN:** owner chooses to decide **after E5**, from the
+   measured baseline spread; the gate (§7.4) cannot be pre-registered until then.
+4. **Regression-set composition — OPEN:** owner chooses to decide **after E1**;
+   the set must still be hash-frozen before E5.
+5. **Wall cap — answered with a new run-placement directive:** default session
+   cap 30 min. The design must be CPU-friendly — do not use all cores, handle
+   RAM carefully, and do not run hot/overwhelming jobs for long. Longer runs,
+   even beyond 2 h, are available **only with owner permission** at session
+   endpoints or where results are needed to continue, and only after the local
+   gate plus a successful smoke test. This supersedes the old ≤15 min/seed and
+   Colab-first defaults for this single-machine setup; `AGENTS.md` must be
+   amended to match (owner approved 2026-11-26).
+6. **min_verified — answered:** 20 Verified events across ≥ 2 farms and ≥ 2
+   years (the proposed default); below that, discovery-only.
+7. **Primary probe metric — answered:** linear-probe R² on season phase.
+8. **Independent record — answered:** none available (no irrigation logs, ECe
+   or yield records) beyond owner blind review; claims therefore stay capped
+   at **L3**, as §9 already states.
+
+**Cycle-timeline check (task 0.5) — recorded, but verdict negative:** the owner
+found missed cycles (`todo.md:44-64`,
+`docs/audits/cycle_gap_diagnosis_2026-11-26.md`). Owner answers 2026-11-26:
+L02-02 gaps stay **unresolved** (flagged, no forced harvest); R15-18 shows
+**multiple** missed cycles (two peaks in 2019–2020, one detected, plus the
+2018→2019 cycle missed, apparently from low NDVI peaks) — a detection defect,
+not one disputed boundary; the `overlong_unresolved` flag is **approved**.
+Path B, stage mapping and the cycle-correctness claim remain blocked until
+cycle detection is repaired and re-reviewed.
 
 ## 13. Decision register (r2)
 
@@ -743,5 +781,17 @@ fewest losses / smallest k not meaningfully worse (CI of difference includes
 
 **Experimental hypotheses / arms [HYP]:** Mamba-lite vs GRU vs Transformer; fusion type and k; head/loss count; aggregation AG-max/AG-rank/AG-wcal; calibration form; normalization N0–N4; sensor handling; anomaly-head arms H-sup/H-cw/H-pu; PU class prior; Path C fusion; CL mechanisms (replay, distillation, EWC); unscreened data in the first pretraining pass; ST_QA weighting; that SSL pretraining helps real anomaly discovery at all (currently unsupported, finding 28).
 
-**Unresolved [OPEN]:** §12 items 1–8; archive-wide field-id alias (490); owner cycle-timeline check; independent agronomic modality for L4; δ values; regression-set cells; whether METRIC-derived CWSI/ETa/TVDI are independent enough of model inputs to count as evidence.
+**Confirmed 2026-11-26 (owner UI answers):** owner-only blind review with K=10;
+no independent agronomic record exists, so L4 is unavailable and claims cap at
+L3; `min_verified` = 20 events / ≥2 farms / ≥2 years; primary probe = linear
+R² on season phase; 30 min default session cap with CPU-friendly, RAM-aware,
+non-saturating design, and longer runs only with owner permission after the
+local gate (§12 items 1, 2, 5–8). The cycle-timeline visual check is recorded but its verdict is negative
+(three missed cycles; `todo.md:35-52`; §0 task 0.5), so Path B stays blocked.
+
+**Unresolved [OPEN]:** §12 items 3–4 (δ values after E5; regression-set cells
+after E1, frozen before E5); archive-wide field-id alias (490); amendment of
+the stale `AGENTS.md` environment and run-placement rules; whether
+METRIC-derived CWSI/ETa/TVDI are independent enough of model inputs to count
+as evidence.
 

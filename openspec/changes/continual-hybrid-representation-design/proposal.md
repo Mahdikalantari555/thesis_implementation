@@ -50,9 +50,10 @@ checkpoint, verbose convergence verdict, laptop CPU only).
    prioritized roadmap. Every proposal carries an evidence tag:
    **[R]** research-backed, **[C]** exists in code, **[D]** needs development,
    **[H]** experimental hypothesis.
-2. **Five capability specs** (ADDED): `training-convergence-control`,
-   `hybrid-pixel-context-representation`, `phenology-dual-path`,
-   `anomaly-discovery-triage`, `continual-update-protocol`.
+2. **Five capability specs** in the original design phase (ADDED):
+   `training-convergence-control`, `hybrid-pixel-context-representation`,
+   `phenology-dual-path`, `anomaly-discovery-triage`,
+   `continual-update-protocol`; **r2 adds a sixth**, `input-data-contract`.
 3. **Tasks** for the implementation phase (owner implements from next session,
    CPU laptop only, TDD, agent never runs long jobs).
 
