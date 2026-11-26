@@ -28,6 +28,16 @@ from ssl_anomaly.models.bench.arms import (
     param_band_check,
     target_centric,
 )
+from ssl_anomaly.models.bench.time2agri_arms import (
+    ARM_CLASSES as TIME2AGRI_ARM_CLASSES,
+    TIME2AGRI_ARM_BY_MODEL,
+    TIME2AGRI_MODEL_IDS,
+    Time2AgriFPBenchArm,
+    Time2AgriFFBenchArm,
+    Time2AgriTDBenchArm,
+    build_time2agri_bench_arm,
+    time2agri_objective_signature,
+)
 from ssl_anomaly.models.bench.backbones import (
     BackboneOutput,
     CausalMambaBackbone,
@@ -40,6 +50,14 @@ from ssl_anomaly.models.bench.backbones import (
 __all__ = [
     "ARM_BY_MODEL",
     "ARM_CLASSES",
+    "TIME2AGRI_ARM_BY_MODEL",
+    "TIME2AGRI_ARM_CLASSES",
+    "TIME2AGRI_MODEL_IDS",
+    "Time2AgriFPBenchArm",
+    "Time2AgriFFBenchArm",
+    "Time2AgriTDBenchArm",
+    "build_time2agri_bench_arm",
+    "time2agri_objective_signature",
     "CAPACITY_CONTROL_TRUNKS",
     "PARADIGM_ORDER",
     "BackboneOutput",

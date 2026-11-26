@@ -20,6 +20,15 @@
       2-epoch / 8-training-unit smoke AUPRC (TD 0.533, FP 0.551, FF 0.580 vs
       random-init 0.608 for FF) is not evidence at this scale.
 
-## Phase 3 — deferred (not absent)
-- [ ] 3.1 Benchmark registry arms A11–A13 behind `BaseArm` with `score_bins`.
+## Phase 3 — adapter (applied 2026-11-26)
+- [x] 3.1 A11/A12/A13 `BaseArm` adapters with `score_bins`, `compute_loss` and
+      distinct `objective_spec` in `models/bench/time2agri_arms.py`; honest
+      per-bin residuals documented in `scoring_note`; FP fail-closed on missing
+      train targets / eval split / missing ndvi_index. 8 unit tests
+      (`tests/benchmarking/test_time2agri_arms.py`).
+      **Scope boundary:** the frozen A1–A10 contract (`ARM_BY_MODEL`,
+      `benchmark_config.yaml`, `matrix.yaml`) is untouched; A11–A13 are
+      adapters reachable through `build_time2agri_bench_arm`, not pre-registered
+      cells. Adding them to the matrix requires a dated amendment before
+      execution.
 - [ ] 3.2 2D patch/ViT path from the date-centric raw store.
