@@ -32,6 +32,25 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
   (`CONVERGED_PLATEAU` / `BUDGET_EXHAUSTED_STILL_IMPROVING` / …). Next session:
   owner answers design.md §12, then tasks 1.x (trainer) and 2.x (hygiene).
 
+- ▶ **cycle-gap diagnosis (2026-11-26) — owner verdict: NOT all cycles detected** —
+  Owner reviewed `timeline_seasonal.png`: R12-08 fully detected; **L02-02 two
+  misses, R15-18 one miss**. All three are intervals silently dropped by
+  `build_cycle_rows` (`mini.py:168-172`) for exceeding `max_cycle_days=540`:
+  L02-02 `2018-08-20→2020-03-09` (567 d, cycle_id 6) and
+  `2023-06-30→2025-02-19` (600 d, id 10); R15-18 `2017-11-12→2019-06-27`
+  (592 d, id 5). Signal check: L02-02 gaps contain **no** mid-gap harvest peak
+  (prominence ≤ 0.13, score < 0, support 0/4) — one long cycle each, real vs
+  merged is owner-gated; R15-18 has a plausible missed harvest ~Jan–Feb 2019
+  (score 0.54, 3/4 support) merged into the broad June peak. R12-08 has no
+  >540 d interval, hence fully detected. Independent defect: over-long
+  intervals are deleted without a flag — propose keeping them as
+  `overlong_unresolved` (NOT applied). Full evidence:
+  `docs/audits/cycle_gap_diagnosis_2026-11-26.md`. **Open questions to owner:**
+  (1) force a second harvest in the two L02-02 gaps or accept long/fallow
+  cycles? (2) accept R15-18 Jan–Feb 2019 despite weak support? (3) approve the
+  `overlong_unresolved` flag? Until these are answered, splits, stage mapping
+  and the cycle-correctness claim stay blocked.
+
 - ▶ **NEXT SESSION — owner cycle-timeline visual check (2026-11-25)** —
   The PNGs are **local review artifacts only** (not committed; regenerate with
   `PYTHONPATH=src <geo>/python -X utf8 scripts/visualize_mini_timeline.py`):
@@ -47,8 +66,10 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
     + year×month heatmap; flags on the **same date in all three farms** indicate
     a scene/METRIC-calibration effect, not farm stress.
   - `reports/mini_dataset/figures/timeline_readme.md` — provenance and caveats.
-  **After the visual confirmation** (not before): replace the fixed S1–S4
-  DSH bins with literature stages **tillering → grand growth →
+  **Verdict recorded 2026-11-26: NOT all cycles detected** — see the
+  cycle-gap diagnosis item above; stage work stays blocked until those gaps
+  are resolved. **After the visual confirmation** (not before): replace the
+  fixed S1–S4 DSH bins with literature stages **tillering → grand growth →
   maturity/ripening** (Joshi 2024 SOS/EOS via BISE→FFT→DoG, FAO two-crop model;
   finding 13; Nie/Albahli stage-conditioned windows). Keep the DSH-bin arm as a
   pre-registered comparator, then rerun the architecture/target sweep with a
