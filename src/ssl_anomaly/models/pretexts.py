@@ -1,6 +1,6 @@
 """Controlled SSL pretext objectives on a shared 1D Transformer backbone (RQ2 / Gap G3).
 
-Provides three self-supervised pretext arms with identical encoder architecture,
+Provides three controlled self-supervised pretext arms with identical encoder architecture,
 parameter budget, and sequence interface:
   1. ``masked_recon``: Random + cloud-block masked Huber reconstruction.
   2. ``traj_contrastive``: InfoNCE / NT-Xent trajectory-contrastive learning over
@@ -18,7 +18,17 @@ import torch.nn.functional as F
 
 from .masked_tf import SinusoidalPositionalEncoding, TransformerBlock
 
-PRETEXT_ARMS = ("masked_recon", "traj_contrastive", "anomaly_degradation", "time2agri")
+PRETEXT_ARMS = (
+    "masked_recon", "traj_contrastive", "anomaly_degradation", "agri_view_contrastive"
+)
+#: The old name was a mislabel: this is an in-repo augmentation contrastive arm,
+#: NOT Gupta & Sobti's TD/FP/FF architectures (now in models/time2agri_archs.py).
+LEGACY_ARM_ALIASES = {"time2agri": "agri_view_contrastive"}
+
+
+def resolve_arm(name: str) -> str:
+    """Resolve a deprecated arm name without changing its semantics."""
+    return LEGACY_ARM_ALIASES.get(name, name)
 
 
 class PretextTransformer(nn.Module):
@@ -37,6 +47,7 @@ class PretextTransformer(nn.Module):
         arm: str = "masked_recon",
     ) -> None:
         super().__init__()
+        arm = resolve_arm(arm)
         if arm not in PRETEXT_ARMS:
             raise ValueError(f"Unsupported arm={arm!r}; expected {PRETEXT_ARMS}")
         self.d_in = d_in
@@ -60,7 +71,7 @@ class PretextTransformer(nn.Module):
                 nn.GELU(),
                 nn.Linear(d_model, d_in),
             )
-        elif arm in ("traj_contrastive", "time2agri"):
+        elif arm in ("traj_contrastive", "agri_view_contrastive"):
             self.task_head = nn.Sequential(
                 nn.Linear(d_model, d_model),
                 nn.GELU(),
@@ -265,8 +276,8 @@ def _arm_batch_loss(
         ).mean(dim=-1)
         return (err * m_t.float()).sum() / m_t.float().sum().clamp(min=1.0)
 
-    if arm in ("traj_contrastive", "time2agri"):
-        if arm == "time2agri":
+    if arm in ("traj_contrastive", "agri_view_contrastive"):
+        if arm == "agri_view_contrastive":
             v1, p1, v2, p2 = make_time2agri_views(bx, bp, n_bands, rng)
             temp = 0.15
         else:
@@ -432,7 +443,7 @@ def score_cycle_pretext(
         s = np.sort(tok_rms)
         return float(np.mean(s[-min(3, T) :]))
 
-    if model.arm in ("traj_contrastive", "time2agri"):
+    if model.arm in ("traj_contrastive", "agri_view_contrastive"):
         _, emb = model.encode_sequence(x, mask=None, key_padding_mask=pad)
         e_np = emb[0].numpy()
         e_norm = e_np / max(float(np.linalg.norm(e_np)), 1e-8)
@@ -488,7 +499,7 @@ class Time2AgriModel(nn.Module):
             d_ff=d_ff,
             dropout=dropout,
             max_len=max_len,
-            arm="time2agri",
+            arm="agri_view_contrastive",
         )
         self.proj_head = nn.Sequential(
             nn.Linear(d_model, d_model),

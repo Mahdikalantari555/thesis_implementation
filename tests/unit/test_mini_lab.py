@@ -51,11 +51,11 @@ def test_max_steps_caps_compute_independent_of_dataset_size(tmp_path):
     assert seen == [3, 3]
 
 
-def test_registry_exposes_all_nine_architectures():
+def test_registry_exposes_all_architectures():
     specs = model_specs()
     assert {s["name"] for s in specs} == set(MODEL_REGISTRY)
-    assert len(specs) == 9
-    assert {s["family"] for s in specs} == {"reconstruction", "representation"}
+    assert len(specs) == 12  # 9 legacy + 3 Time2Agri pretext arms
+    assert {s["family"] for s in specs} == {"reconstruction", "representation", "pretext"}
     assert all(s["available"] for s in specs)
 
 
@@ -67,7 +67,11 @@ def test_all_models_build_and_forward():
     for name in MODEL_REGISTRY:
         model = build_model(name, 5, cfg.model)
         recon, embed = model(x)
-        assert recon.shape == x.shape, (name, recon.shape)
+        # Pretext arms expose their own loss and never emit a fake reconstruction.
+        if MODEL_REGISTRY[name].family == "pretext":
+            assert recon is None, (name, recon)
+        else:
+            assert recon.shape == x.shape, (name, recon.shape)
         assert embed.ndim == 2 and embed.shape[0] == 2, (name, embed.shape)
 
 

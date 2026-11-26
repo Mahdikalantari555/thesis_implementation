@@ -221,7 +221,26 @@ def _barlow(d_in: int, cfg: ModelConfig) -> nn.Module:
     )
 
 
+def _time2agri(name: str):
+    def build(d_in: int, cfg: ModelConfig) -> nn.Module:
+        from ssl_anomaly.models.time2agri_archs import build_time2agri_arm
+
+        # Returned directly: its own pretext_loss is the training objective,
+        # never the generic Barlow loss of the representation family.
+        return build_time2agri_arm(name, d_in, d_model=max(cfg.d_model, 16))
+    return build
+
+
 MODEL_REGISTRY: dict[str, ModelSpec] = {
+    "time2agri_td": ModelSpec(
+        "time2agri_td", "pretext", "laptop", "models/time2agri_archs.py (Gupta & Sobti 2025)",
+        _time2agri("time2agri_td"), note="TD bin-gap classification; L1 only"),
+    "time2agri_fp": ModelSpec(
+        "time2agri_fp", "pretext", "laptop", "models/time2agri_archs.py (Gupta & Sobti 2025)",
+        _time2agri("time2agri_fp"), note="FP dominant NDVI FFT; train-period targets only; L1 only"),
+    "time2agri_ff": ModelSpec(
+        "time2agri_ff", "pretext", "laptop", "models/time2agri_archs.py (Gupta & Sobti 2025)",
+        _time2agri("time2agri_ff"), note="FF future-frame reconstruction; L1 only"),
     "mlp_ae": ModelSpec("mlp_ae", "reconstruction", "laptop", "new", lambda d, c: _MLPAE(d, c.d_model, c.latent_dim)),
     "gru_ae": ModelSpec("gru_ae", "reconstruction", "laptop", "models/gru_ae.py", _gru),
     "lstm_ae": ModelSpec("lstm_ae", "reconstruction", "laptop", "new", lambda d, c: _LSTMAE(d, c.d_model, c.latent_dim, c.n_layers, c.dropout)),

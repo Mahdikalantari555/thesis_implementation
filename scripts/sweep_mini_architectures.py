@@ -114,6 +114,7 @@ def n_params(model: str, d_in: int, cfg: ModelConfig) -> int:
 
 def run(args: argparse.Namespace) -> int:
     t0 = time.monotonic()
+    out_root = Path(args.out) if getattr(args, "out", None) else OUT
     stage = args.stage
     target_steps = 100 if stage == "screen" else 400
     seeds = (13,) if stage == "screen" else tuple(args.seeds or SEEDS)
@@ -122,7 +123,7 @@ def run(args: argparse.Namespace) -> int:
         else (int(args.d_model), int(args.latent_dim), int(args.n_layers))
     )
     models = list(args.models or MODEL_REGISTRY)
-    stage_out = OUT / stage
+    stage_out = out_root / stage
     stage_out.mkdir(parents=True, exist_ok=True)
 
     rows: list[dict[str, Any]] = []
@@ -222,6 +223,10 @@ def main() -> int:
     ap.add_argument("--d-model", type=int, default=64)
     ap.add_argument("--latent-dim", type=int, default=32)
     ap.add_argument("--n-layers", type=int, default=2)
+    ap.add_argument("--out", default=None,
+                    help="output root (default: reports/mini_dataset/arch_sweep). Use a distinct "
+                         "root for a re-run so an already-committed screening result is not "
+                         "silently replaced.")
     return run(ap.parse_args())
 
 

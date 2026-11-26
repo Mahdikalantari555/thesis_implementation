@@ -42,6 +42,8 @@ def _apply_overrides(cfg: RunConfig, args: argparse.Namespace) -> None:
         cfg.out_root = Path(args.out)
     if args.resume:
         cfg.resume = True
+    if args.claim_rung:
+        cfg.claim_rung = args.claim_rung
     if args.smoke:
         cfg.model.epochs = min(cfg.model.epochs, 2)
         cfg.model.seeds = (13,)
@@ -76,6 +78,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--device", default=None)
     ap.add_argument("--out", type=Path, default=None)
     ap.add_argument("--resume", action="store_true")
+    ap.add_argument("--claim-rung", choices=("L1", "L2"), default=None)
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument("--all-protocols-smoke", action="store_true")
     ap.add_argument("--list-models", action="store_true")

@@ -73,14 +73,16 @@ def _scores(model: nn.Module, x: torch.Tensor, observed: torch.Tensor, family: s
     model.eval()
     with torch.no_grad():
         recon, emb = model(x)
+        if family in ("representation", "pretext"):
+            if train_emb is None:
+                return np.full(x.shape[0], np.nan)
+            d = torch.cdist(emb, train_emb)
+            return d.min(dim=1).values.cpu().numpy()
         if family == "reconstruction":
             err = (recon - x).pow(2)
             denom = observed.sum(dim=(1, 2)).clamp(min=1)
             return ((err * observed).sum(dim=(1, 2)) / denom).cpu().numpy()
-        if train_emb is None:
-            return np.full(x.shape[0], np.nan)
-        d = torch.cdist(emb, train_emb)
-        return d.min(dim=1).values.cpu().numpy()
+        raise ValueError(f"Unknown model family {family!r}")
 
 
 def _auprc(clean: np.ndarray, deviated: np.ndarray) -> float | None:
@@ -155,6 +157,15 @@ def _one_seed(
     xte = torch.from_numpy(test.x).to(device)
     obs_te = torch.from_numpy(test.observed).to(device)
 
+    fp_targets = None
+    if cfg.model.name == "time2agri_fp":
+        from ssl_anomaly.models.time2agri_archs import build_fp_targets
+
+        ni = feature_names.index("ndvi") if "ndvi" in feature_names else 0
+        fp_targets = torch.from_numpy(
+            build_fp_targets(train.x, train.observed, ni, split="train")
+        ).to(device)
+
     losses: list[float] = []
     steps_done = 0
     for epoch in range(start_epoch, cfg.model.epochs):
@@ -170,7 +181,12 @@ def _one_seed(
             for start in bar:
                 batch_idx = perm[start : start + cfg.model.batch_size]
                 batch = xtr[batch_idx]
-                if spec.family == "reconstruction":
+                if spec.family == "pretext":
+                    kwargs = {}
+                    if fp_targets is not None:
+                        kwargs["ndvi_targets"] = fp_targets[batch_idx]
+                    loss = model.pretext_loss(batch, obs_tr[batch_idx], **kwargs)
+                elif spec.family == "reconstruction":
                     loss = _masked_reconstruction_loss(model, batch, obs_tr[batch_idx])
                 else:
                     v1 = _augment(batch, seed + epoch + start)
@@ -203,7 +219,10 @@ def _one_seed(
         if cfg.model.max_steps is not None and steps_done >= cfg.model.max_steps:
             break
 
-    train_emb = _train_embeddings(model, xtr) if spec.family == "representation" else None
+    train_emb = (
+        _train_embeddings(model, xtr)
+        if spec.family in ("representation", "pretext") else None
+    )
     clean = _scores(model, xte, obs_te, spec.family, train_emb)
     deviated_x = xte.clone()
     idx = feature_names.index("ndvi") if "ndvi" in feature_names else 0
@@ -225,7 +244,10 @@ def _one_seed(
 
     seed_everything(seed)
     random_model = build_model(cfg.model.name, train.x.shape[-1], cfg.model).to(device)
-    random_emb = _train_embeddings(random_model, xtr) if spec.family == "representation" else None
+    random_emb = (
+        _train_embeddings(random_model, xtr)
+        if spec.family in ("representation", "pretext") else None
+    )
     rand_clean = _scores(random_model, xte, obs_te, spec.family, random_emb)
     rand_deviated = _scores(random_model, deviated_x, obs_te, spec.family, random_emb)
     random_auprc = _auprc(rand_clean, rand_deviated)
@@ -273,12 +295,22 @@ def _one_seed(
     return report
 
 
-def _optuna_study(cfg: RunConfig, train: Split, device: torch.device, out_dir: Path) -> dict[str, Any]:
+def _optuna_study(cfg: RunConfig, train: Split, device: torch.device, out_dir: Path,
+                  feature_names: list[str]) -> dict[str, Any]:
     import optuna
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     xtr = torch.from_numpy(train.x[: min(32, train.n)]).to(device)
     obs = torch.from_numpy(train.observed[: min(32, train.n)]).to(device)
+    family = MODEL_REGISTRY[cfg.model.name].family
+    fp_targets = None
+    if cfg.model.name == "time2agri_fp":
+        from ssl_anomaly.models.time2agri_archs import build_fp_targets
+
+        ni = feature_names.index("ndvi") if "ndvi" in feature_names else 0
+        fp_targets = torch.from_numpy(
+            build_fp_targets(train.x[: min(32, train.n)], train.observed[: min(32, train.n)], ni, split="train")
+        ).to(device)
 
     def objective(trial: optuna.Trial) -> float:
         lr = trial.suggest_float("lr", 1e-4, 5e-3, log=True)
@@ -286,15 +318,19 @@ def _optuna_study(cfg: RunConfig, train: Split, device: torch.device, out_dir: P
         model = build_model(cfg.model.name, train.x.shape[-1], cfg.model).to(device)
         opt = torch.optim.AdamW(model.parameters(), lr=lr)
         for _ in range(2):
-            loss = _masked_reconstruction_loss(model, xtr, obs)
+            if family == "pretext":
+                kw = {} if fp_targets is None else {"ndvi_targets": fp_targets}
+                loss = model.pretext_loss(xtr, obs, **kw)
+            elif family == "reconstruction":
+                loss = _masked_reconstruction_loss(model, xtr, obs)
+            else:
+                _, e1 = model(xtr)
+                _, e2 = model(xtr)
+                loss = _barlow_loss(e1, e2)
             opt.zero_grad()
             loss.backward()
             opt.step()
-        model.eval()
-        with torch.no_grad():
-            recon, _ = model(xtr)
-            err = ((recon - xtr).pow(2))[obs]
-        return float(err.mean().cpu()) if obs.any() else float("nan")
+        return float(loss.detach().cpu())
 
     study = optuna.create_study(direction="minimize")
     study.optimize(objective, n_trials=max(1, cfg.n_trials), catch=())
@@ -419,7 +455,7 @@ def run_experiment(
             "random_init_auprc": agg("random_init_auprc"),
         },
         "per_seed": all_reports,
-        "optuna": _optuna_study(cfg, splits[0][1], device, out),
+        "optuna": _optuna_study(cfg, splits[0][1], device, out, dataset.feature_names),
         "wall_s": round(time.monotonic() - t0, 2),
         "output_dir": str(out),
     }
