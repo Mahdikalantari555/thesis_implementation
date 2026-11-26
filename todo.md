@@ -29,8 +29,17 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
   dual-path phenology, statistical discovery + active learning with quarantine,
   continual updates gated by a fixed regression set. Training policy: laptop
   CPU only, train to plateau, checkpoint always, verbose verdict
-  (`CONVERGED_PLATEAU` / `BUDGET_EXHAUSTED_STILL_IMPROVING` / …). Next session:
-  owner answers design.md §12, then tasks 1.x (trainer) and 2.x (hygiene).
+  (`CONVERGED_PLATEAU` / `BUDGET_EXHAUSTED_STILL_IMPROVING` / …).
+  **Owner UI answers 2026-11-26 recorded in `design.md` §12/§13:** owner-only
+  blind review K=10; no independent agronomic record (claims cap at L3);
+  `min_verified` = 20 events / ≥2 farms / ≥2 years; primary probe = linear R²
+  on season phase; 30 min default session cap, CPU-friendly/RAM-aware design,
+  longer runs only with owner permission after the local gate. Machine
+  measured here: i7-12700H, 14c/20t, 23 GiB, no GPU. Still OPEN: δ values
+  (after E5), regression-set cells (after E1, frozen before E5), Path B blocked
+  by the negative cycle-gap verdict (item below). The stale Windows-only
+  `AGENTS.md` environment/run rules were corrected on both binding files
+  2026-11-26. Next: tasks 0A/1.x/2.x (input contract, trainer, hygiene).
 
 - ▶ **cycle-gap diagnosis (2026-11-26) — owner verdict: NOT all cycles detected** —
   Owner reviewed `timeline_seasonal.png`: R12-08 fully detected; **L02-02 two
@@ -45,11 +54,32 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
   >540 d interval, hence fully detected. Independent defect: over-long
   intervals are deleted without a flag — propose keeping them as
   `overlong_unresolved` (NOT applied). Full evidence:
-  `docs/audits/cycle_gap_diagnosis_2026-11-26.md`. **Open questions to owner:**
-  (1) force a second harvest in the two L02-02 gaps or accept long/fallow
-  cycles? (2) accept R15-18 Jan–Feb 2019 despite weak support? (3) approve the
-  `overlong_unresolved` flag? Until these are answered, splits, stage mapping
-  and the cycle-correctness claim stay blocked.
+  `docs/audits/cycle_gap_diagnosis_2026-11-26.md`.
+  **Owner answers 2026-11-26 (UI):** (1) L02-02 gaps → **leave unresolved**
+  (flag, do not use for stage mapping; do not force a harvest). (2) R15-18 →
+  the owner sees **more than one missed cycle**: between 2019 and 2020 there
+  are two NDVI peaks, one detected and one missed, and the 2018→2019 cycle is
+  also missed, apparently because its NDVI peak is low. So this is a
+  **cycle-detection defect**, not a single disputed boundary — no boundary is
+  accepted from this review. (3) `overlong_unresolved` flag → **approved**:
+  keep >540 d intervals flagged instead of silently deleting them.
+  Splits, stage mapping and the cycle-correctness claim stay blocked until
+  cycle detection is repaired and re-reviewed.
+  **Repair applied 2026-11-26** (openspec `cycle-detection-vi-repair`): NDVI+SAVI
+  score only, real-day separation (root cause of the missed 2019-02-12 peak),
+  S1–S4 VI-progress states, no `kind`, `overlong_unresolved` +
+  `short_unresolved` retained. Owner decisions: keep min 180 d, keep
+  2016-01-26 weak, trajectory-conditioned stage comparison (no precise-cycle
+  machinery). **Greenup start added per owner, then corrected:** rest is
+  claimed only after a confirmed bare-soil plateau (both indices within 0.02 of
+  their floor for ≥3 acquisitions); greenup is the first sustained 0.02 rise,
+  not a fraction of full canopy amplitude. Otherwise the cycle starts at
+  harvest. Field_318 now starts 2018-09-05 as the owner indicated. Mini smoke:
+  36 rows = 32 normal / 3 overlong / 1 short; 14 cycles have rest (median 80.5 d).
+  **Awaiting owner review** of plots with distinct S1–S4 colours/labels,
+  legend and gray rest spans: `/tmp/opencode/vi_review4/mini/{L02-02,R12-08,R15-18}.png`
+  and `/tmp/opencode/vi_review4/fields/field_*.png` (+ `review_summary.json`).
+  Canonical mini phenology output NOT yet rebuilt; Path B still blocked.
 
 - ▶ **NEXT SESSION — owner cycle-timeline visual check (2026-11-25)** —
   The PNGs are **local review artifacts only** (not committed; regenerate with
@@ -67,14 +97,15 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
     a scene/METRIC-calibration effect, not farm stress.
   - `reports/mini_dataset/figures/timeline_readme.md` — provenance and caveats.
   **Verdict recorded 2026-11-26: NOT all cycles detected** — see the
-  cycle-gap diagnosis item above; stage work stays blocked until those gaps
-  are resolved. **After the visual confirmation** (not before): replace the
-  fixed S1–S4 DSH bins with literature stages **tillering → grand growth →
-  maturity/ripening** (Joshi 2024 SOS/EOS via BISE→FFT→DoG, FAO two-crop model;
-  finding 13; Nie/Albahli stage-conditioned windows). Keep the DSH-bin arm as a
-  pre-registered comparator, then rerun the architecture/target sweep with a
-  **phase-aware** injection. Do not rebuild splits or claim cycle correctness
-  before this check is recorded.
+  cycle-gap diagnosis item above; stage work stays blocked until cycle
+  detection is repaired and re-reviewed. **After that** (not before): replace
+  the four named DSH-fraction phases (`PHASE_ORDER` = germination, tillering,
+  grand growth, maturation; `phenology/mini.py:124`) with literature stages
+  **tillering → grand growth → maturity/ripening** (Joshi 2024 SOS/EOS via
+  BISE→FFT→DoG, FAO two-crop model; finding 13; Nie/Albahli stage-conditioned
+  windows). Keep the DSH-phase arm as a pre-registered comparator, then rerun
+  the architecture/target sweep with a **phase-aware** injection. Do not
+  rebuild splits or claim cycle correctness before detection is repaired.
 - ✅ **mini CPU architecture screening — finding 28 (2026-11-25)** — after the
   provenance fix, screen (9 archs × 8 spatial units, 100 equal steps, 1 seed:
   70/72 ok) then confirm (3 seeds, 400 steps, bigger d_model 64 / latent 32 /
@@ -353,6 +384,46 @@ Nothing superseded is to be applied (see `openspec/changes/INDEX.md`); archived 
   GRU/Mamba (A1–A10) × suppression (S0–S3) × 5 synthetic anomaly families × 3 severities
   × 3 validation protocols; AUPRC primary; budget-aware execution with Deferred
   visibility; three winner reports; feeds the capstone but no capstone gate depends on it.
+- **`time2agri-pretext-architectures`** (PROPOSED 2026-11-26, owner UI answers) —
+  faithful implementation of Gupta & Sobti 2025 (arXiv:2507.04366): all three
+  pretexts **TD** (time-gap classification), **FP** (dominant NDVI frequency
+  regression) and **FF** (future-frame prediction). Owner decisions: 1D cycle
+  tokens first (CPU smoke), then a 2D patch/ViT path from the date-centric raw
+  store; wire into `mini_lab` for smoke and the benchmark registry as A11–A13
+  with the objective-distinctness audit; **first gate = L1 pretext learning
+  only** (no anomaly claim). FP frequency targets MUST be computed from
+  train-period acquisitions only (leakage guard). Existing mislabeled
+  `time2agri` contrastive arm is **kept and renamed** `agri_view_contrastive`
+  (old name retained as deprecated alias so old manifests/checkpoints still
+  resolve). Paper's FF-error-as-anomaly link is an L1/L2 hypothesis, not a
+  stress claim; paper has RGB+NIR only, no thermal band.
+  **Phase 1–2 applied 2026-11-26:** three faithful arms implemented in
+  `models/time2agri_archs.py`, legacy arm renamed with alias, mini_lab wired with
+  a new `pretext` family, 17 unit tests pass, three CPU smokes (~4 s each) read
+  and tagged L1 at `/tmp/opencode/t2a_smoke/`. Benchmark ids A11–A13 and the 2D
+  patch path remain deferred in that change's tasks.md.
+  **Phase 3.1 applied 2026-11-26:** A11/A12/A13 `BaseArm` adapters added in
+  `models/bench/time2agri_arms.py` (8 new tests), frozen A1–A10 contract left
+  untouched; adapters are not pre-registered cells. **Mini 12-arm sweep run**
+  (background, 9 min 10 s, 96 configs, 94 ok, 2 pre-existing full-field edge
+  cases: barlow_twins batch=1 and jepa None-subscript) at
+  `reports/mini_dataset/arch_sweep/t2a_all12/screen/sweep.json`; git
+  121281cb. Top gain over random init: `full_field__time2agri_td +0.2402`,
+  `pixel__gru_ae +0.0611` from the earlier 9-arm screen. These are screening
+  numbers (1 seed, 100 steps) — not evidence and no winner claim; Time2Agri
+  arms remain L1-pretext by design.
+- **`cycle-agnostic-anomaly-path`** (PROPOSAL 2026-11-26, **pending owner
+  agreement** — design only, no code) — alternative to cycle-boundary
+  segmentation, motivated by the owner's review that a false harvest boundary
+  corrupts every downstream phase signal. Proposed arms: C0a rolling robust-z
+  statistical score (no model), C0b date-centric residual forecaster with Δt +
+  month/year encoding, C0c per-field same-date multi-year comparison (phase
+  alignment without explicit cycle boundaries). Proposed roles: (i) independent
+  triage score for active learning / anomaly memory, (ii) challenge arm against
+  phenology-aware B1/B2 under identical splits and injections, (iii) fallback
+  scorer for `short_unresolved` / `overlong_unresolved` intervals that are
+  currently excluded. No cycle-correctness or stress claim before paired
+  evidence.
 - **`madeline-yield-embeddings-init`** (TRACKED, not created 2026-11-23; owner decision) — Madeline's path: initialise/fine-tune the region base model from external early-season yield-forecasting-model embeddings. Self-supervised trajectory use needs no yield labels, but the external artifact itself needs a data, licence and provenance contract before an openspec change is written. Not implemented; not scheduled.
 0. **`code-audit-2026-11-21-deferred`** — the deferred defect list from the post-bd65829
    audit (`docs/audits/code_audit_2026-11-21.md`): the 3 result-corrupting bugs are FIXED
