@@ -50,18 +50,21 @@ machine. The rules below are binding.
   `openspec/changes/<name>/`; the capability specs under `openspec/specs/` are
   the source of truth after archiving.
 - **Verification gates before any "done"**:
-  1. `pytest tests/unit/test_platform_data_contract.py tests/unit/test_platform_bilingual.py -q`
-     (conda env `geo`: `D:\Dev\Miniforge3\envs\geo\python.exe`, use `-X utf8`
-     for Persian output).
+  1. `/home/mahdi/micromamba/envs/geo/bin/python -X utf8 -m pytest
+     tests/unit/test_platform_data_contract.py tests/unit/test_platform_bilingual.py -q`
+     (use `-X utf8` for Persian output).
   2. `platform`: `node node_modules/typescript/bin/tsc --noEmit` then
-     `TMP/TEMP → platform/.tmpbuild node node_modules/vite/bin/vite.js build`
-     (esbuild temp-dir workaround).
+     `TMPDIR=platform/.tmpbuild node node_modules/vite/bin/vite.js build`
+     (esbuild temp-dir workaround; create `platform/.tmpbuild` first).
   3. Runtime gate: start `scripts/serve_tiles.py --port 8765`, then
      `node scripts/capture_platform_screenshots.mjs --out reports/screenshots/audit --locale en`
      (+ a `--no-tile-server` degradation run after changes that touch
      degradation paths). Zero console errors / zero page errors required.
+     **No browser is installed on this machine**, so this gate cannot pass until
+     one is installed; report that failure verbatim rather than substituting.
   4. Tile-server changes additionally require
-     `python scripts/test_tile_concurrency.py` (12-thread burst).
+     `/home/mahdi/micromamba/envs/geo/bin/python -X utf8 scripts/test_tile_concurrency.py`
+     (12-thread burst).
 - **Evidence is committed** under `reports/` (screenshots, audit.json).
 - **Docs stay true**: after behavior changes update
   `docs/platform_bug_audit.md`, `docs/platform_score_methods.md` (exact
@@ -70,16 +73,24 @@ machine. The rules below are binding.
 
 ## 4. Environment quick reference
 
-- Python: conda env **geo** (`D:\Dev\Miniforge3\envs\geo\python.exe -X utf8`).
-  Exporter full run ≈ 8–10 min. Persian console output needs UTF-8.
-- Headless browser: **Edge** `C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe`
-  (no Chrome installed). Node ≥ 26 (built-in WebSocket for raw CDP).
-- Git Bash quirks: grep output is CRLF + backslash paths →
-  `| tr '\134' '/' | tr -d '\r' | xargs …`; `sed -i` works directly but not
-  inside `while read` loops; `//FLAG` for Windows-native tools.
-- Data roots: `D:\RS\Thesis\Data\Processed\` (canonical) and
-  `D:\RS\Thesis\Data\Metric\products\` (METRIC suite: ETaDaily, CWSI_ET,
-  CWSI_LST, ETinst, ETrF, … + `interpolation/` daily interpolated rasters).
+- Python: micromamba env **geo** at `/home/mahdi/micromamba/envs/geo/bin/python`
+  (Python 3.11.18; use `-X utf8` for Persian output). System Python is 3.15.2 —
+  do not use it for thesis work. Exporter full run ≈ 8–10 min.
+- Node 26.13.1 (fnm shims on PATH) and Bun 1.4.5 (`/home/mahdi/.bun/bin`).
+  `node` has the built-in WebSocket needed for raw CDP.
+- Headless browser: **none installed** (no Edge/Chrome/Chromium on PATH, no
+  Playwright cache). The runtime screenshot gate cannot run until one is
+  installed; report that failure verbatim rather than substituting a fake.
+- Shell: Fedora Linux with POSIX paths and LF line endings; the old Git Bash
+  `//FLAG` / CRLF workarounds do not apply.
+- Data roots: `/home/mahdi/RS/Thesis/Data/Processed/` (canonical) and
+  `/home/mahdi/RS/Thesis/Data/Metric/products/` (METRIC suite: ETaDaily, CWSI_ET,
+  CWSI_LST, ETinst, ETrF, … + `interpolation/` daily interpolated rasters), plus
+  `Data/RoI/` and `Data/Weather/` under the same root.
+- Hardware (measured 2026-11-26, owner's only machine): Intel i7-12700H,
+  14 physical / 20 logical cores, 23 GiB RAM (~18 GiB available), no GPU
+  (`torch.cuda.is_available() == False`). Keep CPU jobs within a subset of
+  cores and bounded RAM.
 - The user works in Persian; **all assistant replies stay in English**. Data
   values may be Persian (registry text renders verbatim); UI code stays
   Latin-script with i18n keys in `platform/src/i18n/{en,fa}.ts` (parity test
@@ -100,27 +111,21 @@ machine. The rules below are binding.
 
 ## 6. Long-running jobs (training, full evaluation, exports)
 
-- **Compute placement: Colab, after local validation (owner directive
-  2026-11-20).** Heavy work runs on **Colab, not on the owner's laptop** — and
-  that now covers **evaluation, σ (sigma) calibration and long exports**, not
-  only training. The escalation is always **validate-locally-first, then
-  escalate**; a pipeline that has not passed the local gate is never handed
-  over. See §6.1 for the gate and §6.2 for the return path.
-- **Placement trigger: small-data + CPU/RAM-heavy + slow ⇒ Colab by default**
-  (owner directive 2026-11-21, after the patch severity sweep saturated the
-  laptop for hours on ~5 MB of inputs). If a job's inputs fit a small Drive
-  bundle (≲ tens of MB beyond what `thesis_data_full*.zip` already carries in
-  `MyDrive/thesis_colab/`), but it is CPU/RAM-hungry (torch scoring, sweep
-  loops, large tensor passes) and expected to take ≳ 30 minutes locally, do
-  NOT run it on the laptop — not even deprioritized or "just once". Build the
-  upload bundle (never re-upload artifacts already in Drive), write the Colab
-  notebook, pass §6.1's local gate, and hand it over through §6.2. The laptop
-  keeps only validation: tests, smoke, quick single-seed probes.
-- **The agent never launches a long job itself.** Anything expected to run
-  longer than ~2 minutes (full training, multi-seed sweeps, full RQ suite,
-  full evaluation, σ calibration, full exporter runs) is handed to the user as
-  an **exact terminal command or notebook cell** (conda env, working
-  directory, arguments, expected wall time, output paths).
+- **Compute placement (owner directive 2026-11-26, supersedes the 2026-11-20/21
+  Colab-first rule):** this Fedora machine is the owner's **only** system — no
+  Windows, no WSL, no GPU. Long local runs are allowed **only with owner
+  permission**, typically at a session endpoint or where a result is needed to
+  continue, and only after the local gate (§6.1) plus a successful smoke test;
+  the owner has permitted runs beyond 2 h. Colab is an option when local
+  resources are clearly insufficient, not the default.
+- **CPU-friendly by design:** do not use all cores, bound RAM, watch thermals;
+  prefer streaming and small batches. The agent still never launches a long job
+  itself — it hands over an exact command with expected wall time and output
+  paths.
+- Anything expected to run longer than ~2 minutes (full training, multi-seed
+  sweeps, full RQ suite, full evaluation, σ calibration, full exporter runs) is
+  handed to the user as an **exact terminal command or notebook cell** (geo env,
+  working directory, arguments, expected wall time, output paths).
 - Before handing over a command the agent MUST: run the unit tests that cover
   the touched code, run the script's `--smoke` mode end to end, and read the
   smoke output (metrics present, no NaN, shapes and counts as expected). If
@@ -129,10 +134,10 @@ machine. The rules below are binding.
   progress bar (tqdm) with epoch/step, current losses, and ETA; a
   machine-readable `progress.jsonl`; a final summary line with wall time and
   output paths. Long jobs MUST support `--resume`.
-- Scripts auto-select the device (`cuda` when available, else `cpu`) so the
-  same command runs on the laptop, the lab GPU, or Colab. Laptop budget for
-  development runs: ≤ 15 min per seed, ≤ 500 k parameters; anything above that
-  budget is a Colab job, not a longer laptop wait.
+- Scripts auto-select the device (`cuda` when available, else `cpu`); here that
+  means `cpu`, while lab GPU/Colab remain valid targets for the same command.
+  Keep smoke and development probes short; longer runs follow the permission
+  rule above.
 - **Save model weights** (state_dict + optimizer/scheduler/rng) per seed so
   `--resume` works; never ship a run without its checkpoint and sidecar.
 - When the user reports results, the agent reads the produced files (not only
@@ -143,7 +148,7 @@ machine. The rules below are binding.
   hashes) and never emit placeholder/NaN-filled numbers; reports missing any of
   these fields are defects, not "done".
 
-### 6.1 The local gate (before every Colab handover)
+### 6.1 The local gate (before every long run or handover)
 
 All of the following must hold, and the agent must say so explicitly in the
 handover message:
@@ -158,12 +163,12 @@ handover message:
 5. The pipeline is deterministic enough to resume: `--resume` verified, seeds
    recorded.
 
-Only then does the job go to Colab. Training is never the first place new code
-runs.
+Only then is the job handed to the owner or, if needed, escalated to Colab.
+Training is never the first place new code runs.
 
 ### 6.2 Return path: Colab → Drive → Arena agent → Drive → local agent
 
-The owner's workflow, and the agent's obligation inside it:
+If a run is escalated to Colab, the owner's bundle workflow applies:
 
 1. **Colab writes to Google Drive** as a **dated, self-describing bundle** —
    e.g. `patch_ep10_colab_2026-11-19.zip`, `sigma_eval_colab_2026-11-20.zip`.
@@ -248,5 +253,5 @@ is a defect.
 - Silent fallbacks (simulator, proxy formula, default values) when real data
   or a checkpoint is missing — must fail or be labelled `absent`.
 - Exceptions swallowed so a script reports success on partial work.
-- Platform/OS issues that change results (e.g. Windows joblib
-  PermissionError leading to an n = 1 run).
+- Platform/OS issues that change results (e.g. filesystem permission or
+  process-spawn failures silently reducing a run to n = 1).
