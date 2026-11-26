@@ -232,7 +232,11 @@ def _temporal_units(
         if not cyc_path.exists():
             raise RuntimeError(f"Temporal repr {rep.temporal} requires {cyc_path}")
         idx = []
-        for _, row in pd.read_parquet(cyc_path).iterrows():
+        cycles = pd.read_parquet(cyc_path)
+        # Unresolved long intervals are evidence, not training cycles.
+        if "status" in cycles.columns:
+            cycles = cycles[cycles["status"] == "normal"]
+        for _, row in cycles.iterrows():
             sel = np.array(
                 [i for i, d in enumerate(dates) if str(row["start_date"]) <= d <= str(row["end_date"])]
             )

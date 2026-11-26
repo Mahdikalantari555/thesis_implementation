@@ -87,3 +87,54 @@ been made.
 2. R15-18: accept a Jan–Feb 2019 harvest despite score 0.54 and 3/4 support?
 3. Approve keeping over-long intervals as `overlong_unresolved` (§4) instead of
    deleting them?
+
+---
+
+## 6. Repair addendum — 2026-11-26 (implementation, not yet owner-reviewed)
+
+Owner decisions: L02-02 gaps stay unresolved (no forced harvest);
+`overlong_unresolved` flag approved; LST and GDD dropped from the harvest score;
+growth states S1–S4 from VI progress; `kind` plant/ratoon removed; short bounded
+intervals flagged `short_unresolved`; weak 2016-01-26 peak stays weak; stage
+comparison will use trajectory-conditioned matching, not exact cycle dates.
+
+**Root cause of the missed R15-18 Feb-2019 boundary:** the old `find_peaks`
+distance was computed in *indices* from the median sampling interval. With
+irregular acquisitions it suppressed a peak only 12 indices away despite being
+**135 real days** from the stronger June peak. The repaired detector enforces
+the 120-day separation in real days; 2019-02-12 now has prominence 0.406 and is
+a strong boundary.
+
+**Smoke output** (`/tmp/opencode/phenology_smoke3`, 0.94 s): 39 cycle rows —
+33 `normal`, 4 `overlong_unresolved`, 1 `short_unresolved`; no NaN in
+length/status; no `kind` or GDD columns. R15-18 retains two unresolved
+over-long intervals (2015-03-12→2017-01-12 = 672 d;
+2022-04-17→2023-11-21 = 583 d) and the 135 d interval is now visible as
+`short_unresolved`. The R15-18 2016-01-26 candidate remains in
+`weak_candidates` (prominence 0.174). L02-02 still has its two long gaps
+(720 d, 663 d), as the owner chose.
+
+**Evidence for review:** three mini farms via
+`/tmp/opencode/vi_review/mini/timeline_seasonal.png`; six stratified archive
+fields (12, 87, 164, 241, 318, 455) via
+`/tmp/opencode/vi_review/fields/field_*.png` and `review_summary.json`.
+These are local artifacts, not committed. **No cycle-correctness, stage or
+stress claim is made until the owner reviews them.**
+
+### 6.1 Greenup start — corrected after owner review (2026-11-26)
+
+The owner pointed out that a field may rest before the next cycle's greenup,
+but **not after every harvest**. The first version (20% of full canopy
+amplitude) claimed rest too broadly and started field_318 in 2019-01 instead of
+the observed rise in 2018-09. Corrected rule: rest is claimed only when both
+smoothed indices stay within 0.02 of their post-harvest floor for ≥3
+acquisitions (bare soil); greenup is the first sustained rise ≥0.02 above that
+floor (≥2 acquisitions); otherwise the cycle starts at the harvest.
+
+Rebuilt mini smoke (`/tmp/opencode/phenology_smoke5`): 36 rows = 32 normal,
+3 `overlong_unresolved`, 1 `short_unresolved`; 14 cycles have `rest_days`
+(median 80.5 d). Field_318 now starts 2018-09-05 as the owner identified.
+Regenerated plots with distinct S1–S4 colours, labels, legend and gray rest
+spans are at `/tmp/opencode/vi_review4/{mini,fields}/`. This is a screening
+heuristic, not phenology extraction; no cycle-correctness or stage claim is
+made before the owner's review.

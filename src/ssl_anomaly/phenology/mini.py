@@ -1,17 +1,18 @@
-"""Transparent multi-band phenology for the three-farm mini dataset.
+"""NDVI+SAVI-only sugarcane phenology for the three-farm mini dataset.
 
-NDVI-only harvest detection is explicitly rejected: the v2 archive showed it
-missed winter harvests and merged two seasons. Here four field-level channels
-(NDVI, SAVI, LST, daily GDD) are oriented so that a harvest is a *drop* in
-NDVI/SAVI/GDD and a *rise* in LST, standardized, and combined into one score.
-Candidate harvests are peaks of that combined score with a minimum separation
-in real days. Stage confidence is the fraction of channels that independently
-support each candidate, so a weak candidate is visible rather than silently
-promoted to a harvest.
+Harvest candidates are peaks of the mean oriented z-score of NDVI and SAVI
+(−z NDVI, −z SAVI). LST, GDD and weather are deliberately absent from the
+score: a single station series is shared by all fields, and the thesis keeps
+thermal time for a separate axis ablation (findings 13/15). A date missing
+either index is unscored rather than renormalized over the survivors.
 
-This is a screening-layer detector, not an owner-approved production detector.
-It must not be used to claim stress or phenology-phase anomaly detection beyond
-validation-ladder rung L1.
+Growth states are derived from normalized within-cycle progress (finding 17):
+S1 establishment/growth, S2 peak growth, S3 maturity/senescence,
+S4 harvest/dormancy. No plant/ratoon label is inferred.
+
+This is a screening-layer detector, not owner-approved production phenology.
+It must not be used for stress or phase-anomaly claims beyond L1 until the
+owner has re-reviewed the regenerated timelines.
 """
 
 from __future__ import annotations
@@ -22,7 +23,13 @@ from typing import Any
 import numpy as np
 from scipy.signal import find_peaks
 
-DEFAULT_WEIGHTS = {"ndvi": 1.0, "savi": 1.0, "lst": 1.0, "gdd": 0.5}
+WEAK_PROMINENCE = 0.1
+PHASE_ORDER = (
+    "S1_establishment_growth",
+    "S2_peak_growth",
+    "S3_maturity_senescence",
+    "S4_harvest_dormancy",
+)
 
 
 @dataclass(frozen=True)
@@ -32,6 +39,7 @@ class HarvestCandidate:
     confidence: float
     support: int
     channel_z: dict[str, float]
+    prominence: float = 0.0
 
 
 def _zscore(y: np.ndarray) -> np.ndarray:
@@ -47,37 +55,22 @@ def _zscore(y: np.ndarray) -> np.ndarray:
     return out
 
 
-def multi_band_harvest_score(
+def vi_harvest_score(
     ndvi: np.ndarray,
     savi: np.ndarray,
-    lst: np.ndarray,
-    gdd: np.ndarray,
-    *,
-    weights: dict[str, float] | None = None,
 ) -> tuple[np.ndarray, dict[str, np.ndarray]]:
-    """Return (combined score, per-channel oriented z-scores).
+    """Return (combined score, oriented z-scores) from NDVI and SAVI only.
 
-    Oriented z-scores: -NDVI, -SAVI, +LST, -GDD. NaNs stay NaN; a date with any
-    missing channel has a NaN score and cannot become a harvest candidate.
+    Oriented z: -z(NDVI), -z(SAVI), so a harvest-like greenness drop is high.
+    NaNs stay NaN; a date with either index missing cannot be scored.
     """
-    w = dict(DEFAULT_WEIGHTS if weights is None else weights)
-    oriented = {
-        "ndvi": -_zscore(ndvi),
-        "savi": -_zscore(savi),
-        "lst": _zscore(lst),
-        "gdd": -_zscore(gdd),
-    }
-    # Fail closed: a date missing any channel cannot be scored. Renormalizing
-    # over the surviving channels would let a cloud-contaminated date look
-    # like a confident harvest candidate.
-    have_all = np.ones(len(ndvi), dtype=bool)
-    for z in oriented.values():
-        have_all &= np.isfinite(z)
-    total = np.zeros(len(ndvi), dtype=np.float64)
-    for name, z in oriented.items():
-        total += np.where(have_all, z * float(w[name]), 0.0)
-    score = np.full(len(ndvi), np.nan, dtype=np.float64)
-    score[have_all] = total[have_all] / sum(float(v) for v in w.values())
+    a, b = np.asarray(ndvi, dtype=np.float64), np.asarray(savi, dtype=np.float64)
+    if len(a) != len(b):
+        raise ValueError("NDVI and SAVI series must have equal length")
+    oriented = {"ndvi": -_zscore(a), "savi": -_zscore(b)}
+    have_all = np.isfinite(oriented["ndvi"]) & np.isfinite(oriented["savi"])
+    score = np.full(len(a), np.nan, dtype=np.float64)
+    score[have_all] = 0.5 * (oriented["ndvi"][have_all] + oriented["savi"][have_all])
     return score, oriented
 
 
@@ -89,60 +82,112 @@ def detect_harvests(
     min_gap_days: int = 120,
     prominence: float = 0.3,
     min_support_z: float = 0.4,
-) -> list[HarvestCandidate]:
-    """Detect harvest peaks on the combined score with real-day separation."""
+) -> tuple[list[HarvestCandidate], list[HarvestCandidate]]:
+    """Return (cycle boundaries, weak candidates) from the VI score.
+
+    Peaks at or above ``prominence`` are boundaries; peaks between
+    ``WEAK_PROMINENCE`` and ``prominence`` are retained as reviewable evidence
+    and never split a cycle on their own.
+    """
     s = np.asarray(score, dtype=np.float64)
+    days = np.asarray(day_numbers, dtype=np.float64)
     valid = np.isfinite(s)
     idx = np.flatnonzero(valid)
     if idx.size < 3:
-        return []
+        return [], []
     fill = np.interp(np.arange(len(s)), idx, s[valid])
-    distance = max(1, int(min_gap_days / max(1.0, float(np.median(np.diff(day_numbers))))))
-    peaks, props = find_peaks(fill, prominence=prominence, distance=distance)
-    out = []
-    for i, p in enumerate(peaks):
+    # Distance in *indices* is wrong for irregular Landsat sampling: a gap in
+    # the series makes the median spacing small and suppresses peaks that are
+    # far apart in real days. Find all peaks, then enforce the separation rule
+    # on real days, keeping the higher-scoring peak first.
+    peaks, props = find_peaks(fill, prominence=WEAK_PROMINENCE)
+
+    def _candidate(p: int, prom: float) -> HarvestCandidate:
         zs = {
             name: float(np.asarray(z)[p]) if np.isfinite(np.asarray(z)[p]) else 0.0
             for name, z in oriented.items()
         }
         support = sum(1 for v in zs.values() if v >= min_support_z)
-        conf = float(
-            min(1.0, support / len(zs)) * min(1.0, float(props["prominences"][i]))
+        conf = float(min(1.0, support / max(1, len(zs))) * min(1.0, prom))
+        return HarvestCandidate(
+            index=int(p),
+            score=float(fill[p]),
+            confidence=round(conf, 4),
+            support=support,
+            channel_z={k: round(v, 4) for k, v in zs.items()},
+            prominence=round(prom, 4),
         )
-        out.append(
-            HarvestCandidate(
-                index=int(p),
-                score=float(fill[p]),
-                confidence=round(conf, 4),
-                support=support,
-                channel_z={k: round(v, 4) for k, v in zs.items()},
-            )
-        )
-    return out
+
+    prom_by_index = {int(p): float(pr) for p, pr in zip(peaks, props["prominences"])}
+    ranked = sorted(
+        (p for p, pr in prom_by_index.items() if pr >= prominence),
+        key=lambda p: fill[p],
+        reverse=True,
+    )
+    boundaries: list[HarvestCandidate] = []
+    for p in ranked:
+        if all(abs(days[p] - days[q.index]) >= min_gap_days for q in boundaries):
+            boundaries.append(_candidate(p, prom_by_index[p]))
+    weak = [
+        _candidate(p, pr) for p, pr in prom_by_index.items() if pr < prominence
+    ]
+    boundaries.sort(key=lambda c: c.index)
+    return boundaries, weak
 
 
-PHASE_ORDER = ("germination", "tillering", "grand_growth", "maturation")
-
-
-def phase_for_date(dsh_days: float, cycle_length_days: float) -> str:
-    """Map days-since-harvest to a classical sugarcane phase.
-
-    Fractions follow the standard Khuzestan plant-cane calendar
-    (germination 30-45 d, tillering 60-90 d, grand growth 120-180 d,
-    maturation 60-90 d) scaled to the observed cycle length.
-    """
-    if not np.isfinite(dsh_days) or not np.isfinite(cycle_length_days) or cycle_length_days <= 0:
+def growth_state(progress: float) -> str:
+    """Map normalized within-cycle progress to a VI-progress growth state."""
+    p = float(progress)
+    if not np.isfinite(p) or p < 0.0 or p > 1.0:
         return "absent"
-    frac = dsh_days / cycle_length_days
-    if frac < 45 / 366:
-        return "germination"
-    if frac < 135 / 366:
-        return "tillering"
-    if frac < 300 / 366:
-        return "grand_growth"
-    if frac < 1.0:
-        return "maturation"
-    return "post_harvest"
+    if p < 0.25:
+        return PHASE_ORDER[0]
+    if p < 0.60:
+        return PHASE_ORDER[1]
+    if p < 0.85:
+        return PHASE_ORDER[2]
+    return PHASE_ORDER[3]
+
+
+def _greenup_index(
+    s: int,
+    e: int,
+    ndvi: np.ndarray | None,
+    savi: np.ndarray | None,
+    *,
+    bare_tol: float,
+    rise_tol: float,
+    min_rest_obs: int,
+    min_obs: int,
+) -> int | None:
+    """First sustained rise after a *bare-soil* plateau, or None.
+
+    Rest is not assumed after every harvest. It is claimed only when both
+    indices stay within ``bare_tol`` of their post-harvest floor for at least
+    ``min_rest_obs`` acquisitions; greenup is then the first sustained rise of
+    ``rise_tol`` above that floor (not a fraction of full canopy amplitude).
+    """
+    if ndvi is None or savi is None or s < 0:
+        return None
+    lo, hi = s + 1, min(e, len(ndvi))
+    if hi - lo < min_rest_obs + min_obs:
+        return None
+    a = np.asarray(ndvi, dtype=np.float64)[lo:hi]
+    b = np.asarray(savi, dtype=np.float64)[lo:hi]
+    if np.isfinite(a).sum() < min_rest_obs + min_obs or np.isfinite(b).sum() < min_rest_obs + min_obs:
+        return None
+    floor_a, floor_b = float(np.nanmin(a[:3])), float(np.nanmin(b[:3]))
+    bare = (a <= floor_a + bare_tol) & (b <= floor_b + bare_tol)
+    n_bare = 0
+    while n_bare < len(bare) and bool(bare[n_bare]):
+        n_bare += 1
+    if n_bare < min_rest_obs:
+        return None  # no bare-soil rest: the cycle starts at the harvest
+    rising = (a >= floor_a + rise_tol) & (b >= floor_b + rise_tol)
+    for j in range(n_bare, len(rising) - min_obs + 1):
+        if rising[j : j + min_obs].all():
+            return lo + j
+    return None  # bare soil until the next boundary: conservative fallback
 
 
 def build_cycle_rows(
@@ -150,12 +195,17 @@ def build_cycle_rows(
     ogc_fid: int,
     dates: list[str],
     candidates: list[HarvestCandidate],
-    gdd_daily: np.ndarray,
     *,
     min_cycle_days: int = 180,
     max_cycle_days: int = 540,
+    ndvi: np.ndarray | None = None,
+    savi: np.ndarray | None = None,
+    bare_tol: float = 0.02,
+    rise_tol: float = 0.02,
+    min_rest_obs: int = 3,
+    greenup_min_obs: int = 2,
 ) -> list[dict[str, Any]]:
-    """Assemble cycle records from consecutive harvest candidates."""
+    """Assemble cycle records; a cycle starts at greenup, not at the last harvest."""
     days = np.array([np.datetime64(d, "D") for d in dates])
     day_int = (days - np.datetime64("2013-03-30", "D")).astype(int)
     rows: list[dict[str, Any]] = []
@@ -163,13 +213,25 @@ def build_cycle_rows(
     starts = [-1] + boundaries
     ends = boundaries + [len(dates)]
     for cid, (s, e) in enumerate(zip(starts, ends), start=1):
-        start = 0 if s < 0 else s
-        length = int(day_int[min(e, len(dates) - 1)] - day_int[start])
-        if length < min_cycle_days:
-            continue
+        if s < 0:
+            start, rest_days, start_source = 0, 0, "series_start"
+        else:
+            g = _greenup_index(
+                s, e, ndvi, savi,
+                bare_tol=bare_tol, rise_tol=rise_tol,
+                min_rest_obs=min_rest_obs, min_obs=greenup_min_obs,
+            )
+            start = g if g is not None else s
+            rest_days = int(day_int[start] - day_int[s]) if g is not None else 0
+            start_source = "greenup" if g is not None else "harvest"
+        stop = min(e, len(dates) - 1)
+        length = int(day_int[stop] - day_int[start])
         censored = bool(s < 0 or e >= len(dates))
-        if length > max_cycle_days and not censored:
+        bounded = bool(s >= 0 and e < len(dates))
+        short = bool(length < min_cycle_days and bounded)
+        if length < min_cycle_days and not short:
             continue
+        overlong = bool(length > max_cycle_days and not censored)
         conf_values = [
             c.confidence for c in candidates if start <= c.index < min(e, len(dates))
         ]
@@ -179,16 +241,23 @@ def build_cycle_rows(
                 "ogc_fid": ogc_fid,
                 "cycle_id": cid,
                 "start_date": dates[start],
-                "end_date": dates[min(e, len(dates) - 1)],
+                "end_date": dates[stop],
                 "start_harvest": bool(s >= 0),
                 "end_harvest": bool(e < len(dates)),
                 "length_days": length,
                 "censored": censored,
-                "kind": "plant" if cid == 1 else "ratoon",
+                "rest_days": rest_days,
+                "cycle_start_source": start_source,
+                "status": (
+                    "overlong_unresolved" if overlong
+                    else "short_unresolved" if short
+                    else "normal"
+                ),
+                "boundary_start_index": int(s),
+                "boundary_end_index": int(e),
                 "stage_confidence": float(np.mean(conf_values)) if conf_values else np.nan,
                 "n_harvest_candidates": len(conf_values),
-                "gdd_sum_within_cycle": float(np.nansum(gdd_daily[start:e])),
-                "phases_at_midpoint": phase_for_date(length / 2.0, float(length)),
+                "growth_state_at_midpoint": growth_state(0.5),
             }
         )
     return rows

@@ -7,7 +7,7 @@ under Data/Processed/:
 
 * NDVI and LST: field-mean of mini satellite.zarr pixels (red/nir/lst bands),
   masked by pixel_valid AND in_field. LST Kelvin -> Celsius (273.15).
-* Crop cycles: phenology/cycles_mini.parquet (start_date / end_date / kind).
+* Crop cycles: phenology/cycles_mini.parquet (start_date / end_date / status).
 * Flagged dates: suspected_stress/suspected_patches.parquet (weak suspicion
   from re-masked METRIC CWSI_ET / ETaDaily / ETrF / LAI / TVDI products).
 * Anomaly score: a DERIVED, phase-conditioned robust deviation — for each
@@ -194,12 +194,21 @@ def _panel(c: Canvas, box, dates, values, title, color, cycles, flags,
     for _, cyc in cycles.iterrows():
         a = int(np.datetime64(str(cyc["start_date"]), "D").astype("datetime64[D]").astype(int))
         b = int(np.datetime64(str(cyc["end_date"]), "D").astype("datetime64[D]").astype(int))
-        fill = (223, 238, 250) if str(cyc["kind"]) == "plant" else (253, 235, 218)
+        status = str(cyc.get("status", "normal"))
+        fill = (
+            (255, 236, 236) if status == "overlong_unresolved"
+            else (255, 248, 220) if status == "short_unresolved"
+            else (232, 242, 252)
+        )
         c.rect((int(px(a)), yT, int(px(b)), yB), fill=fill)
         c.line([(px(a), yT), (px(a), yB)], (61, 126, 166), 1)
         c.line([(px(b), yT), (px(b), yB)], (183, 119, 45), 1)
-        c.text(((px(a) + px(b)) / 2, yT + 2), "P" if str(cyc["kind"]) == "plant" else "R",
-               12, (110, 110, 110), anchor="ma")
+        label = (
+            "U" if status == "overlong_unresolved"
+            else "s" if status == "short_unresolved"
+            else str(cyc.get("cycle_id", ""))
+        )
+        c.text(((px(a) + px(b)) / 2, yT + 2), label, 12, (110, 110, 110), anchor="ma")
     # y grid + labels
     for k in range(5):
         v = ymin + k * (ymax - ymin) / 4
@@ -351,13 +360,15 @@ def _figure_flags(out, series):
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    ap.add_argument("--cycles", type=Path, default=CYCLES,
+                    help="cycle parquet to plot (defaults to the canonical mini output)")
     args = ap.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
     set_farms([p.name for p in STORE.iterdir() if p.is_dir() and (p / ".zgroup").exists()])
     if not FARMS:
         raise SystemExit(f"No farm groups found in {STORE}")
 
-    cycles = pd.read_parquet(CYCLES)
+    cycles = pd.read_parquet(args.cycles)
     patches = pd.read_parquet(PATCHES)
     flags = patches.groupby(["farm", "date"], as_index=False)["n_suspected"].sum()
     flag_map = {(r.farm, str(r.date)[:10]): int(r.n_suspected) for r in flags.itertuples()}

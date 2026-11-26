@@ -75,6 +75,8 @@ def product_index(name: str) -> dict[str, Path]:
 
 def stage_of(date: str, cycles: pd.DataFrame) -> str | None:
     for _, c in cycles.iterrows():
+        if "status" in cycles.columns and c["status"] != "normal":
+            continue  # overlong_unresolved intervals are not stage-assigned
         if str(c["start_date"]) <= date <= str(c["end_date"]):
             start = np.datetime64(str(c["start_date"]), "D")
             end = np.datetime64(str(c["end_date"]), "D")

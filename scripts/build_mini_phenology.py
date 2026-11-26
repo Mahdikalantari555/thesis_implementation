@@ -1,11 +1,10 @@
-"""Derive provisional multi-band sugarcane phenology for the mini dataset.
+"""Derive provisional NDVI+SAVI sugarcane phenology for the mini dataset.
 
-Channels: field-median NDVI and SAVI (computed on demand from stored bands),
-field-median LST (K) and daily GDD from the mini weather table. Harvest-like
-candidates and cycle/stage confidence come from
-``ssl_anomaly.phenology.mini``. Outputs are screening metadata used to document
-the season structure and proposed temporal holdout boundary — not ground truth
-and not a model prediction.
+Channels: field-median NDVI and SAVI only, computed on demand from stored
+bands. LST and GDD are deliberately excluded from the harvest score (owner
+decision 2026-11-26; thermal time is a separate axis ablation). Harvest-like
+candidates and cycle state come from ``ssl_anomaly.phenology.mini``. Outputs
+are screening metadata, not ground truth and not a model prediction.
 
 Usage::
 
@@ -35,7 +34,7 @@ from ssl_anomaly.features import compute_index  # noqa: E402
 from ssl_anomaly.phenology.mini import (  # noqa: E402
     build_cycle_rows,
     detect_harvests,
-    multi_band_harvest_score,
+    vi_harvest_score,
 )
 from ssl_anomaly.utils.tracking import get_git_commit_sha  # noqa: E402
 from ssl_anomaly.utils.paths import localize  # noqa: E402
@@ -67,32 +66,25 @@ def farm_series(group: Any) -> tuple[np.ndarray, dict[str, np.ndarray]]:
             mask = valid[di] & in_field & np.isfinite(arr[di])
             vals.append(float(np.median(arr[di][mask])) if mask.any() else np.nan)
         field[name] = np.asarray(vals)
-    lst = []
-    for di in range(len(dates)):
-        mask = valid[di] & in_field & np.isfinite(bands["lst"][di])
-        lst.append(float(np.median(bands["lst"][di][mask])) if mask.any() else np.nan)
-    field["lst"] = np.asarray(lst)
     return dates, field
 
 
 def build_phenology(store: Path, weather_path: Path, out_dir: Path) -> dict[str, Any]:
     t0 = time.monotonic()
-    weather = pd.read_parquet(weather_path)
-    gdd_map = dict(
-        zip(
-            weather["acquisition_date"].astype(str).str.slice(0, 10),
-            weather["gdd_daily"].astype(float),
-        )
-    )
     all_rows: list[dict[str, Any]] = []
+    all_weak: list[dict[str, Any]] = []
     season: dict[str, Any] = {
-        "schema": "mini-season-structure/v1",
+        "schema": "mini-season-structure/v2-vi-only",
         "git_sha": get_git_commit_sha(),
         "generated_utc": datetime.now(timezone.utc).isoformat(),
         "note": (
-            "Multi-band screening detector (NDVI+SAVI+LST+GDD). NDVI-only "
-            "detection is rejected. Boundaries are provisional, not owner-approved."
+            "NDVI+SAVI-only screening detector. LST and GDD are not score "
+            "channels. Over-long and short bounded intervals are retained as "
+            "overlong_unresolved / short_unresolved. Boundaries are provisional "
+            "until owner review; stage comparison uses trajectory-conditioned "
+            "matching, not these exact dates."
         ),
+        "weather_path_ignored": str(weather_path),
         "farms": {},
         "holdout_candidate": None,
     }
@@ -101,17 +93,24 @@ def build_phenology(store: Path, weather_path: Path, out_dir: Path) -> dict[str,
         farm_id = str(g.attrs["farm_id"])
         ogc_fid = int(g.attrs["ogc_fid"])
         dates, field = farm_series(g)
-        gdd = np.asarray([gdd_map.get(d, np.nan) for d in dates], dtype=np.float64)
-        smooth = {k: _smooth(v) for k, v in {**field, "gdd": gdd}.items()}
-        score, oriented = multi_band_harvest_score(
-            smooth["ndvi"], smooth["savi"], smooth["lst"], smooth["gdd"]
-        )
+        smooth = {k: _smooth(v) for k, v in field.items()}
+        score, oriented = vi_harvest_score(smooth["ndvi"], smooth["savi"])
         day_numbers = np.array(
             [(np.datetime64(d, "D") - np.datetime64("2013-03-30", "D")).astype(int) for d in dates]
         )
-        candidates = detect_harvests(score, day_numbers, oriented)
-        rows = build_cycle_rows(farm_id, ogc_fid, dates, candidates, smooth["gdd"])
+        candidates, weak = detect_harvests(score, day_numbers, oriented)
+        rows = build_cycle_rows(
+            farm_id, ogc_fid, dates, candidates,
+            ndvi=smooth["ndvi"], savi=smooth["savi"],
+        )
         all_rows.extend(rows)
+        for c in weak:
+            all_weak.append({
+                "farm": farm_id, "ogc_fid": ogc_fid, "date": dates[c.index],
+                "score": round(c.score, 4), "prominence": c.prominence,
+                "confidence": c.confidence, "support": c.support,
+                "channel_z": json.dumps(c.channel_z),
+            })
         by_year = pd.Series(dates).str.slice(0, 4).value_counts().sort_index()
         season["farms"][farm_id] = {
             "ogc_fid": ogc_fid,
@@ -121,8 +120,17 @@ def build_phenology(store: Path, weather_path: Path, out_dir: Path) -> dict[str,
             "monthly_max": int(pd.Series(dates).str.slice(5, 7).astype(int).value_counts().max()),
             "n_cycles": len(rows),
             "harvest_candidates": [
-                {"date": dates[c.index], "score": round(c.score, 3), "confidence": c.confidence}
+                {
+                    "date": dates[c.index], "score": round(c.score, 3),
+                    "confidence": c.confidence, "prominence": c.prominence,
+                    "support": c.support, "channel_z": c.channel_z,
+                }
                 for c in candidates
+            ],
+            "weak_candidates": [
+                {"date": dates[c.index], "score": round(c.score, 3),
+                 "prominence": c.prominence, "support": c.support}
+                for c in weak
             ],
             "cycles": rows,
         }
@@ -136,7 +144,8 @@ def build_phenology(store: Path, weather_path: Path, out_dir: Path) -> dict[str,
     for farm, info in season["farms"].items():
         for cyc in info["cycles"]:
             if (
-                cyc["end_harvest"]
+                cyc["status"] == "normal"
+                and cyc["end_harvest"]
                 and "2024-01-01" <= cyc["end_date"] < "2026-01-01"
                 and cyc["length_days"] <= 450
             ):
@@ -176,6 +185,8 @@ def build_phenology(store: Path, weather_path: Path, out_dir: Path) -> dict[str,
     out_dir.mkdir(parents=True, exist_ok=True)
     cycles_path = out_dir / "cycles_mini.parquet"
     pd.DataFrame(all_rows).to_parquet(cycles_path, index=False)
+    weak_path = out_dir / "weak_candidates.parquet"
+    pd.DataFrame(all_weak).to_parquet(weak_path, index=False)
     season_path = out_dir / "season_structure.json"
     season_path.write_text(json.dumps(season, indent=2) + "\n", encoding="utf-8")
     print(
@@ -186,6 +197,9 @@ def build_phenology(store: Path, weather_path: Path, out_dir: Path) -> dict[str,
                 "holdout_boundary": boundary,
                 "wall_s": season["wall_s"],
                 "cycles": str(cycles_path),
+                "weak_candidates": str(weak_path),
+                "n_overlong": sum(1 for r in all_rows if r["status"] == "overlong_unresolved"),
+                "n_short": sum(1 for r in all_rows if r["status"] == "short_unresolved"),
                 "season": str(season_path),
             }
         ),
