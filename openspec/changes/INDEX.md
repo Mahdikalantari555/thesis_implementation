@@ -1,4 +1,4 @@
-# OpenSpec changes index — triage 2026-11-23, updated 2026-11-24
+# OpenSpec changes index — triage 2026-11-23, updated 2026-11-27
 
 Maintained by the owner's triage decision of 2026-11-23 (recorded in
 `todo.md`): **the v1-era patch line and the GRU-prediction line are
@@ -19,11 +19,15 @@ application.
 
 | Change | Tasks | Status | Notes |
 |---|---|---|---|
-| `continual-hybrid-representation-design` | 4/55 | PROPOSED — design r2 (2026-11-26) | Owner requirements: SSL + continual representation learning and anomaly discovery; hybrid pixel+context, dual-path phenology, statistical discovery + active learning, regression-set gated updates; plateau-driven CPU training with mandatory checkpoints and verdicts. Feeds the capstone; does not edit its gates |
+| `continual-hybrid-representation-design` | 5/55 | PROPOSED — design r2 (2026-11-26) | Owner requirements: SSL + continual representation learning and anomaly discovery; hybrid pixel+context, dual-path phenology, statistical discovery + active learning, regression-set gated updates; plateau-driven CPU training with mandatory checkpoints and verdicts. Feeds the capstone; does not edit its gates |
 | `regional-ssl-representation-evaluation` | 15/42 | PROPOSED — the capstone | Level-1/Level-2 evaluation of a light regional SSL representation; five-level ladders; pre-registered gates G-A…G-E; owner decisions registered 2026-11-23 (advantage = undecided; priority = both + applied ambition; Madeline path = tracked future change) |
-| `benchmark-latent-reconstruction-prediction-architectures` | 0/37 | PROPOSED — heavy counterpart | Architecture/suppression/synthetic breadth benchmark (Colab T4, budget-aware); feeds the capstone, no capstone gate depends on it |
+| `benchmark-latent-reconstruction-prediction-architectures` | 26/37 | PROPOSED — heavy counterpart | Architecture/suppression/synthetic breadth benchmark (Colab T4, budget-aware); feeds the capstone, no capstone gate depends on it |
 | `cycle-detection-v3-multindex` | 26/27 | ACTIVE — v2 producer; nearly closed | Only open item is an optional follow-up: the gate FAILED, so no switch; production path stays off; owner call whether to re-gate with `--sweep` after the v2 store completes |
-| `mini-research-dataset` | 28/28 | COMPLETE — additive three-farm lab (apply done, not archived) | 3 farms (R12-06/08/10), 538 real scene dates; configurable protocols, spatial/temporal reprs and 9-architecture registry; no claim beyond L2 |
+| `cycle-detection-vi-repair` | 8/10 | ACTIVE — repair applied; owner visual review pending | NDVI+SAVI detector repair (root cause: missed 2019-02-12 peak) landed 2026-11-26 with `overlong_unresolved`/`short_unresolved` flags kept. Open: 2.3 owner visual review of review4 artifacts (the `/tmp/opencode/vi_review4/` plots no longer exist and are being regenerated), 2.4 record verdict + decide canonical mini phenology rebuild. Path B stays blocked until 2.3 closes positively |
+| `time2agri-pretext-architectures` | 7/8 | ACTIVE — phases 1–3.1 done; 3.2 deferred | Faithful Gupta & Sobti 2025 TD/FP/FF arms + benchmark adapters A11–A13 landed; L1 pretext-only gate. Open item 3.2 (2D patch/ViT path) deferred — blocked on the date-centric raw store (HELD) |
+| `data-fix-and-colab-prep` | 3/33 | ACTIVE | Data fixes, Colab bundle prep and platform/Rust verification gates. Rust tasks 6.x are stale (WSL-era wording superseded by native Fedora builds, AGENTS §13 2026-11-26); `platform/node_modules` absent → `bun install` before tsc/vite gates |
+| `date-centric-raw-store` | 0/28 | PROPOSED — HELD (owner decision; do not build) | Full-temporal/pixel-fidelity raw store with cycle-centric view derived. Phase-0 gates are owner-side: full `Data/Processed/` backup, owner reviews `figures_perfield/` and selects the 5–10 farm subset. Consumers stay deferred (`farm-subset-anomaly-probe`, time2agri 3.2) |
+| `farm-subset-anomaly-probe` | 0/20 | PROPOSED — active | First anomaly-score outputs on the owner's machine (CPU-only) validated on a farm subset; 0b.3 fallback to the v2 cycle-centric subset if blocked. Optional consumer of the date-centric raw store |
 
 ## Dormant — unapplied, await owner decision
 
@@ -51,6 +55,16 @@ items remain unchecked in the archived task files.
 |---|---|---|
 | `2026-11-24-optional-rust-acceleration` | `optional-rust-acceleration` (+6 requirements) | 3 (9/12 complete) |
 | `2026-11-24-eval-artifact-cache` | `eval-artifact-cache` (+5 requirements) | 2 (12/14 complete) |
+
+Archived 2026-11-27 (tasks verified complete before the move; specs synced
+manually into `openspec/specs/` — the openspec CLI is unavailable on this
+machine):
+
+| Change | Archived spec (new) | Note |
+|---|---|---|
+| `add-thesis-inspector` | `thesis-inspector` (+12 requirements) | Local read-only research-artifact inspector; 25/25 |
+| `field-id-provenance-fix` | `field-id-provenance` (5 requirements) | 6/6. **Follow-up stays OWNER-GATED:** whether to correct the canonical 490-field archive's off-by-one field id (its splits/findings are hash-bound — no silent re-index; todo.md "field-id-provenance-fix" entry) |
+| `mini-research-dataset` | `mini-research-dataset` (+12 requirements) | 28/28. Executed lab farms are **L02-02/R12-08/R15-18** (`RoI/3farms-dev.geojson`, 538 scene dates); task 0.1's R12-06/08/10 list described the proposal, not the executed selection |
 
 ## Superseded historical changes archived 2026-11-24
 
