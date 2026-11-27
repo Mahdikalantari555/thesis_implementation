@@ -13,6 +13,8 @@ import logging
 import numpy as np
 import pandas as pd
 
+from .data_contract import SR_OFFSET, SR_SCALE, ST_OFFSET, ST_SCALE
+
 log = logging.getLogger("ssl_anomaly.io.zonal")
 
 
@@ -113,10 +115,10 @@ def zonal_scene_from_paths(
     *,
     n_fields: int | None = None,
     min_valid_fraction: float = 0.0,
-    scale_sr: float = 0.0000275,
-    offset_sr: float = -0.2,
-    scale_st: float = 0.00341802,
-    offset_st: float = 149.0,
+    scale_sr: float = SR_SCALE,
+    offset_sr: float = SR_OFFSET,
+    scale_st: float = ST_SCALE,
+    offset_st: float = ST_OFFSET,
 ) -> pd.DataFrame | None:
     """Convenience: load scene + field mask and compute zonal stats.
 

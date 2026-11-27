@@ -55,6 +55,12 @@ if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
 from ssl_anomaly.io import patches as P  # noqa: E402
+from ssl_anomaly.io.data_contract import (  # noqa: E402  single source: LSDS-1619 constants
+    SR_OFFSET,
+    SR_SCALE,
+    ST_OFFSET,
+    ST_SCALE,
+)
 from ssl_anomaly.io.landsat import (  # noqa: E402
     apply_scale_sr,
     apply_scale_st,
@@ -456,7 +462,7 @@ def read_scene_patch(
         if path is None:
             continue
         if mode == "landsat":
-            bands[band] = apply_scale_sr(_load(path, 0, np.int32), 0.0000275, -0.2)
+            bands[band] = apply_scale_sr(_load(path, 0, np.int32), SR_SCALE, SR_OFFSET)
         else:
             bands[band] = _load(path, np.nan, np.float32)
     for band in ST_FILE_MAP:
@@ -464,7 +470,7 @@ def read_scene_patch(
         if path is None:
             continue
         if mode == "landsat":
-            bands[band] = apply_scale_st(_load(path, 0, np.int32), 0.00341802, 149.0)
+            bands[band] = apply_scale_st(_load(path, 0, np.int32), ST_SCALE, ST_OFFSET)
         else:
             bands[band] = _load(path, np.nan, np.float32)
     values = stack_channels(bands, size=window.size)
@@ -992,8 +998,8 @@ def main(argv: list[str] | None = None) -> int:
         splits_sha256=binding["splits_manifest_sha256"] or "unspecified",
         source_products=[str(args.scenes_root)],
         scale_factors={
-            "sr_scale": 0.0000275, "sr_offset": -0.2,
-            "st_scale": 0.00341802, "st_offset": 149.0,
+            "sr_scale": SR_SCALE, "sr_offset": SR_OFFSET,
+            "st_scale": ST_SCALE, "st_offset": ST_OFFSET,
         },
         patch_size=args.patch_size,
         n_fields=len(field_ids),

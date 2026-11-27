@@ -12,6 +12,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from .io.data_contract import SR_OFFSET, SR_SCALE, ST_OFFSET, ST_SCALE
+
 # -------------------------- enums / top-level --------------------------------
 
 
@@ -121,10 +123,12 @@ class IngestCfg:
             "ST_B10",
         ]
     )
-    scale_factor: float = 0.0000275  # Landsat C2 L2 SR
-    add_offset: float = -0.2
-    temp_scale: float = 0.00341802
-    temp_offset: float = 149.0
+    # Landsat C2 L2 constants pinned in io/data_contract.py (LSDS-1619 v5.0);
+    # imported here so there is exactly one definition (task 0A.1).
+    scale_factor: float = SR_SCALE
+    add_offset: float = SR_OFFSET
+    temp_scale: float = ST_SCALE
+    temp_offset: float = ST_OFFSET
     min_valid_fraction: float = 0.3
     quality: QualityCfg = field(default_factory=QualityCfg)
 

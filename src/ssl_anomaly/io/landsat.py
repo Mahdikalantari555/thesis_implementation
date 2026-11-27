@@ -17,6 +17,7 @@ from pathlib import Path
 import numpy as np
 
 from ..config import QualityCfg
+from .data_contract import SR_OFFSET, SR_SCALE, ST_OFFSET, ST_SCALE
 
 log = logging.getLogger("ssl_anomaly.io.landsat")
 
@@ -90,10 +91,10 @@ def load_scene(
     scene_dir: str | Path,
     bands: list[str],
     cfg: QualityCfg,
-    scale_sr: float = 0.0000275,
-    offset_sr: float = -0.2,
-    scale_st: float = 0.00341802,
-    offset_st: float = 149.0,
+    scale_sr: float = SR_SCALE,
+    offset_sr: float = SR_OFFSET,
+    scale_st: float = ST_SCALE,
+    offset_st: float = ST_OFFSET,
 ) -> tuple[dict[str, np.ndarray], np.ndarray, SceneMeta] | None:
     """Load bands + QA_PIXEL for one scene. Returns (bands_dict, valid_mask, meta).
 
