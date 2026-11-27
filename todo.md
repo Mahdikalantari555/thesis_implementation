@@ -436,11 +436,19 @@ Nothing superseded is to be applied (see `openspec/changes/INDEX.md`); archived 
 - **`madeline-yield-embeddings-init`** (TRACKED, not created 2026-11-23; owner decision) — Madeline's path: initialise/fine-tune the region base model from external early-season yield-forecasting-model embeddings. Self-supervised trajectory use needs no yield labels, but the external artifact itself needs a data, licence and provenance contract before an openspec change is written. Not implemented; not scheduled.
 0. **`code-audit-2026-11-21-deferred`** — the deferred defect list from the post-bd65829
    audit (`docs/audits/code_audit_2026-11-21.md`): the 3 result-corrupting bugs are FIXED
-   (99709b0 / ea74a0c / d4b3cb8, σ refit + severity re-run required); the remaining
-   3 P1 latent defects (farm_own shrinkage no-op, absorption polarity, GRU init slice),
-   26 P2 hygiene items and 10 perf opportunities are RECORDED there and must be picked
-   up as small fixes before the code they touch is next used. Nothing on this list
-   corrupts a current result.
+   (99709b0 / ea74a0c / d4b3cb8, σ refit + severity re-run required) and the 3 P1 latent
+   defects are FIXED + re-verified 2026-11-27 (WP-9; change created): farm_own shrinkage
+   no-op → adae60d (explicit `pooled_reference`, κ acts, n→0 ⇒ pooled, fail-closed),
+   absorption polarity → d7432a9 (`share_absorbed = a`, E7 rule = LOWEST `a_patch`),
+   GRU init slice → b082283 (gates sliced by rows; pre-fix-checkpoint deviation recorded
+   in finding 25:148-152, no retrain). Defect reproduction re-confirmed on the pre-fix
+   parents (tests fail there, pass at HEAD — 88 passed). The 26 P2 hygiene items and 10
+   perf opportunities stay recorded in the audit doc; f51fd43 (+ b082283/cbeff9f) swept
+   P2 items 4/5/6/8/9/10/11/12/15/16/17/19/20/21/22/23/24/25/26/28/29 (WP-9 code-greps
+   confirm #4/#5/#6/#9/#12/#24 + PERF-2/PERF-5), leaving #7/#13/#14/#18/#27 + perf
+   1,3,4,6,7,8,9,10 open in change task 3.1 — pick up as small fixes before the code
+   they touch is next used; the `eval_dev.py` deferral gate stands. Nothing on this
+   list corrupts a current result.
 1. **`visualize-metric-products`** — wire METRIC products into the platform:
    - ✅ Interim visualization DONE (user, 2026-11-10): `data/interim/metric_interpolation_timeseries.png` — ticked 2026-11-14; platform wiring still pending
    - `Data/Metric/products/ETaDaily/` — 271 scene rasters (mm/day, 30 m, UTM39N, AOI 496×472)
