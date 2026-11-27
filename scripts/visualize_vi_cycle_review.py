@@ -171,6 +171,12 @@ def _detect(label: str, date_strs: list[str], dates: pd.DatetimeIndex,
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--fields", type=int, nargs="+", default=list(DEFAULT_FIELDS))
+    ap.add_argument(
+        "--skip-archive-fields", action="store_true",
+        help="Plot only the mini store farms (used with --mini-store to keep "
+             "the review layout mini/ and fields/ separate); the stratified "
+             "archive fields are then reviewed in their own --out run.",
+    )
     ap.add_argument("--zarr", type=Path, default=DEFAULT_ZARR)
     ap.add_argument("--mini-store", type=Path, default=None)
     ap.add_argument("--mini-cycles", type=Path, default=None)
@@ -186,21 +192,23 @@ def main(argv: list[str] | None = None) -> int:
         "fields": {},
     }
 
-    reader = load_stats_zarr(args.zarr)
-    indices = reader.compute_indices("median")
-    dates = reader.dates
-    date_strs = [str(d)[:10] for d in dates]
-    field_index = {int(f): i for i, f in enumerate(reader.fields)}
-    for fid in args.fields:
-        if fid not in field_index:
-            raise SystemExit(f"field {fid} not in stats.zarr")
-        i = field_index[fid]
-        ndvi, savi = _smooth(indices["ndvi"][i]), _smooth(indices["savi"][i])
-        label = f"field_{fid:03d}"
-        strong, weak, rows = _detect(label, date_strs, dates, ndvi, savi)
-        summary["fields"][label] = _plot(
-            label, dates, date_strs, dates, ndvi, savi, strong, weak, rows, args.out
-        )
+    reader = None
+    if not args.skip_archive_fields:
+        reader = load_stats_zarr(args.zarr)
+        indices = reader.compute_indices("median")
+        dates = reader.dates
+        date_strs = [str(d)[:10] for d in dates]
+        field_index = {int(f): i for i, f in enumerate(reader.fields)}
+        for fid in args.fields:
+            if fid not in field_index:
+                raise SystemExit(f"field {fid} not in stats.zarr")
+            i = field_index[fid]
+            ndvi, savi = _smooth(indices["ndvi"][i]), _smooth(indices["savi"][i])
+            label = f"field_{fid:03d}"
+            strong, weak, rows = _detect(label, date_strs, dates, ndvi, savi)
+            summary["fields"][label] = _plot(
+                label, dates, date_strs, dates, ndvi, savi, strong, weak, rows, args.out
+            )
 
     if args.mini_store is not None:
         cycles = pd.read_parquet(args.mini_cycles) if args.mini_cycles else None
