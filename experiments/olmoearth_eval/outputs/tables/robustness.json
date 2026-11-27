@@ -1,0 +1,82 @@
+{
+  "subset_n_fields": 120,
+  "subset_seed": 2026,
+  "baseline_probe_macro_f1": 0.8695,
+  "arms": [
+    {
+      "arm": "fill05",
+      "status": "ok",
+      "n_aligned_obs": 6358,
+      "mean_cosine_to_full": 0.8921,
+      "probe_macro_f1": 0.879,
+      "probe_f1_delta_vs_full": 0.0095
+    },
+    {
+      "arm": "b11dup",
+      "status": "ok",
+      "n_aligned_obs": 6358,
+      "mean_cosine_to_full": 0.9998,
+      "probe_macro_f1": 0.8707,
+      "probe_f1_delta_vs_full": 0.0013
+    },
+    {
+      "arm": "up144",
+      "status": "ok",
+      "n_aligned_obs": 6358,
+      "mean_cosine_to_full": 0.7149,
+      "probe_macro_f1": 0.8894,
+      "probe_f1_delta_vs_full": 0.02
+    },
+    {
+      "arm": "drop1",
+      "status": "ok",
+      "n_aligned_obs": 6062,
+      "mean_cosine_to_full": 0.9902,
+      "probe_macro_f1": 0.8889,
+      "probe_f1_delta_vs_full": 0.0194
+    },
+    {
+      "arm": "drop2",
+      "status": "ok",
+      "n_aligned_obs": 5767,
+      "mean_cosine_to_full": 0.9811,
+      "probe_macro_f1": 0.8708,
+      "probe_f1_delta_vs_full": 0.0013
+    },
+    {
+      "arm": "drop4",
+      "status": "ok",
+      "n_aligned_obs": 5176,
+      "mean_cosine_to_full": 0.9664,
+      "probe_macro_f1": 0.8586,
+      "probe_f1_delta_vs_full": -0.0109
+    },
+    {
+      "arm": "drop6",
+      "status": "ok",
+      "n_aligned_obs": 4592,
+      "mean_cosine_to_full": 0.9547,
+      "probe_macro_f1": 0.8657,
+      "probe_f1_delta_vs_full": -0.0037
+    },
+    {
+      "arm": "rebin30",
+      "status": "ok",
+      "n_aligned_obs": 3170,
+      "mean_cosine_to_full": 0.7924,
+      "probe_macro_f1": 0.7346,
+      "probe_f1_delta_vs_full": -0.1349
+    },
+    {
+      "arm": "rebin60",
+      "status": "ok",
+      "n_aligned_obs": 1575,
+      "mean_cosine_to_full": 0.6882,
+      "probe_macro_f1": 0.84,
+      "probe_f1_delta_vs_full": -0.0294
+    }
+  ],
+  "note": "drop-k arms re-extract with k fewer valid bins per cycle; rebin arms aggregate to coarser medians; drift is mean cosine to the default-arm embedding on aligned bins",
+  "generated_by": "experiments/olmoearth_eval",
+  "validation_ladder": "L1-L2 only"
+}

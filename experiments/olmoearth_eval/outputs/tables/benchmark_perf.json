@@ -1,0 +1,172 @@
+{
+  "device": "CPU (torch default threads)",
+  "torch_threads": null,
+  "encoder_params": 1698096,
+  "weights_mb": 17.04,
+  "peak_rss_mb": 1352.0,
+  "latency_cells": [
+    {
+      "B": 1,
+      "H": 48,
+      "W": 48,
+      "T": 3,
+      "patch_size": 8,
+      "wall_s": 0.0128,
+      "ms_per_window": 12.77,
+      "windows_per_s": 78.3
+    },
+    {
+      "B": 8,
+      "H": 48,
+      "W": 48,
+      "T": 3,
+      "patch_size": 8,
+      "wall_s": 0.0353,
+      "ms_per_window": 4.41,
+      "windows_per_s": 226.8
+    },
+    {
+      "B": 32,
+      "H": 48,
+      "W": 48,
+      "T": 3,
+      "patch_size": 8,
+      "wall_s": 0.1129,
+      "ms_per_window": 3.53,
+      "windows_per_s": 283.5
+    },
+    {
+      "B": 1,
+      "H": 144,
+      "W": 144,
+      "T": 3,
+      "patch_size": 8,
+      "wall_s": 0.0781,
+      "ms_per_window": 78.12,
+      "windows_per_s": 12.8
+    },
+    {
+      "B": 8,
+      "H": 144,
+      "W": 144,
+      "T": 3,
+      "patch_size": 8,
+      "wall_s": 0.5443,
+      "ms_per_window": 68.04,
+      "windows_per_s": 14.7
+    },
+    {
+      "B": 1,
+      "H": 48,
+      "W": 48,
+      "T": 6,
+      "patch_size": 8,
+      "wall_s": 0.0238,
+      "ms_per_window": 23.79,
+      "windows_per_s": 42.0
+    },
+    {
+      "B": 8,
+      "H": 48,
+      "W": 48,
+      "T": 6,
+      "patch_size": 8,
+      "wall_s": 0.0633,
+      "ms_per_window": 7.91,
+      "windows_per_s": 126.4
+    },
+    {
+      "B": 32,
+      "H": 48,
+      "W": 48,
+      "T": 6,
+      "patch_size": 8,
+      "wall_s": 0.233,
+      "ms_per_window": 7.28,
+      "windows_per_s": 137.4
+    },
+    {
+      "B": 1,
+      "H": 144,
+      "W": 144,
+      "T": 6,
+      "patch_size": 8,
+      "wall_s": 0.2229,
+      "ms_per_window": 222.94,
+      "windows_per_s": 4.5
+    },
+    {
+      "B": 8,
+      "H": 144,
+      "W": 144,
+      "T": 6,
+      "patch_size": 8,
+      "wall_s": 1.4267,
+      "ms_per_window": 178.34,
+      "windows_per_s": 5.6
+    },
+    {
+      "B": 1,
+      "H": 48,
+      "W": 48,
+      "T": 12,
+      "patch_size": 8,
+      "wall_s": 0.0354,
+      "ms_per_window": 35.38,
+      "windows_per_s": 28.3
+    },
+    {
+      "B": 8,
+      "H": 48,
+      "W": 48,
+      "T": 12,
+      "patch_size": 8,
+      "wall_s": 0.1244,
+      "ms_per_window": 15.55,
+      "windows_per_s": 64.3
+    },
+    {
+      "B": 32,
+      "H": 48,
+      "W": 48,
+      "T": 12,
+      "patch_size": 8,
+      "wall_s": 0.7451,
+      "ms_per_window": 23.28,
+      "windows_per_s": 42.9
+    },
+    {
+      "B": 1,
+      "H": 144,
+      "W": 144,
+      "T": 12,
+      "patch_size": 8,
+      "wall_s": 0.5248,
+      "ms_per_window": 524.77,
+      "windows_per_s": 1.9
+    },
+    {
+      "B": 8,
+      "H": 144,
+      "W": 144,
+      "T": 12,
+      "patch_size": 8,
+      "wall_s": 4.6065,
+      "ms_per_window": 575.81,
+      "windows_per_s": 1.7
+    }
+  ],
+  "full_run": {
+    "measured_full_store_obs": 17307,
+    "measured_full_store_fields": 370,
+    "note": "wall time recorded in the extraction summary (outputs/progress.jsonl + SUMMARY line): 79 s for 370 fields on this machine",
+    "projected_490_fields_wall_s": 22920.0
+  },
+  "gate_G_O5": {
+    "criterion": "full-store extrapolation <= 12 h CPU",
+    "measured": "79 s wall for the full 370-field store (2026-11-27)",
+    "verdict": "PASS"
+  },
+  "generated_by": "experiments/olmoearth_eval",
+  "validation_ladder": "L1-L2 only"
+}

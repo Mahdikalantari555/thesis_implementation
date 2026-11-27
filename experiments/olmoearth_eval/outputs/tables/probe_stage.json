@@ -1,0 +1,95 @@
+{
+  "suffix": "",
+  "label_definition": "derived phase (4 classes, percent-of-cycle, store-native cycle bounds) \u2014 DERIVED, not ground truth",
+  "split": "probe-train = splits_locked_v2 train\u2229patches (seeded subsample); probe-test = dev\u2229patches; no test-period data",
+  "results": {
+    "oe_embeddings": {
+      "runs": [
+        {
+          "macro_f1": 0.850885515394052,
+          "accuracy": 0.8450395083406497,
+          "n_train": 10679,
+          "n_test": 2278,
+          "classes_present": 4
+        },
+        {
+          "macro_f1": 0.8543212275543179,
+          "accuracy": 0.848990342405619,
+          "n_train": 10188,
+          "n_test": 2278,
+          "classes_present": 4
+        },
+        {
+          "macro_f1": 0.855365321241678,
+          "accuracy": 0.8494293239683933,
+          "n_train": 10529,
+          "n_test": 2278,
+          "classes_present": 4
+        }
+      ],
+      "macro_f1_mean": 0.8535240213966827,
+      "macro_f1_std": 0.0019137778260872225,
+      "macro_f1_runs": [
+        0.8509,
+        0.8543,
+        0.8554
+      ],
+      "accuracy_mean": 0.8478197249048872,
+      "accuracy_std": 0.001974061686162152,
+      "seeds": [
+        13,
+        42,
+        2026
+      ],
+      "subsample": 0.8,
+      "n_train_fields_total": 280
+    },
+    "raw_channels": {
+      "runs": [
+        {
+          "macro_f1": 0.6273099831041267,
+          "accuracy": 0.6404741000877963,
+          "n_train": 10679,
+          "n_test": 2278,
+          "classes_present": 4
+        },
+        {
+          "macro_f1": 0.6267990526796499,
+          "accuracy": 0.6404741000877963,
+          "n_train": 10188,
+          "n_test": 2278,
+          "classes_present": 4
+        },
+        {
+          "macro_f1": 0.6265465753012125,
+          "accuracy": 0.6400351185250219,
+          "n_train": 10529,
+          "n_test": 2278,
+          "classes_present": 4
+        }
+      ],
+      "macro_f1_mean": 0.6268852036949963,
+      "macro_f1_std": 0.0003175577285801575,
+      "macro_f1_runs": [
+        0.6273,
+        0.6268,
+        0.6265
+      ],
+      "accuracy_mean": 0.6403277729002048,
+      "accuracy_std": 0.0002069378932357322,
+      "seeds": [
+        13,
+        42,
+        2026
+      ],
+      "subsample": 0.8,
+      "n_train_fields_total": 280
+    }
+  },
+  "delta_macro_f1": 0.22663881770168637,
+  "ci_separated": true,
+  "verdict": "OE > raw with CI separation",
+  "gate_G_O1_probe_component": "OE > raw with CI separation",
+  "generated_by": "experiments/olmoearth_eval",
+  "validation_ladder": "L1-L2 only"
+}

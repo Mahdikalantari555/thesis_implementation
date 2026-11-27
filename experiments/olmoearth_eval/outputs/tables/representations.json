@@ -1,0 +1,57 @@
+{
+  "suffix": "",
+  "n_obs": 17307,
+  "n_fields": 370,
+  "n_cycles": 799,
+  "years": [
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024,
+    2025,
+    2026
+  ],
+  "e1_pca": {
+    "pca_explained_variance": [
+      0.254417359828949,
+      0.13442222774028778
+    ],
+    "figures": [
+      "/home/mahdi/RS/Thesis/thesis_implementation/experiments/olmoearth_eval/outputs/figures/pca_month_phase.png",
+      "/home/mahdi/RS/Thesis/thesis_implementation/experiments/olmoearth_eval/outputs/figures/trajectories.png"
+    ]
+  },
+  "e2_cross_year_consistency": {
+    "n_fields": 219,
+    "matched_cosine_median": 0.7987615466117859,
+    "matched_ci": [
+      0.7936314344406128,
+      0.8035887082417806
+    ],
+    "margin_median": 0.19689857959747314,
+    "margin_ci": [
+      0.1920158226788044,
+      0.20217241843541464
+    ],
+    "margin_mean": 0.19306428030758585,
+    "n_margin_positive": 219,
+    "note": "margin = phase-matched cosine \u2212 phase-mismatched cosine, cross-year pairs of the same field; bootstrap CI over fields"
+  },
+  "e3_knn_purity": {
+    "k": 5,
+    "n": 8000,
+    "purity_same_field": 0.0953,
+    "purity_same_field_diff_year": 0.039575,
+    "note": "same-field-diff-year controls temporal autocorrelation; values are nearest-neighbour vote fractions (L1 evidence)"
+  },
+  "generated_by": "experiments/olmoearth_eval",
+  "validation_ladder": "L1-L2 only"
+}
