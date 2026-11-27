@@ -50,7 +50,11 @@ only, and evaluate per calendar year (2024, 2025, 2026 and pooled ≥2024) on bi
 the **spatially held-out k-means dev/test block fields** (which have zero
 overlap with `train_fields`; the v2 protocol's flat `test_fields` overlap
 train by design at cycle level, so they are NOT a spatial holdout), with no
-adaptation, threshold selection or model choice made on those years. The raw-spectral arm SHALL be evaluated
+adaptation, threshold selection or model choice made on those years. The
+report SHALL include an **attrition table** tracing the ≥2024 bins/fields of
+the whole patch store (S0) through the flat-split filter (S1) and the
+spatial-block filter (S2) to the final evaluation pool after the raw-feature
+join (S3); the S2→S3 join SHALL be lossless or the run fails. The raw-spectral arm SHALL be evaluated
 under the identical restriction as the control, and a phase-consistency
 analysis restricted to ≥2024 cycles SHALL be reported as secondary evidence.
 
@@ -63,9 +67,20 @@ analysis restricted to ≥2024 cycles SHALL be reported as secondary evidence.
 
 #### Scenario: Sparse years are not over-read
 
-- **WHEN** a holdout year has few evaluation bins (e.g. 2026)
-- **THEN** its per-year metrics carry their n and interval and the report
-  explicitly marks them as low-n, without merging them into a headline claim
+- **WHEN** a holdout year has fewer than 100 evaluation bins OR fewer than
+  30 independent evaluation fields (the low-n rule; 2025 qualifies on the
+  field axis, 2026 on both)
+- **THEN** its per-year metrics carry their n (bins AND fields) and interval,
+  are flagged low-n, and are not merged into a headline claim
+
+#### Scenario: Phase margin on the evaluation fields only
+
+- **WHEN** the ≥2024-restricted phase-consistency margin is computed
+- **THEN** it yields ONE value per unique evaluation field (the mean over
+  that field's cycle pairs; `n_fields` reports unique fields, never cycle
+  pairs), carries a field-level bootstrap interval (1,000 resamples), and is
+  reported **not estimable** when fewer than 2 evaluable cycle pairs exist
+  — the pre-2024-dominated margin of the parent change is not substituted
 
 ### Requirement: L2→L1 domain-shift measurement (data-gated)
 
@@ -106,7 +121,11 @@ supports — (a) temporal encoder only, (b) transferable agricultural
 representation, or (c) anomaly-detection added value — with the T1/T2/T3
 results each mapped to the claim they support, every claim carrying its
 validation-ladder rung (L1–L2), and the parent change's ADAPT verdict
-confirmed or amended explicitly.
+confirmed or amended explicitly. Every transferability statement SHALL be
+scoped as **within-region, within-crop** (Khuzestan sugarcane; one sensor
+family) spatial and temporal transferability; no cross-region, cross-crop or
+cross-sensor generalization SHALL be implied by any table, sentence or
+summary in this change.
 
 ### Requirement: Isolation and artifact discipline
 

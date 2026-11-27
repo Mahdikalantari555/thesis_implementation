@@ -29,17 +29,18 @@ no `ssl_anomaly` imports, no writes outside the experiment directory.
       runtime leakage assertions (train has zero ≥2024 bins; eval has zero
       train-field bins); field-level bootstrap CIs; per-year n; ≥2024-only
       phase-consistency margin as secondary.
-- [x] 2.2 Run + record (2026-11-27): evaluation on k-means spatial block
-      fields (73; zero train overlap — the flat `test_fields` overlap train
-      by design, caught by the leakage assertion and corrected), train =
-      268 fields / 10,226 bins pre-2024. Pooled ≥2024: OE 0.825
-      [0.776, 0.867] vs raw 0.537 → **Δ+0.289 [0.242, 0.336]**; 2024
-      Δ+0.314; 2025 Δ+0.291 (low-n, wide CIs); 2026 n=5 → not interpretable
-      (marked). In-sample 0.854 → holdout 0.825 (−0.03). timestamp-only
-      degrades sharply in holdout years (0.613→0.367 in 2025) while OE
-      degrades least — harvest-calendar drift is tracked by the
-      representation, not by calendar time. ≥2024-only phase-consistency
-      margin +0.215 [0.029, 0.252] (n=14, supportive but low-n).
+- [x] 2.2 Run + record (2026-11-27; corrected in round 2 — see §6):
+      evaluation pool = 42 k-means block fields / 965 bins (31 of the 73
+      block fields lack ≥2024 coverage; attrition 4,943/204 → 4,740/195 →
+      965/42, raw-feature join lossless), train = 268 fields / 10,226 bins
+      pre-2024. Pooled ≥2024: OE 0.825 [0.776, 0.867] vs raw 0.537 →
+      **Δ+0.289 [0.242, 0.336]**; 2024 Δ+0.314; 2025 Δ+0.291 (**low-n: 24
+      fields**, wide CIs); 2026 n=5/1 field → not interpretable. In-sample
+      0.854 → holdout 0.825 (−0.03). timestamp-only degrades sharply in
+      holdout years (0.613→0.367 in 2025) while OE degrades least.
+      ≥2024-only phase margin: **not estimable** on the evaluation fields
+      (1 field with an evaluable cycle pair); the earlier +0.215 figure
+      mixed non-evaluation fields and is withdrawn.
 
 ## 3. T3 L1-vs-L2 measurement (data-gated)
 
@@ -63,3 +64,23 @@ no `ssl_anomaly` imports, no writes outside the experiment directory.
       registered, temporal-confound + generalization results referenced,
       interpretation verdict recorded, T3/T4 status named.
 - [x] 5.2 INDEX.md + todo.md registration; memory updated.
+
+## 6. Owner amendments, round 2 (2026-11-27) — applied
+
+- [x] 6.1 Phase-margin uncertainty: ONE value per unique evaluation field
+      (mean over its cycle pairs), field-level bootstrap 1,000×; `n_fields`
+      reports unique fields (never cycle pairs); with 1 evaluable pair the
+      ≥2024 margin is reported not estimable. Unit tests
+      `tests/unit/test_temporal_transfer_stats.py` (aggregation, single-cycle
+      skip, degenerate + spread bootstrap, empty input).
+- [x] 6.2 Low-n rule: <100 bins OR <30 independent fields (both axes
+      checked; unit-tested). 2025 now flagged low-n on the field axis
+      (24 fields); 2024/pooled not flagged; 2026 flagged on both.
+- [x] 6.3 Attrition table: S0 4,943/204 → S1 4,740/195 → S2 965/42 → S3
+      965/42 (join lossless, verified and asserted in-code) persisted in
+      `outputs/tables/temporal_transfer_holdout_years.json`; inconsistent
+      figures reconciled in design §1, REPORT §11 and todo.md.
+- [x] 6.4 Transferability claims narrowed to WITHIN-REGION, WITHIN-CROP
+      (Khuzestan sugarcane, Landsat 8/9) spatial+temporal; no cross-region/
+      cross-crop/cross-sensor wording anywhere (spec requirement + design +
+      REPORT + tables' protocol strings).

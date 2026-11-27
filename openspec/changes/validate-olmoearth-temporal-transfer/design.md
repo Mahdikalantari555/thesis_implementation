@@ -10,8 +10,12 @@ Status: applied for T1/T2 (2026-11-27); T3 data-gated; T4 deferred.
 - Splits: `splits_locked_v2.json` sha `30ecbe10…`; patch-store intersection:
   train 297 / dev 53 / test 270 fields.
 - Holdout cut: 2024-01-01 = day **3929** from epoch 2013-03-30. Verified
-  coverage: **4,943 bins ≥ 2024** (2024: 3,993 · 2025: 926 · 2026: 24) on
-  **195 dev+test fields** (4,740 bins).
+  coverage (attrition chain, owner amendment round 2): **S0** 4,943 bins /
+  204 fields (whole store ≥2024) → **S1** 4,740 bins / 195 fields (flat
+  dev+test — not a spatial holdout) → **S2** 965 bins / 42 fields (the 73
+  k-means block fields; 31 have no ≥2024 coverage) → **S3** 965 bins /
+  42 fields (raw-feature join lossless). The evaluation pool is S3;
+  per-year fields: 2024: 42 · 2025: 24 · 2026: 1.
 - Cycle bounds come from `farmcycle_v1_2_nano.parquet` (store-native;
   `cycle_frac` = (day − cycle_start)/(cycle_end − cycle_start), clipped [0,1]).
 
@@ -43,6 +47,12 @@ Interpretation mapping (owner's 3-way question):
 - OE > timestamp_only AND detection ≥ B0 (only reachable via T3/T4
   follow-ups) ⇒ (c).
 
+All transferability wording is scoped **within-region, within-crop**
+(Khuzestan sugarcane; Landsat 8/9 only): the evaluation fields and years all
+come from one agro-industry region, one crop and one sensor family — no
+cross-region, cross-crop or cross-sensor generalization is claimed or
+implied.
+
 ## 3. T2 — unseen-year generalization
 
 - Training set: train-field bins with date < 2024-01-01 (asserted).
@@ -56,7 +66,13 @@ Interpretation mapping (owner's 3-way question):
   if the label degrades to calendar time in holdout years, that is part of
   the finding). cycle-progress-only is included as the oracle control.
 - Metrics: macro-F1 (+ accuracy) per year and pooled; field-level bootstrap
-  CIs; per-year n reported; 2026 (24 bins) explicitly marked low-n.
+  CIs; per-year n reported as bins AND fields; **low-n rule = <100 bins OR
+  <30 independent fields** (2025 flagged on the field axis: 24 fields;
+  2026 on both; unit-tested).
+- Secondary margin (≥2024 cycles): ONE value per unique evaluation field
+  (mean over its cycle pairs), field-level bootstrap 1,000×; with only 1
+  evaluable pair among the block fields it is reported **not estimable** —
+  never substituted by the pre-2024-dominated parent margin.
 - Secondary: phase-consistency margin (E2 definition) restricted to cycles
   whose bins are ALL ≥ 2024 (no pre-2024 content leaks into the margin).
 - Risks recorded in advance: harvest-calendar drift across years changes the

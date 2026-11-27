@@ -37,6 +37,17 @@ HOLDOUT_CUT = (date(2024, 1, 1) - date(2013, 3, 30)).days  # 3929
 BOOTSTRAP_N = 1000
 BOOTSTRAP_SEED = 2026
 PHASES = common.PHASE_NAMES
+# low-n rule (owner amendment 2026-11-27 round 2): BOTH dimensions must be
+# adequate — <100 evaluation bins OR <30 independent evaluation fields flags
+# the cell. 30 fields is the working minimum for a stable field-level
+# bootstrap; the rule is unit-tested.
+LOW_N_MIN_BINS = 100
+LOW_N_MIN_FIELDS = 30
+
+
+def classify_low_n(n_bins: int, n_fields: int) -> bool:
+    """A result cell is low-n when bins OR independent fields are scarce."""
+    return bool(n_bins < LOW_N_MIN_BINS or n_fields < LOW_N_MIN_FIELDS)
 
 
 # ---------------------------------------------------------------------------
@@ -221,9 +232,9 @@ def run_probe_arms() -> dict:
 # ---------------------------------------------------------------------------
 
 def run_holdout_years() -> dict:
-    df = common.add_derived_columns(common.load_obs_embeddings(""))
+    df_all = common.add_derived_columns(common.load_obs_embeddings(""))
     raw = common.load_raw_bin_features()
-    df = df.merge(
+    df = df_all.merge(
         raw[["field_id", "cycle_index", "bin_index"] + common.PATCH_CHANNEL_ORDER],
         on=["field_id", "cycle_index", "bin_index"], how="inner")
     train_fields, dev_fields = common.split_field_sets()
@@ -255,6 +266,40 @@ def run_holdout_years() -> dict:
     # leakage property 2: no train-field bin in evaluation
     assert df.loc[eval_mask, "field_id"].isin(train_fields).sum() == 0, \
         "leakage: train-field bin in holdout evaluation"
+
+    # ---- attrition table (owner amendment: reconcile sample counts) ----
+    late_all = df_all[df_all["day_index"] >= HOLDOUT_CUT]
+    flat_dev_test = (dev_fields
+                     | ({int(f) for f in sp["test_fields"]} & patch_fields))
+    s1_all = late_all[late_all["field_id"].isin(flat_dev_test)]
+    s2_pre = late_all[late_all["field_id"].isin(eval_fields)]
+    late_eval = df[(df["day_index"] >= HOLDOUT_CUT)
+                   & df["field_id"].isin(eval_fields)]
+    attrition = dict(
+        steps=[
+            dict(step="S0", desc="all patch-store bins >= 2024-01-01",
+                 bins=int(len(late_all)),
+                 fields=int(late_all["field_id"].nunique())),
+            dict(step="S1",
+                 desc="flat dev+test split fields (NOT a spatial holdout)",
+                 bins=int(len(s1_all)),
+                 fields=int(s1_all["field_id"].nunique())),
+            dict(step="S2",
+                 desc="k-means spatial block fields, before raw-feature join",
+                 bins=int(len(s2_pre)),
+                 fields=int(s2_pre["field_id"].nunique())),
+            dict(step="S3",
+                 desc="after raw-feature inner join (= evaluation pool)",
+                 bins=int(len(late_eval)),
+                 fields=int(late_eval["field_id"].nunique())),
+        ],
+        raw_join_bins_lost=int(len(s2_pre) - len(late_eval)),
+        raw_join_fields_lost=int(s2_pre["field_id"].nunique()
+                                 - late_eval["field_id"].nunique()),
+    )
+    if attrition["raw_join_bins_lost"] != 0:
+        raise SystemExit("DEFECT: raw-feature join dropped evaluation bins — "
+                         "attrition table would misrepresent the sample")
 
     y = df["phase"].astype("category").cat.codes.values
     years = df["year"].values
@@ -316,13 +361,28 @@ def run_holdout_years() -> dict:
             n_bins=int(len(sub)),
             n_fields=int(len(set(field_ids_sub))),
             arms=results, paired_deltas=deltas,
-            low_n=bool(len(sub) < 100))
+            low_n=classify_low_n(int(len(sub)),
+                                 int(len(set(field_ids_sub)))))
 
     # secondary: phase-consistency restricted to cycles that START >= 2024
-    # (add_derived_columns already merged cycle bounds — no re-merge)
+    # (add_derived_columns already merged cycle bounds — no re-merge);
+    # ONE margin value per unique field, field-level bootstrap (owner
+    # amendment: n_fields reports unique fields, never cycle pairs)
     late = common.add_derived_columns(common.load_obs_embeddings(""))
     late = late[late["cycle_start_day"] >= HOLDOUT_CUT]
-    margin = _phase_margin(late)
+    late = late[late["field_id"].isin(eval_fields)]
+    vals, n_fields, n_pairs = phase_margin_per_field(late)
+    margin = bootstrap_field_margins(vals)
+    margin["n_pairs"] = n_pairs
+    margin["note"] = ("cross-year phase-matched minus phase-mismatched "
+                      "cosine among cycles that START >= 2024; one value "
+                      "per unique evaluation field; field-level bootstrap")
+
+    pooled_bins = sum(v.get("n_bins", 0) for k, v in per_year.items()
+                      if k != "pooled")
+    if pooled_bins != int(len(late_eval)):
+        raise SystemExit("DEFECT: per-year bins do not sum to the pooled "
+                         "evaluation pool")
 
     return dict(
         per_year=per_year,
@@ -330,28 +390,40 @@ def run_holdout_years() -> dict:
         train_bins=int(train_mask.sum()),
         train_fields=int(df.loc[train_mask, "field_id"].nunique()),
         eval_fields=int(len(eval_fields)),
+        attrition=attrition,
         phase_consistency_ge2024=margin,
         protocol="no adaptation, no threshold or model selection on "
-                 ">=2024 bins; owner authorization 2026-11-27",
+                 ">=2024 bins; owner authorization 2026-11-27; evidence "
+                 "covers WITHIN-REGION, WITHIN-CROP (Khuzestan sugarcane) "
+                 "spatial and temporal transferability only — no "
+                 "cross-region, cross-crop or cross-sensor claims",
         validation_ladder="L1-L2 only",
     )
 
 
-def _phase_margin(late: pd.DataFrame) -> dict:
-    """E2-style margin computed only among >=2024 cycles."""
-    vals = []
+def phase_margin_per_field(late: pd.DataFrame,
+                           embed_cols=None) -> tuple[np.ndarray, int, int]:
+    """Cross-year phase margin, ONE value per unique field.
+
+    A field with k evaluable cycles contributes k(k−1)/2 cycle-pair margins
+    which are averaged into a single per-field value; the field-level
+    bootstrap then resamples FIELDS (owner amendment: n_fields reports unique
+    fields, never cycle pairs). Returns (per_field_values, n_fields, n_pairs).
+    """
+    embed_cols = embed_cols or common.EMBED_COLS
+    per_field: dict[int, float] = {}
+    n_pairs = 0
     for fid, g in late.groupby("field_id"):
         cycles = sorted(g["cycle_index"].unique())
-        if len(cycles) < 2:
-            continue
+        margins = []
         for a in range(len(cycles)):
             for b in range(a + 1, len(cycles)):
                 ga = g[g["cycle_index"] == cycles[a]]
                 gb = g[g["cycle_index"] == cycles[b]]
                 diag, off = [], []
                 for pa in PHASES:
-                    ea = ga[ga["phase"] == pa][common.EMBED_COLS].values
-                    eb_all = gb[common.EMBED_COLS].values
+                    ea = ga[ga["phase"] == pa][embed_cols].values
+                    eb_all = gb[embed_cols].values
                     pb_all = gb["phase"].astype(str).values
                     if len(ea) == 0 or len(eb_all) == 0:
                         continue
@@ -364,18 +436,29 @@ def _phase_margin(late: pd.DataFrame) -> dict:
                         if sel.size:
                             (diag if pa2 == pa else off).append(sel.mean())
                 if diag and off:
-                    vals.append(float(np.mean(diag) - np.mean(off)))
-    if not vals:
-        return dict(n_fields=0)
-    arr = np.array(vals)
+                    margins.append(float(np.mean(diag) - np.mean(off)))
+                    n_pairs += 1
+        if margins:
+            per_field[int(fid)] = float(np.mean(margins))
+    vals = np.array(list(per_field.values()), dtype=np.float64)
+    return vals, int(len(vals)), int(n_pairs)
+
+
+def bootstrap_field_margins(vals: np.ndarray, n_boot: int = BOOTSTRAP_N,
+                            seed: int = BOOTSTRAP_SEED) -> dict:
+    """Field-level bootstrap of the per-field margin distribution."""
+    vals = np.asarray(vals, dtype=np.float64)
+    if len(vals) == 0:
+        return dict(n_fields=0, margin_median=None, margin_ci=None)
+    rng = np.random.default_rng(seed)
+    idx = lambda: rng.integers(0, len(vals), size=len(vals))
+    boots = np.array([np.median(vals[idx()]) for _ in range(n_boot)])
     return dict(
-        n_fields=len(arr),
-        margin_median=float(np.median(arr)),
-        margin_ci=[float(np.quantile(arr, 0.025)),
-                   float(np.quantile(arr, 0.975))],
-        note="cross-year phase-matched minus phase-mismatched cosine among "
-             "cycles that START >= 2024 (bootstrap over fields)",
-    )
+        margin_median=float(np.median(vals)),
+        margin_ci=[float(np.quantile(boots, 0.025)),
+                   float(np.quantile(boots, 0.975))],
+        n_fields=int(len(vals)),
+        bootstrap=dict(n=n_boot, seed=seed, unit="evaluation fields"))
 
 
 def main(argv=None) -> int:

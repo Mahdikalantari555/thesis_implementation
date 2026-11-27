@@ -86,7 +86,7 @@
           "ci_high": 0.5212563273047535
         }
       },
-      "low_n": false
+      "low_n": true
     },
     "2026": {
       "n_bins": 5,
@@ -181,16 +181,52 @@
   "train_bins": 10226,
   "train_fields": 268,
   "eval_fields": 73,
-  "phase_consistency_ge2024": {
-    "n_fields": 14,
-    "margin_median": 0.21545252203941345,
-    "margin_ci": [
-      0.029420146346092226,
-      0.2516561463475227
+  "attrition": {
+    "steps": [
+      {
+        "step": "S0",
+        "desc": "all patch-store bins >= 2024-01-01",
+        "bins": 4943,
+        "fields": 204
+      },
+      {
+        "step": "S1",
+        "desc": "flat dev+test split fields (NOT a spatial holdout)",
+        "bins": 4740,
+        "fields": 195
+      },
+      {
+        "step": "S2",
+        "desc": "k-means spatial block fields, before raw-feature join",
+        "bins": 965,
+        "fields": 42
+      },
+      {
+        "step": "S3",
+        "desc": "after raw-feature inner join (= evaluation pool)",
+        "bins": 965,
+        "fields": 42
+      }
     ],
-    "note": "cross-year phase-matched minus phase-mismatched cosine among cycles that START >= 2024 (bootstrap over fields)"
+    "raw_join_bins_lost": 0,
+    "raw_join_fields_lost": 0
   },
-  "protocol": "no adaptation, no threshold or model selection on >=2024 bins; owner authorization 2026-11-27",
+  "phase_consistency_ge2024": {
+    "margin_median": 0.23222213983535767,
+    "margin_ci": [
+      0.23222213983535767,
+      0.23222213983535767
+    ],
+    "n_fields": 1,
+    "bootstrap": {
+      "n": 1000,
+      "seed": 2026,
+      "unit": "evaluation fields"
+    },
+    "n_pairs": 1,
+    "note": "cross-year phase-matched minus phase-mismatched cosine among cycles that START >= 2024; one value per unique evaluation field; field-level bootstrap"
+  },
+  "protocol": "no adaptation, no threshold or model selection on >=2024 bins; owner authorization 2026-11-27; evidence covers WITHIN-REGION, WITHIN-CROP (Khuzestan sugarcane) spatial and temporal transferability only \u2014 no cross-region, cross-crop or cross-sensor claims",
   "validation_ladder": "L1-L2 only",
   "generated_by": "experiments/olmoearth_eval"
 }

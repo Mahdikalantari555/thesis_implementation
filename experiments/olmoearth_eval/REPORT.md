@@ -257,15 +257,24 @@ the two runnable batteries were executed the same day:
    carry phase information beyond raw channels, beyond calendar time, and
    beyond their naive concatenation. The derived labels measure **cycle
    progression** — never read them as validated biological stages.
-2. **Unseen-year generalization — holds.** Train = 268 fields / 10,226 bins
-   pre-2024; evaluation = 2024–2026 bins of the k-means spatial block fields
-   (73 fields, zero train overlap; the flat `test_fields` overlap train by
-   design and are NOT a spatial holdout — caught by the leakage assertion).
-   Pooled ≥2024: OE 0.825 [0.776, 0.867] vs raw 0.537 → Δ+0.289 [0.242,
-   0.336]. Only −0.03 vs the in-sample probe. Calendar time degrades
-   sharply in holdout years (0.613→0.367 in 2025) while the embedding
-   degrades least — the representation tracks harvest-calendar drift.
-   2026 (5 bins) is not interpretable.
+2. **Unseen-year generalization — holds (within-region, within-crop).**
+   Train = 268 fields / 10,226 bins pre-2024; evaluation = 2024–2026 bins of
+   the k-means spatial block fields with zero train overlap (the flat
+   `test_fields` overlap train by design and are NOT a spatial holdout —
+   caught by the leakage assertion). **Attrition** (owner amendment): 4,943
+   bins / 204 fields ≥2024 in the store → 4,740 / 195 on the flat dev+test
+   fields → **965 bins / 42 fields** on the blocks (31 of the 73 block
+   fields have no ≥2024 coverage; raw-feature join lossless). Pooled ≥2024:
+   OE 0.825 [0.776, 0.867] vs raw 0.537 → Δ+0.289 [0.242, 0.336] (2024:
+   n=817; 2025: n=143; 2026: n=5). Only
+   −0.03 vs the in-sample probe. Calendar time degrades sharply in holdout
+   years (0.613→0.367 in 2025) while the embedding degrades least — the
+   representation tracks harvest-calendar drift. **2025 is flagged low-n
+   (24 independent fields; wide CIs)** and 2026 (5 bins / 1 field) is not
+   interpretable. The ≥2024-restricted phase margin is **not estimable** on
+   the evaluation fields (1 field with an evaluable cycle pair); the
+   interim "+0.215 (n=14)" figure mixed non-evaluation fields and is
+   withdrawn.
 3. **L2→L1 domain shift — data-gated.** The ≤13 % figure in §3.2 describes
    DN-scale distance only, not the SR-vs-TOA / LST-vs-brightness semantic
    gap. All 607 local scenes are L2-only; T3 requires same-date public C2
@@ -274,8 +283,11 @@ the two runnable batteries were executed the same day:
    store (`date-centric-raw-store`, HELD).
 
 **Interpretation verdict (owner's 3-way question):** the evidence supports
-**(b) transferable agricultural representation** — more than a temporal
-encoder (T1), robust across unseen years and spatial blocks (T2); anomaly-
-detection added value remains unproven (G-O3 FAIL; T4 deferred). The ADAPT
-verdict of §1 stands unchanged. Tables:
-`outputs/tables/temporal_transfer_{probe_arms,holdout_years}.json`.
+**(b) transferable agricultural representation — within-region and
+within-crop** (Khuzestan sugarcane; Landsat 8/9 only): more than a temporal
+encoder (T1), robust across unseen years and spatial blocks of the same
+region and crop (T2). No cross-region, cross-crop or cross-sensor
+generalization is claimed or implied. Anomaly-detection added value remains
+unproven (G-O3 FAIL; T4 deferred). The ADAPT verdict of §1 stands unchanged.
+Tables: `outputs/tables/temporal_transfer_{probe_arms,holdout_years}.json`
+(the holdout table carries the attrition chain and per-cell low-n flags).
