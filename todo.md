@@ -124,7 +124,8 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
   `docs/findings/28_mini_cpu_architecture_screening.md`,
   `reports/mini_dataset/arch_sweep/{screen,confirm}/sweep.json`. Gates: 18 mini
   + 51 platform unit tests green; failures recorded verbatim.
-- ▶ **field-id-provenance-fix (2026-11-25, openspec change created)** — the
+- ✅ **field-id-provenance-fix (2026-11-25; ARCHIVED 2026-11-27, 6/6, spec
+  `field-id-provenance`)** — the
   2026-11-25 rebuild confirmed an off-by-one field ID: archive pixels for fid k
   are polygon k−1 (IoU 1.0 / 0.0 own) in all three `3farms-dev` farms. Fixed
   **additively for the mini store** via measured alias `archive_fid =
@@ -296,7 +297,7 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
   only); proxy circularity flagged — METRIC CWSI is quasi-independent evidence at
   best, L4 wording must be agreement-never-truth.
 
-## Active openspec changes (2026-11-23) — derived from the change folders; full task lists live in each `tasks.md`
+## Active openspec changes (updated 2026-11-27) — derived from the change folders; full task lists live in each `tasks.md`; triage index = `openspec/changes/INDEX.md`
 
 **`regional-ssl-representation-evaluation`** — PROPOSED, 15/42. The capstone. Code built and green
 (`pytest tests/evaluation` 355 passed; six scripts smoke-pass), but **no real number exists yet** —
