@@ -19,6 +19,9 @@ venv/
 env/
 .tmp
 
+# Workflow/agent scratch space (ledgers, handovers, entry files) — never committed
+.scratch/
+
 
 # IDE / editor
 .vscode/
