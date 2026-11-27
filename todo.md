@@ -21,6 +21,11 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
 
 - ✅ **1. Full-archive observation axis** — every acquisition date (538; 263,620 obs; multi-acquisition months kept). Contract v4 compact payload (292 MB → 29.8 MB, RLE provenance, derived formula ids). Charts: adaptive ticks; scatters stride-sampled for display (stats on full data). Registry envelopes widened for real winter medians (ndvi −0.399 observed). Gates green (up + down).
 - ✅ RGB tile seams (per-scene contrast window), compact provenance chips, tick fonts, CDP send-timeout + watchdog in the gate harness.
+- ✅ **`rerun-rq-suite-on-real-490`** (proposed 2026-11-10) — RQ1–RQ8 + data-scarcity
+  re-run on the real 490-field archive (fail closed, provenance in every report);
+  all six tasks ✅ (tasks 1–6 recorded in the archived change). **Archived** at
+  `openspec/changes/archive/rerun-rq-suite-on-real-490/` — archive folder verified
+  2026-11-27; the "In progress" listing was stale.
 
 ## In progress
 
@@ -278,19 +283,22 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
     standing thesis deliverable; candidate precision stays unvalidated (company harvest
     records remain the L4 validator).
 - ✅ **`decomposition-aware-ssl-study`** — ARCHIVED 2026-11-23 (spec `decomposition-aware-anomaly-study` merged). Isolated runner and [runbook](docs/decomposition_aware_ssl_study.md). Note: real benchmark/ablation numbers for its STL features still require the canonical polygon zonal store; smoke is not empirical evidence (applies to the capstone's B5/C-decomp reuse).
-- ▶ **`rerun-rq-suite-on-real-490`** (proposed 2026-11-10) — RQ1–RQ8 + data-scarcity results in findings 11–12 came from `simulate_490_field_archive`, not the real 490-field archive; re-run on real data, fail closed, provenance in every report.
-  - ✅ Task 1: real_archive.py loader + hash check + provenance + --source arg (tests/unit/test_real_archive.py 4/6 pass)
-  - ✅ Task 2: all 8 run_rq*.py + run_data_scarcity.py refactored with --source {real490,real32,simulated}; simulated → reports/simulated/
-  - ✅ Task 3.1: data/processed/splits_490.json built (370 fields, 799 cycles, 20 spatial blocks, SHA-256 recorded)
-  - ✅ Task 3.2: proxies absent on real490 (no 32-farm cwsi_et borrow); test passes
-  - ✅ Task 4: smoke tests all pass on real490 (run_rq1–rq7_rq8 + run_data_scarcity all EXIT 0)
-  - ✅ Task 5: findings 08/10/11/12 updated; real490 status + sim superseded sections added
-  - ✅ Task 6: tests added (test_provenance_complete, test_fail_closed, test_no_32farm_borrow, test_sim_output_path); spec R1–R5 verified; change archived to openspec/changes/archive/
-  - See `openspec/changes/rerun-rq-suite-on-real-490/`.
+## Research deliverables (2026-11-27)
+
+- **`thesis_research/SSL_Proposal/ssl-hierarchical-agri-model/`** — hierarchical
+  SSL deep-research deliverables relocated 2026-11-27 out of `.tmp/` (was outside
+  any git repo) into the research repo: `REPORT.md` (8 agents, 61 fetched/verified
+  sources), `brief.md`, `findings/F0a…F6` (research-repo commit `e37dcef`).
+  Key verdicts feeding method design: feasibility
+  holds **only with narrowed claims** (no cross-crop/region generalization, no
+  CWSI water/salinity typing, "anomaly" ≠ "stress" before L4); gate-based roadmap
+  preserves the pre-authorized honest-negative fallback (SSL = retrieval/embedding
+  only); proxy circularity flagged — METRIC CWSI is quasi-independent evidence at
+  best, L4 wording must be agreement-never-truth.
 
 ## Active openspec changes (2026-11-23) — derived from the change folders; full task lists live in each `tasks.md`
 
-**`regional-ssl-representation-evaluation`** — PROPOSED, 16/42. The capstone. Code built and green
+**`regional-ssl-representation-evaluation`** — PROPOSED, 15/42. The capstone. Code built and green
 (`pytest tests/evaluation` 355 passed; six scripts smoke-pass), but **no real number exists yet** —
 every artifact needs owner-side data (v2 parquet/splits/holdout, T4 hour budget, v2 patch store) and
 owner-run training. Next actions (in order):
