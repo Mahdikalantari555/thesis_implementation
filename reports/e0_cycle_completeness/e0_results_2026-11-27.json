@@ -1,0 +1,6023 @@
+{
+  "schema": "e0-cycle-completeness/v1",
+  "created": "2026-11-27T22:24:37",
+  "git_sha_impl": "b9d5583191136600b6501a05849a14fbda512d8c",
+  "read_only": true,
+  "epoch_note": "day ints in cycle tables are days since 2013-03-30 (archive start)",
+  "part_a_cycle_accounting": {
+    "v1": {
+      "path": "data/processed/cycles_490.parquet",
+      "n_rows": 1755,
+      "n_fields_with_cycles": 478,
+      "field_id_min": 1,
+      "field_id_max": 490,
+      "zero_cycle_fields_vs_490": 12,
+      "cycles_per_field": {
+        "mean": 3.672,
+        "median": 3.0,
+        "min": 2,
+        "max": 10
+      },
+      "censored": {
+        "True": 956,
+        "False": 799
+      },
+      "non_censored": 799,
+      "has_status_column": false,
+      "unresolved_flag_counts": "absent (no status column \u2014 intervals outside 180-540 d were skipped at production time, src/ssl_anomaly/phenology/cycles.py:298-301)",
+      "date_range_t_start_to_t_end": [
+        "2013-03-30",
+        "2026-09-11"
+      ]
+    },
+    "v2": {
+      "path": "data/processed/cycles_490_v2.parquet",
+      "n_rows": 4458,
+      "n_fields_with_cycles": 490,
+      "field_id_min": 1,
+      "field_id_max": 490,
+      "zero_cycle_fields_vs_490": 0,
+      "cycles_per_field": {
+        "mean": 9.098,
+        "median": 9.0,
+        "min": 3,
+        "max": 14
+      },
+      "censored": {
+        "False": 3478,
+        "True": 980
+      },
+      "non_censored": 3478,
+      "has_status_column": false,
+      "unresolved_flag_counts": "absent (no status column \u2014 intervals outside 180-540 d were skipped at production time, src/ssl_anomaly/phenology/cycles.py:298-301)",
+      "date_range_t_start_to_t_end": [
+        "2013-03-30",
+        "2026-09-11"
+      ]
+    },
+    "v1_missing_field_ids": [
+      97,
+      127,
+      145,
+      171,
+      193,
+      198,
+      215,
+      217,
+      231,
+      260,
+      387,
+      402
+    ],
+    "v2_missing_field_ids": [],
+    "v1_extra_field_ids_outside_1_490": [],
+    "v2_extra_field_ids_outside_1_490": [],
+    "expectation": {
+      "source": "thesis_research/SSL_Proposal/ssl-hierarchical-agri-model/REPORT.md:122,185 (roadmap gate E0)",
+      "statement": "1,755/490 ~= 3.6 cycles/field vs expected ~10-12 for an annual crop; pass = cycles ~= 10-12/field OR a documented reason",
+      "measured_v1_mean_cycles_per_field": 3.672,
+      "measured_v2_mean_cycles_per_field": 9.098,
+      "measured_v2_non_censored_per_field": 7.098,
+      "documented_reason_v1": "v1 detector (src/ssl_anomaly/phenology/cycles.py) keeps only intervals with 180 <= length <= 540 days and silently skips the rest (_build_cycles_from_boundaries, cycles.py:298-301); fields with <30 usable observations return no cycles at all (cycles.py:165-167). Sugarcane cycles concentrate at the 350-380 d median, so the 540 d cap and detector merges bound the count per field; 12 of 490 fields have zero cycles.",
+      "documented_reason_v2": "v2 = fused detector (cycles_490_v2.provenance.json, git cfa57d86): v1 harvests + multi-index fusion candidates recover censored/skipped windows (4,458 rows, 3,478 non-censored, all 490 fields), but the same 180-540 d window rule still applies, so per-field counts remain below the naive 10-12 annual-crop expectation (measured 9.10 total / 7.10 non-censored per field). The expectation assumes one cycle per year with zero censoring or merging; the measured median length (v2 clean 366.0 d) is consistent with annual sugarcane, so the shortfall is attributable to censoring at the series edges and detector merges, not to missing years."
+    },
+    "provenance_v2": {
+      "created": "2026-11-20 19:14:46",
+      "git_sha": "cfa57d86d9c27d1bc62b8c378a6e6dcbce8477d3",
+      "detector": "fused",
+      "fusion_params_hash": "b73c5517a2fc5594",
+      "supersedes": "cycles_490.parquet (v1, kept frozen in place)",
+      "comparison": {
+        "v1_total": 1755,
+        "v1_clean": 799,
+        "v1_clean_len_median": 365.0,
+        "v2_total": 4458,
+        "v2_clean": 3478,
+        "v2_clean_len_median": 366.0,
+        "v2_fields_with_cycles": 490,
+        "v1_fields_with_cycles": 478,
+        "v1_censored_windows_replaced_by_candidates": 683
+      }
+    },
+    "splits_490": {
+      "n_fields": 370,
+      "n_cycles": 799,
+      "n_spatial_blocks": 20,
+      "n_loyo_years": 13,
+      "sha256": "0315a240117887e7969a992778599747930d4d34787383b184b2403a3cdaf1d1"
+    },
+    "splits_v1_clean_consistency": {
+      "v1_non_censored": 799,
+      "splits_n_cycles": 799,
+      "match": true
+    },
+    "mini_reference_flag_accounting": {
+      "canonical_cycles_mini_parquet": "pre-repair schema (34 rows; columns kind/gdd_sum_within_cycle; no status column) \u2014 NOT rebuilt, owner-gated (docs/audits/cycle_gap_diagnosis_2026-11-26.md \u00a77)",
+      "regenerated_review_run_2026_11_27": {
+        "source": "/tmp/opencode/vi_review4/mini/review_summary.json",
+        "overlong_unresolved": 3,
+        "short_unresolved": 1,
+        "normal": 32
+      }
+    }
+  },
+  "part_b_alias_verification": {
+    "method": "per-field archive pixel membership from pixels/*.parquet (best-coverage date per field over all 538 dates), rasterised reference polygon of reference_fid = archive_fid - 1 (alias under test) and its neighbours, IoU on the field's own 30 m window; best match at a neighbour = failure (spec field-id-provenance R3)",
+    "n_fields_verified": 490,
+    "iou_own_distribution": {
+      "min": 1.0,
+      "p05": 1.0,
+      "median": 1.0,
+      "mean": 1.0,
+      "n_ge_0d99": 490,
+      "n_ge_0d90": 490,
+      "n_lt_0d80": 0
+    },
+    "best_not_own_fields": [],
+    "fields_below_0d80_iou": [],
+    "verdict": "PASS",
+    "per_field": {
+      "1": {
+        "reference_fid": 0,
+        "date_used": "2013-03-30",
+        "n_pixels": 214,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "1": 0.0
+        },
+        "best_reference_fid": 0,
+        "best_is_own": true
+      },
+      "2": {
+        "reference_fid": 1,
+        "date_used": "2013-03-30",
+        "n_pixels": 222,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "0": 0.0,
+          "2": 0.0
+        },
+        "best_reference_fid": 1,
+        "best_is_own": true
+      },
+      "3": {
+        "reference_fid": 2,
+        "date_used": "2013-03-30",
+        "n_pixels": 230,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "1": 0.0,
+          "3": 0.0
+        },
+        "best_reference_fid": 2,
+        "best_is_own": true
+      },
+      "4": {
+        "reference_fid": 3,
+        "date_used": "2013-03-30",
+        "n_pixels": 261,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "2": 0.0,
+          "4": 0.0
+        },
+        "best_reference_fid": 3,
+        "best_is_own": true
+      },
+      "5": {
+        "reference_fid": 4,
+        "date_used": "2013-03-30",
+        "n_pixels": 272,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "3": 0.0,
+          "5": 0.0
+        },
+        "best_reference_fid": 4,
+        "best_is_own": true
+      },
+      "6": {
+        "reference_fid": 5,
+        "date_used": "2013-03-30",
+        "n_pixels": 271,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "4": 0.0,
+          "6": 0.0
+        },
+        "best_reference_fid": 5,
+        "best_is_own": true
+      },
+      "7": {
+        "reference_fid": 6,
+        "date_used": "2013-03-30",
+        "n_pixels": 273,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "5": 0.0,
+          "7": 0.0
+        },
+        "best_reference_fid": 6,
+        "best_is_own": true
+      },
+      "8": {
+        "reference_fid": 7,
+        "date_used": "2013-03-30",
+        "n_pixels": 271,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "6": 0.0,
+          "8": 0.0
+        },
+        "best_reference_fid": 7,
+        "best_is_own": true
+      },
+      "9": {
+        "reference_fid": 8,
+        "date_used": "2013-03-30",
+        "n_pixels": 272,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "7": 0.0,
+          "9": 0.0
+        },
+        "best_reference_fid": 8,
+        "best_is_own": true
+      },
+      "10": {
+        "reference_fid": 9,
+        "date_used": "2013-03-30",
+        "n_pixels": 285,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "8": 0.0,
+          "10": 0.0
+        },
+        "best_reference_fid": 9,
+        "best_is_own": true
+      },
+      "11": {
+        "reference_fid": 10,
+        "date_used": "2013-03-30",
+        "n_pixels": 270,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "9": 0.0,
+          "11": 0.0
+        },
+        "best_reference_fid": 10,
+        "best_is_own": true
+      },
+      "12": {
+        "reference_fid": 11,
+        "date_used": "2013-03-30",
+        "n_pixels": 273,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "10": 0.0,
+          "12": 0.0
+        },
+        "best_reference_fid": 11,
+        "best_is_own": true
+      },
+      "13": {
+        "reference_fid": 12,
+        "date_used": "2013-03-30",
+        "n_pixels": 278,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "11": 0.0,
+          "13": 0.0
+        },
+        "best_reference_fid": 12,
+        "best_is_own": true
+      },
+      "14": {
+        "reference_fid": 13,
+        "date_used": "2013-03-30",
+        "n_pixels": 277,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "12": 0.0,
+          "14": 0.0
+        },
+        "best_reference_fid": 13,
+        "best_is_own": true
+      },
+      "15": {
+        "reference_fid": 14,
+        "date_used": "2013-03-30",
+        "n_pixels": 275,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "13": 0.0,
+          "15": 0.0
+        },
+        "best_reference_fid": 14,
+        "best_is_own": true
+      },
+      "16": {
+        "reference_fid": 15,
+        "date_used": "2013-03-30",
+        "n_pixels": 276,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "14": 0.0,
+          "16": 0.0
+        },
+        "best_reference_fid": 15,
+        "best_is_own": true
+      },
+      "17": {
+        "reference_fid": 16,
+        "date_used": "2013-03-30",
+        "n_pixels": 272,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "15": 0.0,
+          "17": 0.0
+        },
+        "best_reference_fid": 16,
+        "best_is_own": true
+      },
+      "18": {
+        "reference_fid": 17,
+        "date_used": "2013-03-30",
+        "n_pixels": 279,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "16": 0.0,
+          "18": 0.0
+        },
+        "best_reference_fid": 17,
+        "best_is_own": true
+      },
+      "19": {
+        "reference_fid": 18,
+        "date_used": "2013-03-30",
+        "n_pixels": 276,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "17": 0.0,
+          "19": 0.0
+        },
+        "best_reference_fid": 18,
+        "best_is_own": true
+      },
+      "20": {
+        "reference_fid": 19,
+        "date_used": "2013-03-30",
+        "n_pixels": 281,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "18": 0.0,
+          "20": 0.0
+        },
+        "best_reference_fid": 19,
+        "best_is_own": true
+      },
+      "21": {
+        "reference_fid": 20,
+        "date_used": "2013-03-30",
+        "n_pixels": 276,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "19": 0.0,
+          "21": 0.0
+        },
+        "best_reference_fid": 20,
+        "best_is_own": true
+      },
+      "22": {
+        "reference_fid": 21,
+        "date_used": "2013-03-30",
+        "n_pixels": 277,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "20": 0.0,
+          "22": 0.0
+        },
+        "best_reference_fid": 21,
+        "best_is_own": true
+      },
+      "23": {
+        "reference_fid": 22,
+        "date_used": "2013-03-30",
+        "n_pixels": 277,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "21": 0.0,
+          "23": 0.0
+        },
+        "best_reference_fid": 22,
+        "best_is_own": true
+      },
+      "24": {
+        "reference_fid": 23,
+        "date_used": "2013-03-30",
+        "n_pixels": 278,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "22": 0.0,
+          "24": 0.0
+        },
+        "best_reference_fid": 23,
+        "best_is_own": true
+      },
+      "25": {
+        "reference_fid": 24,
+        "date_used": "2013-03-30",
+        "n_pixels": 252,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "23": 0.0,
+          "25": 0.0
+        },
+        "best_reference_fid": 24,
+        "best_is_own": true
+      },
+      "26": {
+        "reference_fid": 25,
+        "date_used": "2013-03-30",
+        "n_pixels": 279,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "24": 0.0,
+          "26": 0.0
+        },
+        "best_reference_fid": 25,
+        "best_is_own": true
+      },
+      "27": {
+        "reference_fid": 26,
+        "date_used": "2013-03-30",
+        "n_pixels": 283,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "25": 0.0,
+          "27": 0.0
+        },
+        "best_reference_fid": 26,
+        "best_is_own": true
+      },
+      "28": {
+        "reference_fid": 27,
+        "date_used": "2013-03-30",
+        "n_pixels": 270,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "26": 0.0,
+          "28": 0.0
+        },
+        "best_reference_fid": 27,
+        "best_is_own": true
+      },
+      "29": {
+        "reference_fid": 28,
+        "date_used": "2013-03-30",
+        "n_pixels": 270,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "27": 0.0,
+          "29": 0.0
+        },
+        "best_reference_fid": 28,
+        "best_is_own": true
+      },
+      "30": {
+        "reference_fid": 29,
+        "date_used": "2013-03-30",
+        "n_pixels": 273,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "28": 0.0,
+          "30": 0.0
+        },
+        "best_reference_fid": 29,
+        "best_is_own": true
+      },
+      "31": {
+        "reference_fid": 30,
+        "date_used": "2013-03-30",
+        "n_pixels": 276,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "29": 0.0,
+          "31": 0.0
+        },
+        "best_reference_fid": 30,
+        "best_is_own": true
+      },
+      "32": {
+        "reference_fid": 31,
+        "date_used": "2013-03-30",
+        "n_pixels": 278,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "30": 0.0,
+          "32": 0.0
+        },
+        "best_reference_fid": 31,
+        "best_is_own": true
+      },
+      "33": {
+        "reference_fid": 32,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "31": 0.0,
+          "33": 0.0
+        },
+        "best_reference_fid": 32,
+        "best_is_own": true
+      },
+      "34": {
+        "reference_fid": 33,
+        "date_used": "2013-03-30",
+        "n_pixels": 278,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "32": 0.0,
+          "34": 0.0
+        },
+        "best_reference_fid": 33,
+        "best_is_own": true
+      },
+      "35": {
+        "reference_fid": 34,
+        "date_used": "2013-03-30",
+        "n_pixels": 280,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "33": 0.0,
+          "35": 0.0
+        },
+        "best_reference_fid": 34,
+        "best_is_own": true
+      },
+      "36": {
+        "reference_fid": 35,
+        "date_used": "2013-03-30",
+        "n_pixels": 279,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "34": 0.0,
+          "36": 0.0
+        },
+        "best_reference_fid": 35,
+        "best_is_own": true
+      },
+      "37": {
+        "reference_fid": 36,
+        "date_used": "2013-03-30",
+        "n_pixels": 279,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "35": 0.0,
+          "37": 0.0
+        },
+        "best_reference_fid": 36,
+        "best_is_own": true
+      },
+      "38": {
+        "reference_fid": 37,
+        "date_used": "2013-03-30",
+        "n_pixels": 281,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "36": 0.0,
+          "38": 0.0
+        },
+        "best_reference_fid": 37,
+        "best_is_own": true
+      },
+      "39": {
+        "reference_fid": 38,
+        "date_used": "2013-03-30",
+        "n_pixels": 292,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "37": 0.0,
+          "39": 0.0
+        },
+        "best_reference_fid": 38,
+        "best_is_own": true
+      },
+      "40": {
+        "reference_fid": 39,
+        "date_used": "2013-03-30",
+        "n_pixels": 276,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "38": 0.0,
+          "40": 0.0
+        },
+        "best_reference_fid": 39,
+        "best_is_own": true
+      },
+      "41": {
+        "reference_fid": 40,
+        "date_used": "2013-03-30",
+        "n_pixels": 277,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "39": 0.0,
+          "41": 0.0
+        },
+        "best_reference_fid": 40,
+        "best_is_own": true
+      },
+      "42": {
+        "reference_fid": 41,
+        "date_used": "2013-03-30",
+        "n_pixels": 287,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "40": 0.0,
+          "42": 0.0
+        },
+        "best_reference_fid": 41,
+        "best_is_own": true
+      },
+      "43": {
+        "reference_fid": 42,
+        "date_used": "2013-03-30",
+        "n_pixels": 271,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "41": 0.0,
+          "43": 0.0
+        },
+        "best_reference_fid": 42,
+        "best_is_own": true
+      },
+      "44": {
+        "reference_fid": 43,
+        "date_used": "2013-03-30",
+        "n_pixels": 283,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "42": 0.0,
+          "44": 0.0
+        },
+        "best_reference_fid": 43,
+        "best_is_own": true
+      },
+      "45": {
+        "reference_fid": 44,
+        "date_used": "2013-03-30",
+        "n_pixels": 285,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "43": 0.0,
+          "45": 0.0
+        },
+        "best_reference_fid": 44,
+        "best_is_own": true
+      },
+      "46": {
+        "reference_fid": 45,
+        "date_used": "2013-03-30",
+        "n_pixels": 287,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "44": 0.0,
+          "46": 0.0
+        },
+        "best_reference_fid": 45,
+        "best_is_own": true
+      },
+      "47": {
+        "reference_fid": 46,
+        "date_used": "2013-03-30",
+        "n_pixels": 284,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "45": 0.0,
+          "47": 0.0
+        },
+        "best_reference_fid": 46,
+        "best_is_own": true
+      },
+      "48": {
+        "reference_fid": 47,
+        "date_used": "2013-03-30",
+        "n_pixels": 286,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "46": 0.0,
+          "48": 0.0
+        },
+        "best_reference_fid": 47,
+        "best_is_own": true
+      },
+      "49": {
+        "reference_fid": 48,
+        "date_used": "2013-03-30",
+        "n_pixels": 278,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "47": 0.0,
+          "49": 0.0
+        },
+        "best_reference_fid": 48,
+        "best_is_own": true
+      },
+      "50": {
+        "reference_fid": 49,
+        "date_used": "2013-03-30",
+        "n_pixels": 284,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "48": 0.0,
+          "50": 0.0
+        },
+        "best_reference_fid": 49,
+        "best_is_own": true
+      },
+      "51": {
+        "reference_fid": 50,
+        "date_used": "2013-03-30",
+        "n_pixels": 278,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "49": 0.0,
+          "51": 0.0
+        },
+        "best_reference_fid": 50,
+        "best_is_own": true
+      },
+      "52": {
+        "reference_fid": 51,
+        "date_used": "2013-03-30",
+        "n_pixels": 277,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "50": 0.0,
+          "52": 0.0
+        },
+        "best_reference_fid": 51,
+        "best_is_own": true
+      },
+      "53": {
+        "reference_fid": 52,
+        "date_used": "2013-03-30",
+        "n_pixels": 291,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "51": 0.0,
+          "53": 0.0
+        },
+        "best_reference_fid": 52,
+        "best_is_own": true
+      },
+      "54": {
+        "reference_fid": 53,
+        "date_used": "2013-03-30",
+        "n_pixels": 274,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "52": 0.0,
+          "54": 0.0
+        },
+        "best_reference_fid": 53,
+        "best_is_own": true
+      },
+      "55": {
+        "reference_fid": 54,
+        "date_used": "2013-03-30",
+        "n_pixels": 276,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "53": 0.0,
+          "55": 0.0
+        },
+        "best_reference_fid": 54,
+        "best_is_own": true
+      },
+      "56": {
+        "reference_fid": 55,
+        "date_used": "2013-03-30",
+        "n_pixels": 281,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "54": 0.0,
+          "56": 0.0
+        },
+        "best_reference_fid": 55,
+        "best_is_own": true
+      },
+      "57": {
+        "reference_fid": 56,
+        "date_used": "2013-03-30",
+        "n_pixels": 284,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "55": 0.0,
+          "57": 0.0
+        },
+        "best_reference_fid": 56,
+        "best_is_own": true
+      },
+      "58": {
+        "reference_fid": 57,
+        "date_used": "2013-03-30",
+        "n_pixels": 276,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "56": 0.0,
+          "58": 0.0
+        },
+        "best_reference_fid": 57,
+        "best_is_own": true
+      },
+      "59": {
+        "reference_fid": 58,
+        "date_used": "2013-03-30",
+        "n_pixels": 280,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "57": 0.0,
+          "59": 0.0
+        },
+        "best_reference_fid": 58,
+        "best_is_own": true
+      },
+      "60": {
+        "reference_fid": 59,
+        "date_used": "2013-03-30",
+        "n_pixels": 279,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "58": 0.0,
+          "60": 0.0
+        },
+        "best_reference_fid": 59,
+        "best_is_own": true
+      },
+      "61": {
+        "reference_fid": 60,
+        "date_used": "2013-03-30",
+        "n_pixels": 271,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "59": 0.0,
+          "61": 0.0
+        },
+        "best_reference_fid": 60,
+        "best_is_own": true
+      },
+      "62": {
+        "reference_fid": 61,
+        "date_used": "2013-03-30",
+        "n_pixels": 283,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "60": 0.0,
+          "62": 0.0
+        },
+        "best_reference_fid": 61,
+        "best_is_own": true
+      },
+      "63": {
+        "reference_fid": 62,
+        "date_used": "2013-03-30",
+        "n_pixels": 278,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "61": 0.0,
+          "63": 0.0
+        },
+        "best_reference_fid": 62,
+        "best_is_own": true
+      },
+      "64": {
+        "reference_fid": 63,
+        "date_used": "2013-03-30",
+        "n_pixels": 285,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "62": 0.0,
+          "64": 0.0
+        },
+        "best_reference_fid": 63,
+        "best_is_own": true
+      },
+      "65": {
+        "reference_fid": 64,
+        "date_used": "2013-03-30",
+        "n_pixels": 285,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "63": 0.0,
+          "65": 0.0
+        },
+        "best_reference_fid": 64,
+        "best_is_own": true
+      },
+      "66": {
+        "reference_fid": 65,
+        "date_used": "2013-03-30",
+        "n_pixels": 285,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "64": 0.0,
+          "66": 0.0
+        },
+        "best_reference_fid": 65,
+        "best_is_own": true
+      },
+      "67": {
+        "reference_fid": 66,
+        "date_used": "2013-03-30",
+        "n_pixels": 275,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "65": 0.0,
+          "67": 0.0
+        },
+        "best_reference_fid": 66,
+        "best_is_own": true
+      },
+      "68": {
+        "reference_fid": 67,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "66": 0.0,
+          "68": 0.0
+        },
+        "best_reference_fid": 67,
+        "best_is_own": true
+      },
+      "69": {
+        "reference_fid": 68,
+        "date_used": "2013-03-30",
+        "n_pixels": 269,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "67": 0.0,
+          "69": 0.0
+        },
+        "best_reference_fid": 68,
+        "best_is_own": true
+      },
+      "70": {
+        "reference_fid": 69,
+        "date_used": "2013-03-30",
+        "n_pixels": 291,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "68": 0.0,
+          "70": 0.0
+        },
+        "best_reference_fid": 69,
+        "best_is_own": true
+      },
+      "71": {
+        "reference_fid": 70,
+        "date_used": "2013-03-30",
+        "n_pixels": 275,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "69": 0.0,
+          "71": 0.0
+        },
+        "best_reference_fid": 70,
+        "best_is_own": true
+      },
+      "72": {
+        "reference_fid": 71,
+        "date_used": "2013-03-30",
+        "n_pixels": 277,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "70": 0.0,
+          "72": 0.0
+        },
+        "best_reference_fid": 71,
+        "best_is_own": true
+      },
+      "73": {
+        "reference_fid": 72,
+        "date_used": "2013-03-30",
+        "n_pixels": 283,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "71": 0.0,
+          "73": 0.0
+        },
+        "best_reference_fid": 72,
+        "best_is_own": true
+      },
+      "74": {
+        "reference_fid": 73,
+        "date_used": "2013-03-30",
+        "n_pixels": 284,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "72": 0.0,
+          "74": 0.0
+        },
+        "best_reference_fid": 73,
+        "best_is_own": true
+      },
+      "75": {
+        "reference_fid": 74,
+        "date_used": "2013-03-30",
+        "n_pixels": 285,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "73": 0.0,
+          "75": 0.0
+        },
+        "best_reference_fid": 74,
+        "best_is_own": true
+      },
+      "76": {
+        "reference_fid": 75,
+        "date_used": "2013-03-30",
+        "n_pixels": 274,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "74": 0.0,
+          "76": 0.0
+        },
+        "best_reference_fid": 75,
+        "best_is_own": true
+      },
+      "77": {
+        "reference_fid": 76,
+        "date_used": "2013-03-30",
+        "n_pixels": 277,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "75": 0.0,
+          "77": 0.0
+        },
+        "best_reference_fid": 76,
+        "best_is_own": true
+      },
+      "78": {
+        "reference_fid": 77,
+        "date_used": "2013-03-30",
+        "n_pixels": 280,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "76": 0.0,
+          "78": 0.0
+        },
+        "best_reference_fid": 77,
+        "best_is_own": true
+      },
+      "79": {
+        "reference_fid": 78,
+        "date_used": "2013-03-30",
+        "n_pixels": 284,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "77": 0.0,
+          "79": 0.0
+        },
+        "best_reference_fid": 78,
+        "best_is_own": true
+      },
+      "80": {
+        "reference_fid": 79,
+        "date_used": "2013-03-30",
+        "n_pixels": 284,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "78": 0.0,
+          "80": 0.0
+        },
+        "best_reference_fid": 79,
+        "best_is_own": true
+      },
+      "81": {
+        "reference_fid": 80,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "79": 0.0,
+          "81": 0.0
+        },
+        "best_reference_fid": 80,
+        "best_is_own": true
+      },
+      "82": {
+        "reference_fid": 81,
+        "date_used": "2013-03-30",
+        "n_pixels": 281,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "80": 0.0,
+          "82": 0.0
+        },
+        "best_reference_fid": 81,
+        "best_is_own": true
+      },
+      "83": {
+        "reference_fid": 82,
+        "date_used": "2013-03-30",
+        "n_pixels": 276,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "81": 0.0,
+          "83": 0.0
+        },
+        "best_reference_fid": 82,
+        "best_is_own": true
+      },
+      "84": {
+        "reference_fid": 83,
+        "date_used": "2013-03-30",
+        "n_pixels": 288,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "82": 0.0,
+          "84": 0.0
+        },
+        "best_reference_fid": 83,
+        "best_is_own": true
+      },
+      "85": {
+        "reference_fid": 84,
+        "date_used": "2013-03-30",
+        "n_pixels": 274,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "83": 0.0,
+          "85": 0.0
+        },
+        "best_reference_fid": 84,
+        "best_is_own": true
+      },
+      "86": {
+        "reference_fid": 85,
+        "date_used": "2013-03-30",
+        "n_pixels": 289,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "84": 0.0,
+          "86": 0.0
+        },
+        "best_reference_fid": 85,
+        "best_is_own": true
+      },
+      "87": {
+        "reference_fid": 86,
+        "date_used": "2013-03-30",
+        "n_pixels": 271,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "85": 0.0,
+          "87": 0.0
+        },
+        "best_reference_fid": 86,
+        "best_is_own": true
+      },
+      "88": {
+        "reference_fid": 87,
+        "date_used": "2013-03-30",
+        "n_pixels": 288,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "86": 0.0,
+          "88": 0.0
+        },
+        "best_reference_fid": 87,
+        "best_is_own": true
+      },
+      "89": {
+        "reference_fid": 88,
+        "date_used": "2013-03-30",
+        "n_pixels": 289,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "87": 0.0,
+          "89": 0.0
+        },
+        "best_reference_fid": 88,
+        "best_is_own": true
+      },
+      "90": {
+        "reference_fid": 89,
+        "date_used": "2013-03-30",
+        "n_pixels": 291,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "88": 0.0,
+          "90": 0.0
+        },
+        "best_reference_fid": 89,
+        "best_is_own": true
+      },
+      "91": {
+        "reference_fid": 90,
+        "date_used": "2013-03-30",
+        "n_pixels": 289,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "89": 0.0,
+          "91": 0.0
+        },
+        "best_reference_fid": 90,
+        "best_is_own": true
+      },
+      "92": {
+        "reference_fid": 91,
+        "date_used": "2013-03-30",
+        "n_pixels": 287,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "90": 0.0,
+          "92": 0.0
+        },
+        "best_reference_fid": 91,
+        "best_is_own": true
+      },
+      "93": {
+        "reference_fid": 92,
+        "date_used": "2013-03-30",
+        "n_pixels": 291,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "91": 0.0,
+          "93": 0.0
+        },
+        "best_reference_fid": 92,
+        "best_is_own": true
+      },
+      "94": {
+        "reference_fid": 93,
+        "date_used": "2013-03-30",
+        "n_pixels": 287,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "92": 0.0,
+          "94": 0.0
+        },
+        "best_reference_fid": 93,
+        "best_is_own": true
+      },
+      "95": {
+        "reference_fid": 94,
+        "date_used": "2013-03-30",
+        "n_pixels": 292,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "93": 0.0,
+          "95": 0.0
+        },
+        "best_reference_fid": 94,
+        "best_is_own": true
+      },
+      "96": {
+        "reference_fid": 95,
+        "date_used": "2013-03-30",
+        "n_pixels": 286,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "94": 0.0,
+          "96": 0.0
+        },
+        "best_reference_fid": 95,
+        "best_is_own": true
+      },
+      "97": {
+        "reference_fid": 96,
+        "date_used": "2013-03-30",
+        "n_pixels": 308,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "95": 0.0,
+          "97": 0.0
+        },
+        "best_reference_fid": 96,
+        "best_is_own": true
+      },
+      "98": {
+        "reference_fid": 97,
+        "date_used": "2013-03-30",
+        "n_pixels": 287,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "96": 0.0,
+          "98": 0.0
+        },
+        "best_reference_fid": 97,
+        "best_is_own": true
+      },
+      "99": {
+        "reference_fid": 98,
+        "date_used": "2013-03-30",
+        "n_pixels": 287,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "97": 0.0,
+          "99": 0.0
+        },
+        "best_reference_fid": 98,
+        "best_is_own": true
+      },
+      "100": {
+        "reference_fid": 99,
+        "date_used": "2013-03-30",
+        "n_pixels": 288,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "98": 0.0,
+          "100": 0.0
+        },
+        "best_reference_fid": 99,
+        "best_is_own": true
+      },
+      "101": {
+        "reference_fid": 100,
+        "date_used": "2013-03-30",
+        "n_pixels": 293,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "99": 0.0,
+          "101": 0.0
+        },
+        "best_reference_fid": 100,
+        "best_is_own": true
+      },
+      "102": {
+        "reference_fid": 101,
+        "date_used": "2013-03-30",
+        "n_pixels": 285,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "100": 0.0,
+          "102": 0.0
+        },
+        "best_reference_fid": 101,
+        "best_is_own": true
+      },
+      "103": {
+        "reference_fid": 102,
+        "date_used": "2013-03-30",
+        "n_pixels": 292,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "101": 0.0,
+          "103": 0.0
+        },
+        "best_reference_fid": 102,
+        "best_is_own": true
+      },
+      "104": {
+        "reference_fid": 103,
+        "date_used": "2013-03-30",
+        "n_pixels": 292,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "102": 0.0,
+          "104": 0.0
+        },
+        "best_reference_fid": 103,
+        "best_is_own": true
+      },
+      "105": {
+        "reference_fid": 104,
+        "date_used": "2013-03-30",
+        "n_pixels": 287,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "103": 0.0,
+          "105": 0.0
+        },
+        "best_reference_fid": 104,
+        "best_is_own": true
+      },
+      "106": {
+        "reference_fid": 105,
+        "date_used": "2013-03-30",
+        "n_pixels": 288,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "104": 0.0,
+          "106": 0.0
+        },
+        "best_reference_fid": 105,
+        "best_is_own": true
+      },
+      "107": {
+        "reference_fid": 106,
+        "date_used": "2013-03-30",
+        "n_pixels": 292,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "105": 0.0,
+          "107": 0.0
+        },
+        "best_reference_fid": 106,
+        "best_is_own": true
+      },
+      "108": {
+        "reference_fid": 107,
+        "date_used": "2013-03-30",
+        "n_pixels": 287,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "106": 0.0,
+          "108": 0.0
+        },
+        "best_reference_fid": 107,
+        "best_is_own": true
+      },
+      "109": {
+        "reference_fid": 108,
+        "date_used": "2013-03-30",
+        "n_pixels": 283,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "107": 0.0,
+          "109": 0.0
+        },
+        "best_reference_fid": 108,
+        "best_is_own": true
+      },
+      "110": {
+        "reference_fid": 109,
+        "date_used": "2013-03-30",
+        "n_pixels": 280,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "108": 0.0,
+          "110": 0.0
+        },
+        "best_reference_fid": 109,
+        "best_is_own": true
+      },
+      "111": {
+        "reference_fid": 110,
+        "date_used": "2013-03-30",
+        "n_pixels": 285,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "109": 0.0,
+          "111": 0.0
+        },
+        "best_reference_fid": 110,
+        "best_is_own": true
+      },
+      "112": {
+        "reference_fid": 111,
+        "date_used": "2013-03-30",
+        "n_pixels": 277,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "110": 0.0,
+          "112": 0.0
+        },
+        "best_reference_fid": 111,
+        "best_is_own": true
+      },
+      "113": {
+        "reference_fid": 112,
+        "date_used": "2013-03-30",
+        "n_pixels": 266,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "111": 0.0,
+          "113": 0.0
+        },
+        "best_reference_fid": 112,
+        "best_is_own": true
+      },
+      "114": {
+        "reference_fid": 113,
+        "date_used": "2013-03-30",
+        "n_pixels": 276,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "112": 0.0,
+          "114": 0.0
+        },
+        "best_reference_fid": 113,
+        "best_is_own": true
+      },
+      "115": {
+        "reference_fid": 114,
+        "date_used": "2013-03-30",
+        "n_pixels": 286,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "113": 0.0,
+          "115": 0.0
+        },
+        "best_reference_fid": 114,
+        "best_is_own": true
+      },
+      "116": {
+        "reference_fid": 115,
+        "date_used": "2013-03-30",
+        "n_pixels": 288,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "114": 0.0,
+          "116": 0.0
+        },
+        "best_reference_fid": 115,
+        "best_is_own": true
+      },
+      "117": {
+        "reference_fid": 116,
+        "date_used": "2013-03-30",
+        "n_pixels": 288,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "115": 0.0,
+          "117": 0.0
+        },
+        "best_reference_fid": 116,
+        "best_is_own": true
+      },
+      "118": {
+        "reference_fid": 117,
+        "date_used": "2013-03-30",
+        "n_pixels": 289,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "116": 0.0,
+          "118": 0.0
+        },
+        "best_reference_fid": 117,
+        "best_is_own": true
+      },
+      "119": {
+        "reference_fid": 118,
+        "date_used": "2013-03-30",
+        "n_pixels": 279,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "117": 0.0,
+          "119": 0.0
+        },
+        "best_reference_fid": 118,
+        "best_is_own": true
+      },
+      "120": {
+        "reference_fid": 119,
+        "date_used": "2013-03-30",
+        "n_pixels": 289,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "118": 0.0,
+          "120": 0.0
+        },
+        "best_reference_fid": 119,
+        "best_is_own": true
+      },
+      "121": {
+        "reference_fid": 120,
+        "date_used": "2013-03-30",
+        "n_pixels": 286,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "119": 0.0,
+          "121": 0.0
+        },
+        "best_reference_fid": 120,
+        "best_is_own": true
+      },
+      "122": {
+        "reference_fid": 121,
+        "date_used": "2013-03-30",
+        "n_pixels": 281,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "120": 0.0,
+          "122": 0.0
+        },
+        "best_reference_fid": 121,
+        "best_is_own": true
+      },
+      "123": {
+        "reference_fid": 122,
+        "date_used": "2013-03-30",
+        "n_pixels": 281,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "121": 0.0,
+          "123": 0.0
+        },
+        "best_reference_fid": 122,
+        "best_is_own": true
+      },
+      "124": {
+        "reference_fid": 123,
+        "date_used": "2013-03-30",
+        "n_pixels": 284,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "122": 0.0,
+          "124": 0.0
+        },
+        "best_reference_fid": 123,
+        "best_is_own": true
+      },
+      "125": {
+        "reference_fid": 124,
+        "date_used": "2013-03-30",
+        "n_pixels": 293,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "123": 0.0,
+          "125": 0.0
+        },
+        "best_reference_fid": 124,
+        "best_is_own": true
+      },
+      "126": {
+        "reference_fid": 125,
+        "date_used": "2013-03-30",
+        "n_pixels": 288,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "124": 0.0,
+          "126": 0.0
+        },
+        "best_reference_fid": 125,
+        "best_is_own": true
+      },
+      "127": {
+        "reference_fid": 126,
+        "date_used": "2013-03-30",
+        "n_pixels": 293,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "125": 0.0,
+          "127": 0.0
+        },
+        "best_reference_fid": 126,
+        "best_is_own": true
+      },
+      "128": {
+        "reference_fid": 127,
+        "date_used": "2013-03-30",
+        "n_pixels": 290,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "126": 0.0,
+          "128": 0.0
+        },
+        "best_reference_fid": 127,
+        "best_is_own": true
+      },
+      "129": {
+        "reference_fid": 128,
+        "date_used": "2013-03-30",
+        "n_pixels": 281,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "127": 0.0,
+          "129": 0.0
+        },
+        "best_reference_fid": 128,
+        "best_is_own": true
+      },
+      "130": {
+        "reference_fid": 129,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "128": 0.0,
+          "130": 0.0
+        },
+        "best_reference_fid": 129,
+        "best_is_own": true
+      },
+      "131": {
+        "reference_fid": 130,
+        "date_used": "2013-03-30",
+        "n_pixels": 283,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "129": 0.0,
+          "131": 0.0
+        },
+        "best_reference_fid": 130,
+        "best_is_own": true
+      },
+      "132": {
+        "reference_fid": 131,
+        "date_used": "2013-03-30",
+        "n_pixels": 283,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "130": 0.0,
+          "132": 0.0
+        },
+        "best_reference_fid": 131,
+        "best_is_own": true
+      },
+      "133": {
+        "reference_fid": 132,
+        "date_used": "2013-03-30",
+        "n_pixels": 283,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "131": 0.0,
+          "133": 0.0
+        },
+        "best_reference_fid": 132,
+        "best_is_own": true
+      },
+      "134": {
+        "reference_fid": 133,
+        "date_used": "2013-03-30",
+        "n_pixels": 279,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "132": 0.0,
+          "134": 0.0
+        },
+        "best_reference_fid": 133,
+        "best_is_own": true
+      },
+      "135": {
+        "reference_fid": 134,
+        "date_used": "2013-03-30",
+        "n_pixels": 283,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "133": 0.0,
+          "135": 0.0
+        },
+        "best_reference_fid": 134,
+        "best_is_own": true
+      },
+      "136": {
+        "reference_fid": 135,
+        "date_used": "2013-03-30",
+        "n_pixels": 280,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "134": 0.0,
+          "136": 0.0
+        },
+        "best_reference_fid": 135,
+        "best_is_own": true
+      },
+      "137": {
+        "reference_fid": 136,
+        "date_used": "2013-03-30",
+        "n_pixels": 284,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "135": 0.0,
+          "137": 0.0
+        },
+        "best_reference_fid": 136,
+        "best_is_own": true
+      },
+      "138": {
+        "reference_fid": 137,
+        "date_used": "2013-03-30",
+        "n_pixels": 284,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "136": 0.0,
+          "138": 0.0
+        },
+        "best_reference_fid": 137,
+        "best_is_own": true
+      },
+      "139": {
+        "reference_fid": 138,
+        "date_used": "2013-03-30",
+        "n_pixels": 284,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "137": 0.0,
+          "139": 0.0
+        },
+        "best_reference_fid": 138,
+        "best_is_own": true
+      },
+      "140": {
+        "reference_fid": 139,
+        "date_used": "2013-03-30",
+        "n_pixels": 271,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "138": 0.0,
+          "140": 0.0
+        },
+        "best_reference_fid": 139,
+        "best_is_own": true
+      },
+      "141": {
+        "reference_fid": 140,
+        "date_used": "2013-03-30",
+        "n_pixels": 303,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "139": 0.0,
+          "141": 0.0
+        },
+        "best_reference_fid": 140,
+        "best_is_own": true
+      },
+      "142": {
+        "reference_fid": 141,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "140": 0.0,
+          "142": 0.0
+        },
+        "best_reference_fid": 141,
+        "best_is_own": true
+      },
+      "143": {
+        "reference_fid": 142,
+        "date_used": "2013-03-30",
+        "n_pixels": 278,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "141": 0.0,
+          "143": 0.0
+        },
+        "best_reference_fid": 142,
+        "best_is_own": true
+      },
+      "144": {
+        "reference_fid": 143,
+        "date_used": "2013-03-30",
+        "n_pixels": 276,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "142": 0.0,
+          "144": 0.0
+        },
+        "best_reference_fid": 143,
+        "best_is_own": true
+      },
+      "145": {
+        "reference_fid": 144,
+        "date_used": "2013-03-30",
+        "n_pixels": 283,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "143": 0.0,
+          "145": 0.0
+        },
+        "best_reference_fid": 144,
+        "best_is_own": true
+      },
+      "146": {
+        "reference_fid": 145,
+        "date_used": "2013-03-30",
+        "n_pixels": 278,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "144": 0.0,
+          "146": 0.0
+        },
+        "best_reference_fid": 145,
+        "best_is_own": true
+      },
+      "147": {
+        "reference_fid": 146,
+        "date_used": "2013-03-30",
+        "n_pixels": 283,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "145": 0.0,
+          "147": 0.0
+        },
+        "best_reference_fid": 146,
+        "best_is_own": true
+      },
+      "148": {
+        "reference_fid": 147,
+        "date_used": "2013-03-30",
+        "n_pixels": 280,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "146": 0.0,
+          "148": 0.0
+        },
+        "best_reference_fid": 147,
+        "best_is_own": true
+      },
+      "149": {
+        "reference_fid": 148,
+        "date_used": "2013-03-30",
+        "n_pixels": 288,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "147": 0.0,
+          "149": 0.0
+        },
+        "best_reference_fid": 148,
+        "best_is_own": true
+      },
+      "150": {
+        "reference_fid": 149,
+        "date_used": "2013-03-30",
+        "n_pixels": 279,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "148": 0.0,
+          "150": 0.0
+        },
+        "best_reference_fid": 149,
+        "best_is_own": true
+      },
+      "151": {
+        "reference_fid": 150,
+        "date_used": "2013-03-30",
+        "n_pixels": 276,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "149": 0.0,
+          "151": 0.0
+        },
+        "best_reference_fid": 150,
+        "best_is_own": true
+      },
+      "152": {
+        "reference_fid": 151,
+        "date_used": "2013-03-30",
+        "n_pixels": 277,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "150": 0.0,
+          "152": 0.0
+        },
+        "best_reference_fid": 151,
+        "best_is_own": true
+      },
+      "153": {
+        "reference_fid": 152,
+        "date_used": "2013-03-30",
+        "n_pixels": 275,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "151": 0.0,
+          "153": 0.0
+        },
+        "best_reference_fid": 152,
+        "best_is_own": true
+      },
+      "154": {
+        "reference_fid": 153,
+        "date_used": "2013-03-30",
+        "n_pixels": 286,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "152": 0.0,
+          "154": 0.0
+        },
+        "best_reference_fid": 153,
+        "best_is_own": true
+      },
+      "155": {
+        "reference_fid": 154,
+        "date_used": "2013-03-30",
+        "n_pixels": 278,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "153": 0.0,
+          "155": 0.0
+        },
+        "best_reference_fid": 154,
+        "best_is_own": true
+      },
+      "156": {
+        "reference_fid": 155,
+        "date_used": "2013-03-30",
+        "n_pixels": 202,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "154": 0.0,
+          "156": 0.0
+        },
+        "best_reference_fid": 155,
+        "best_is_own": true
+      },
+      "157": {
+        "reference_fid": 156,
+        "date_used": "2013-03-30",
+        "n_pixels": 281,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "155": 0.0,
+          "157": 0.0
+        },
+        "best_reference_fid": 156,
+        "best_is_own": true
+      },
+      "158": {
+        "reference_fid": 157,
+        "date_used": "2013-03-30",
+        "n_pixels": 278,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "156": 0.0,
+          "158": 0.0
+        },
+        "best_reference_fid": 157,
+        "best_is_own": true
+      },
+      "159": {
+        "reference_fid": 158,
+        "date_used": "2013-03-30",
+        "n_pixels": 284,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "157": 0.0,
+          "159": 0.0
+        },
+        "best_reference_fid": 158,
+        "best_is_own": true
+      },
+      "160": {
+        "reference_fid": 159,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "158": 0.0,
+          "160": 0.0
+        },
+        "best_reference_fid": 159,
+        "best_is_own": true
+      },
+      "161": {
+        "reference_fid": 160,
+        "date_used": "2013-03-30",
+        "n_pixels": 280,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "159": 0.0,
+          "161": 0.0
+        },
+        "best_reference_fid": 160,
+        "best_is_own": true
+      },
+      "162": {
+        "reference_fid": 161,
+        "date_used": "2013-03-30",
+        "n_pixels": 280,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "160": 0.0,
+          "162": 0.0
+        },
+        "best_reference_fid": 161,
+        "best_is_own": true
+      },
+      "163": {
+        "reference_fid": 162,
+        "date_used": "2013-03-30",
+        "n_pixels": 283,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "161": 0.0,
+          "163": 0.0
+        },
+        "best_reference_fid": 162,
+        "best_is_own": true
+      },
+      "164": {
+        "reference_fid": 163,
+        "date_used": "2013-03-30",
+        "n_pixels": 279,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "162": 0.0,
+          "164": 0.0
+        },
+        "best_reference_fid": 163,
+        "best_is_own": true
+      },
+      "165": {
+        "reference_fid": 164,
+        "date_used": "2013-03-30",
+        "n_pixels": 279,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "163": 0.0,
+          "165": 0.0
+        },
+        "best_reference_fid": 164,
+        "best_is_own": true
+      },
+      "166": {
+        "reference_fid": 165,
+        "date_used": "2013-03-30",
+        "n_pixels": 283,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "164": 0.0,
+          "166": 0.0
+        },
+        "best_reference_fid": 165,
+        "best_is_own": true
+      },
+      "167": {
+        "reference_fid": 166,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "165": 0.0,
+          "167": 0.0
+        },
+        "best_reference_fid": 166,
+        "best_is_own": true
+      },
+      "168": {
+        "reference_fid": 167,
+        "date_used": "2013-03-30",
+        "n_pixels": 288,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "166": 0.0,
+          "168": 0.0
+        },
+        "best_reference_fid": 167,
+        "best_is_own": true
+      },
+      "169": {
+        "reference_fid": 168,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "167": 0.0,
+          "169": 0.0
+        },
+        "best_reference_fid": 168,
+        "best_is_own": true
+      },
+      "170": {
+        "reference_fid": 169,
+        "date_used": "2013-03-30",
+        "n_pixels": 278,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "168": 0.0,
+          "170": 0.0
+        },
+        "best_reference_fid": 169,
+        "best_is_own": true
+      },
+      "171": {
+        "reference_fid": 170,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "169": 0.0,
+          "171": 0.0
+        },
+        "best_reference_fid": 170,
+        "best_is_own": true
+      },
+      "172": {
+        "reference_fid": 171,
+        "date_used": "2013-03-30",
+        "n_pixels": 274,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "170": 0.0,
+          "172": 0.0
+        },
+        "best_reference_fid": 171,
+        "best_is_own": true
+      },
+      "173": {
+        "reference_fid": 172,
+        "date_used": "2013-03-30",
+        "n_pixels": 286,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "171": 0.0,
+          "173": 0.0
+        },
+        "best_reference_fid": 172,
+        "best_is_own": true
+      },
+      "174": {
+        "reference_fid": 173,
+        "date_used": "2013-03-30",
+        "n_pixels": 287,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "172": 0.0,
+          "174": 0.0
+        },
+        "best_reference_fid": 173,
+        "best_is_own": true
+      },
+      "175": {
+        "reference_fid": 174,
+        "date_used": "2013-03-30",
+        "n_pixels": 288,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "173": 0.0,
+          "175": 0.0
+        },
+        "best_reference_fid": 174,
+        "best_is_own": true
+      },
+      "176": {
+        "reference_fid": 175,
+        "date_used": "2013-03-30",
+        "n_pixels": 288,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "174": 0.0,
+          "176": 0.0
+        },
+        "best_reference_fid": 175,
+        "best_is_own": true
+      },
+      "177": {
+        "reference_fid": 176,
+        "date_used": "2013-03-30",
+        "n_pixels": 284,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "175": 0.0,
+          "177": 0.0
+        },
+        "best_reference_fid": 176,
+        "best_is_own": true
+      },
+      "178": {
+        "reference_fid": 177,
+        "date_used": "2013-03-30",
+        "n_pixels": 281,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "176": 0.0,
+          "178": 0.0
+        },
+        "best_reference_fid": 177,
+        "best_is_own": true
+      },
+      "179": {
+        "reference_fid": 178,
+        "date_used": "2013-03-30",
+        "n_pixels": 287,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "177": 0.0,
+          "179": 0.0
+        },
+        "best_reference_fid": 178,
+        "best_is_own": true
+      },
+      "180": {
+        "reference_fid": 179,
+        "date_used": "2013-03-30",
+        "n_pixels": 284,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "178": 0.0,
+          "180": 0.0
+        },
+        "best_reference_fid": 179,
+        "best_is_own": true
+      },
+      "181": {
+        "reference_fid": 180,
+        "date_used": "2013-03-30",
+        "n_pixels": 284,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "179": 0.0,
+          "181": 0.0
+        },
+        "best_reference_fid": 180,
+        "best_is_own": true
+      },
+      "182": {
+        "reference_fid": 181,
+        "date_used": "2013-03-30",
+        "n_pixels": 285,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "180": 0.0,
+          "182": 0.0
+        },
+        "best_reference_fid": 181,
+        "best_is_own": true
+      },
+      "183": {
+        "reference_fid": 182,
+        "date_used": "2013-03-30",
+        "n_pixels": 285,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "181": 0.0,
+          "183": 0.0
+        },
+        "best_reference_fid": 182,
+        "best_is_own": true
+      },
+      "184": {
+        "reference_fid": 183,
+        "date_used": "2013-03-30",
+        "n_pixels": 297,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "182": 0.0,
+          "184": 0.0
+        },
+        "best_reference_fid": 183,
+        "best_is_own": true
+      },
+      "185": {
+        "reference_fid": 184,
+        "date_used": "2013-03-30",
+        "n_pixels": 281,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "183": 0.0,
+          "185": 0.0
+        },
+        "best_reference_fid": 184,
+        "best_is_own": true
+      },
+      "186": {
+        "reference_fid": 185,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "184": 0.0,
+          "186": 0.0
+        },
+        "best_reference_fid": 185,
+        "best_is_own": true
+      },
+      "187": {
+        "reference_fid": 186,
+        "date_used": "2013-03-30",
+        "n_pixels": 279,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "185": 0.0,
+          "187": 0.0
+        },
+        "best_reference_fid": 186,
+        "best_is_own": true
+      },
+      "188": {
+        "reference_fid": 187,
+        "date_used": "2013-03-30",
+        "n_pixels": 290,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "186": 0.0,
+          "188": 0.0
+        },
+        "best_reference_fid": 187,
+        "best_is_own": true
+      },
+      "189": {
+        "reference_fid": 188,
+        "date_used": "2013-03-30",
+        "n_pixels": 287,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "187": 0.0,
+          "189": 0.0
+        },
+        "best_reference_fid": 188,
+        "best_is_own": true
+      },
+      "190": {
+        "reference_fid": 189,
+        "date_used": "2013-03-30",
+        "n_pixels": 288,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "188": 0.0,
+          "190": 0.0
+        },
+        "best_reference_fid": 189,
+        "best_is_own": true
+      },
+      "191": {
+        "reference_fid": 190,
+        "date_used": "2013-03-30",
+        "n_pixels": 290,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "189": 0.0,
+          "191": 0.0
+        },
+        "best_reference_fid": 190,
+        "best_is_own": true
+      },
+      "192": {
+        "reference_fid": 191,
+        "date_used": "2013-03-30",
+        "n_pixels": 295,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "190": 0.0,
+          "192": 0.0
+        },
+        "best_reference_fid": 191,
+        "best_is_own": true
+      },
+      "193": {
+        "reference_fid": 192,
+        "date_used": "2013-03-30",
+        "n_pixels": 290,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "191": 0.0,
+          "193": 0.0
+        },
+        "best_reference_fid": 192,
+        "best_is_own": true
+      },
+      "194": {
+        "reference_fid": 193,
+        "date_used": "2013-03-30",
+        "n_pixels": 292,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "192": 0.0,
+          "194": 0.0
+        },
+        "best_reference_fid": 193,
+        "best_is_own": true
+      },
+      "195": {
+        "reference_fid": 194,
+        "date_used": "2013-03-30",
+        "n_pixels": 297,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "193": 0.0,
+          "195": 0.0
+        },
+        "best_reference_fid": 194,
+        "best_is_own": true
+      },
+      "196": {
+        "reference_fid": 195,
+        "date_used": "2013-03-30",
+        "n_pixels": 292,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "194": 0.0,
+          "196": 0.0
+        },
+        "best_reference_fid": 195,
+        "best_is_own": true
+      },
+      "197": {
+        "reference_fid": 196,
+        "date_used": "2013-03-30",
+        "n_pixels": 286,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "195": 0.0,
+          "197": 0.0
+        },
+        "best_reference_fid": 196,
+        "best_is_own": true
+      },
+      "198": {
+        "reference_fid": 197,
+        "date_used": "2013-03-30",
+        "n_pixels": 294,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "196": 0.0,
+          "198": 0.0
+        },
+        "best_reference_fid": 197,
+        "best_is_own": true
+      },
+      "199": {
+        "reference_fid": 198,
+        "date_used": "2013-03-30",
+        "n_pixels": 288,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "197": 0.0,
+          "199": 0.0
+        },
+        "best_reference_fid": 198,
+        "best_is_own": true
+      },
+      "200": {
+        "reference_fid": 199,
+        "date_used": "2013-03-30",
+        "n_pixels": 257,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "198": 0.0,
+          "200": 0.0
+        },
+        "best_reference_fid": 199,
+        "best_is_own": true
+      },
+      "201": {
+        "reference_fid": 200,
+        "date_used": "2013-03-30",
+        "n_pixels": 286,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "199": 0.0,
+          "201": 0.0
+        },
+        "best_reference_fid": 200,
+        "best_is_own": true
+      },
+      "202": {
+        "reference_fid": 201,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "200": 0.0,
+          "202": 0.0
+        },
+        "best_reference_fid": 201,
+        "best_is_own": true
+      },
+      "203": {
+        "reference_fid": 202,
+        "date_used": "2013-03-30",
+        "n_pixels": 285,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "201": 0.0,
+          "203": 0.0
+        },
+        "best_reference_fid": 202,
+        "best_is_own": true
+      },
+      "204": {
+        "reference_fid": 203,
+        "date_used": "2013-03-30",
+        "n_pixels": 286,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "202": 0.0,
+          "204": 0.0
+        },
+        "best_reference_fid": 203,
+        "best_is_own": true
+      },
+      "205": {
+        "reference_fid": 204,
+        "date_used": "2013-03-30",
+        "n_pixels": 287,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "203": 0.0,
+          "205": 0.0
+        },
+        "best_reference_fid": 204,
+        "best_is_own": true
+      },
+      "206": {
+        "reference_fid": 205,
+        "date_used": "2013-03-30",
+        "n_pixels": 287,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "204": 0.0,
+          "206": 0.0
+        },
+        "best_reference_fid": 205,
+        "best_is_own": true
+      },
+      "207": {
+        "reference_fid": 206,
+        "date_used": "2013-03-30",
+        "n_pixels": 286,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "205": 0.0,
+          "207": 0.0
+        },
+        "best_reference_fid": 206,
+        "best_is_own": true
+      },
+      "208": {
+        "reference_fid": 207,
+        "date_used": "2013-03-30",
+        "n_pixels": 294,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "206": 0.0,
+          "208": 0.0
+        },
+        "best_reference_fid": 207,
+        "best_is_own": true
+      },
+      "209": {
+        "reference_fid": 208,
+        "date_used": "2013-03-30",
+        "n_pixels": 299,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "207": 0.0,
+          "209": 0.0
+        },
+        "best_reference_fid": 208,
+        "best_is_own": true
+      },
+      "210": {
+        "reference_fid": 209,
+        "date_used": "2013-03-30",
+        "n_pixels": 292,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "208": 0.0,
+          "210": 0.0
+        },
+        "best_reference_fid": 209,
+        "best_is_own": true
+      },
+      "211": {
+        "reference_fid": 210,
+        "date_used": "2013-03-30",
+        "n_pixels": 292,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "209": 0.0,
+          "211": 0.0
+        },
+        "best_reference_fid": 210,
+        "best_is_own": true
+      },
+      "212": {
+        "reference_fid": 211,
+        "date_used": "2013-03-30",
+        "n_pixels": 297,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "210": 0.0,
+          "212": 0.0
+        },
+        "best_reference_fid": 211,
+        "best_is_own": true
+      },
+      "213": {
+        "reference_fid": 212,
+        "date_used": "2013-03-30",
+        "n_pixels": 291,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "211": 0.0,
+          "213": 0.0
+        },
+        "best_reference_fid": 212,
+        "best_is_own": true
+      },
+      "214": {
+        "reference_fid": 213,
+        "date_used": "2013-03-30",
+        "n_pixels": 299,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "212": 0.0,
+          "214": 0.0
+        },
+        "best_reference_fid": 213,
+        "best_is_own": true
+      },
+      "215": {
+        "reference_fid": 214,
+        "date_used": "2013-03-30",
+        "n_pixels": 289,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "213": 0.0,
+          "215": 0.0
+        },
+        "best_reference_fid": 214,
+        "best_is_own": true
+      },
+      "216": {
+        "reference_fid": 215,
+        "date_used": "2013-03-30",
+        "n_pixels": 280,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "214": 0.0,
+          "216": 0.0
+        },
+        "best_reference_fid": 215,
+        "best_is_own": true
+      },
+      "217": {
+        "reference_fid": 216,
+        "date_used": "2013-03-30",
+        "n_pixels": 284,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "215": 0.0,
+          "217": 0.0
+        },
+        "best_reference_fid": 216,
+        "best_is_own": true
+      },
+      "218": {
+        "reference_fid": 217,
+        "date_used": "2013-03-30",
+        "n_pixels": 279,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "216": 0.0,
+          "218": 0.0
+        },
+        "best_reference_fid": 217,
+        "best_is_own": true
+      },
+      "219": {
+        "reference_fid": 218,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "217": 0.0,
+          "219": 0.0
+        },
+        "best_reference_fid": 218,
+        "best_is_own": true
+      },
+      "220": {
+        "reference_fid": 219,
+        "date_used": "2013-03-30",
+        "n_pixels": 281,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "218": 0.0,
+          "220": 0.0
+        },
+        "best_reference_fid": 219,
+        "best_is_own": true
+      },
+      "221": {
+        "reference_fid": 220,
+        "date_used": "2013-03-30",
+        "n_pixels": 286,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "219": 0.0,
+          "221": 0.0
+        },
+        "best_reference_fid": 220,
+        "best_is_own": true
+      },
+      "222": {
+        "reference_fid": 221,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "220": 0.0,
+          "222": 0.0
+        },
+        "best_reference_fid": 221,
+        "best_is_own": true
+      },
+      "223": {
+        "reference_fid": 222,
+        "date_used": "2013-03-30",
+        "n_pixels": 286,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "221": 0.0,
+          "223": 0.0
+        },
+        "best_reference_fid": 222,
+        "best_is_own": true
+      },
+      "224": {
+        "reference_fid": 223,
+        "date_used": "2013-03-30",
+        "n_pixels": 280,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "222": 0.0,
+          "224": 0.0
+        },
+        "best_reference_fid": 223,
+        "best_is_own": true
+      },
+      "225": {
+        "reference_fid": 224,
+        "date_used": "2013-03-30",
+        "n_pixels": 280,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "223": 0.0,
+          "225": 0.0
+        },
+        "best_reference_fid": 224,
+        "best_is_own": true
+      },
+      "226": {
+        "reference_fid": 225,
+        "date_used": "2013-03-30",
+        "n_pixels": 280,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "224": 0.0,
+          "226": 0.0
+        },
+        "best_reference_fid": 225,
+        "best_is_own": true
+      },
+      "227": {
+        "reference_fid": 226,
+        "date_used": "2013-03-30",
+        "n_pixels": 293,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "225": 0.0,
+          "227": 0.0
+        },
+        "best_reference_fid": 226,
+        "best_is_own": true
+      },
+      "228": {
+        "reference_fid": 227,
+        "date_used": "2013-03-30",
+        "n_pixels": 278,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "226": 0.0,
+          "228": 0.0
+        },
+        "best_reference_fid": 227,
+        "best_is_own": true
+      },
+      "229": {
+        "reference_fid": 228,
+        "date_used": "2013-03-30",
+        "n_pixels": 273,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "227": 0.0,
+          "229": 0.0
+        },
+        "best_reference_fid": 228,
+        "best_is_own": true
+      },
+      "230": {
+        "reference_fid": 229,
+        "date_used": "2013-03-30",
+        "n_pixels": 269,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "228": 0.0,
+          "230": 0.0
+        },
+        "best_reference_fid": 229,
+        "best_is_own": true
+      },
+      "231": {
+        "reference_fid": 230,
+        "date_used": "2013-03-30",
+        "n_pixels": 281,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "229": 0.0,
+          "231": 0.0
+        },
+        "best_reference_fid": 230,
+        "best_is_own": true
+      },
+      "232": {
+        "reference_fid": 231,
+        "date_used": "2013-03-30",
+        "n_pixels": 278,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "230": 0.0,
+          "232": 0.0
+        },
+        "best_reference_fid": 231,
+        "best_is_own": true
+      },
+      "233": {
+        "reference_fid": 232,
+        "date_used": "2013-03-30",
+        "n_pixels": 281,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "231": 0.0,
+          "233": 0.0
+        },
+        "best_reference_fid": 232,
+        "best_is_own": true
+      },
+      "234": {
+        "reference_fid": 233,
+        "date_used": "2013-03-30",
+        "n_pixels": 280,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "232": 0.0,
+          "234": 0.0
+        },
+        "best_reference_fid": 233,
+        "best_is_own": true
+      },
+      "235": {
+        "reference_fid": 234,
+        "date_used": "2013-03-30",
+        "n_pixels": 285,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "233": 0.0,
+          "235": 0.0
+        },
+        "best_reference_fid": 234,
+        "best_is_own": true
+      },
+      "236": {
+        "reference_fid": 235,
+        "date_used": "2013-03-30",
+        "n_pixels": 281,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "234": 0.0,
+          "236": 0.0
+        },
+        "best_reference_fid": 235,
+        "best_is_own": true
+      },
+      "237": {
+        "reference_fid": 236,
+        "date_used": "2013-03-30",
+        "n_pixels": 286,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "235": 0.0,
+          "237": 0.0
+        },
+        "best_reference_fid": 236,
+        "best_is_own": true
+      },
+      "238": {
+        "reference_fid": 237,
+        "date_used": "2013-03-30",
+        "n_pixels": 286,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "236": 0.0,
+          "238": 0.0
+        },
+        "best_reference_fid": 237,
+        "best_is_own": true
+      },
+      "239": {
+        "reference_fid": 238,
+        "date_used": "2013-03-30",
+        "n_pixels": 281,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "237": 0.0,
+          "239": 0.0
+        },
+        "best_reference_fid": 238,
+        "best_is_own": true
+      },
+      "240": {
+        "reference_fid": 239,
+        "date_used": "2013-03-30",
+        "n_pixels": 274,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "238": 0.0,
+          "240": 0.0
+        },
+        "best_reference_fid": 239,
+        "best_is_own": true
+      },
+      "241": {
+        "reference_fid": 240,
+        "date_used": "2013-03-30",
+        "n_pixels": 278,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "239": 0.0,
+          "241": 0.0
+        },
+        "best_reference_fid": 240,
+        "best_is_own": true
+      },
+      "242": {
+        "reference_fid": 241,
+        "date_used": "2013-03-30",
+        "n_pixels": 285,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "240": 0.0,
+          "242": 0.0
+        },
+        "best_reference_fid": 241,
+        "best_is_own": true
+      },
+      "243": {
+        "reference_fid": 242,
+        "date_used": "2013-03-30",
+        "n_pixels": 261,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "241": 0.0,
+          "243": 0.0
+        },
+        "best_reference_fid": 242,
+        "best_is_own": true
+      },
+      "244": {
+        "reference_fid": 243,
+        "date_used": "2013-03-30",
+        "n_pixels": 288,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "242": 0.0,
+          "244": 0.0
+        },
+        "best_reference_fid": 243,
+        "best_is_own": true
+      },
+      "245": {
+        "reference_fid": 244,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "243": 0.0,
+          "245": 0.0
+        },
+        "best_reference_fid": 244,
+        "best_is_own": true
+      },
+      "246": {
+        "reference_fid": 245,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "244": 0.0,
+          "246": 0.0
+        },
+        "best_reference_fid": 245,
+        "best_is_own": true
+      },
+      "247": {
+        "reference_fid": 246,
+        "date_used": "2013-03-30",
+        "n_pixels": 287,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "245": 0.0,
+          "247": 0.0
+        },
+        "best_reference_fid": 246,
+        "best_is_own": true
+      },
+      "248": {
+        "reference_fid": 247,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "246": 0.0,
+          "248": 0.0
+        },
+        "best_reference_fid": 247,
+        "best_is_own": true
+      },
+      "249": {
+        "reference_fid": 248,
+        "date_used": "2013-03-30",
+        "n_pixels": 279,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "247": 0.0,
+          "249": 0.0
+        },
+        "best_reference_fid": 248,
+        "best_is_own": true
+      },
+      "250": {
+        "reference_fid": 249,
+        "date_used": "2013-03-30",
+        "n_pixels": 289,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "248": 0.0,
+          "250": 0.0
+        },
+        "best_reference_fid": 249,
+        "best_is_own": true
+      },
+      "251": {
+        "reference_fid": 250,
+        "date_used": "2013-03-30",
+        "n_pixels": 123,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "249": 0.0,
+          "251": 0.0
+        },
+        "best_reference_fid": 250,
+        "best_is_own": true
+      },
+      "252": {
+        "reference_fid": 251,
+        "date_used": "2013-03-30",
+        "n_pixels": 292,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "250": 0.0,
+          "252": 0.0
+        },
+        "best_reference_fid": 251,
+        "best_is_own": true
+      },
+      "253": {
+        "reference_fid": 252,
+        "date_used": "2013-03-30",
+        "n_pixels": 285,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "251": 0.0,
+          "253": 0.0
+        },
+        "best_reference_fid": 252,
+        "best_is_own": true
+      },
+      "254": {
+        "reference_fid": 253,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "252": 0.0,
+          "254": 0.0
+        },
+        "best_reference_fid": 253,
+        "best_is_own": true
+      },
+      "255": {
+        "reference_fid": 254,
+        "date_used": "2013-03-30",
+        "n_pixels": 290,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "253": 0.0,
+          "255": 0.0
+        },
+        "best_reference_fid": 254,
+        "best_is_own": true
+      },
+      "256": {
+        "reference_fid": 255,
+        "date_used": "2013-03-30",
+        "n_pixels": 290,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "254": 0.0,
+          "256": 0.0
+        },
+        "best_reference_fid": 255,
+        "best_is_own": true
+      },
+      "257": {
+        "reference_fid": 256,
+        "date_used": "2013-03-30",
+        "n_pixels": 283,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "255": 0.0,
+          "257": 0.0
+        },
+        "best_reference_fid": 256,
+        "best_is_own": true
+      },
+      "258": {
+        "reference_fid": 257,
+        "date_used": "2013-03-30",
+        "n_pixels": 283,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "256": 0.0,
+          "258": 0.0
+        },
+        "best_reference_fid": 257,
+        "best_is_own": true
+      },
+      "259": {
+        "reference_fid": 258,
+        "date_used": "2013-03-30",
+        "n_pixels": 285,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "257": 0.0,
+          "259": 0.0
+        },
+        "best_reference_fid": 258,
+        "best_is_own": true
+      },
+      "260": {
+        "reference_fid": 259,
+        "date_used": "2013-03-30",
+        "n_pixels": 285,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "258": 0.0,
+          "260": 0.0
+        },
+        "best_reference_fid": 259,
+        "best_is_own": true
+      },
+      "261": {
+        "reference_fid": 260,
+        "date_used": "2013-03-30",
+        "n_pixels": 189,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "259": 0.0,
+          "261": 0.0
+        },
+        "best_reference_fid": 260,
+        "best_is_own": true
+      },
+      "262": {
+        "reference_fid": 261,
+        "date_used": "2013-03-30",
+        "n_pixels": 284,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "260": 0.0,
+          "262": 0.0
+        },
+        "best_reference_fid": 261,
+        "best_is_own": true
+      },
+      "263": {
+        "reference_fid": 262,
+        "date_used": "2013-03-30",
+        "n_pixels": 287,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "261": 0.0,
+          "263": 0.0
+        },
+        "best_reference_fid": 262,
+        "best_is_own": true
+      },
+      "264": {
+        "reference_fid": 263,
+        "date_used": "2013-03-30",
+        "n_pixels": 288,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "262": 0.0,
+          "264": 0.0
+        },
+        "best_reference_fid": 263,
+        "best_is_own": true
+      },
+      "265": {
+        "reference_fid": 264,
+        "date_used": "2013-03-30",
+        "n_pixels": 291,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "263": 0.0,
+          "265": 0.0
+        },
+        "best_reference_fid": 264,
+        "best_is_own": true
+      },
+      "266": {
+        "reference_fid": 265,
+        "date_used": "2013-03-30",
+        "n_pixels": 287,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "264": 0.0,
+          "266": 0.0
+        },
+        "best_reference_fid": 265,
+        "best_is_own": true
+      },
+      "267": {
+        "reference_fid": 266,
+        "date_used": "2013-03-30",
+        "n_pixels": 291,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "265": 0.0,
+          "267": 0.0
+        },
+        "best_reference_fid": 266,
+        "best_is_own": true
+      },
+      "268": {
+        "reference_fid": 267,
+        "date_used": "2013-03-30",
+        "n_pixels": 283,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "266": 0.0,
+          "268": 0.0
+        },
+        "best_reference_fid": 267,
+        "best_is_own": true
+      },
+      "269": {
+        "reference_fid": 268,
+        "date_used": "2013-03-30",
+        "n_pixels": 251,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "267": 0.0,
+          "269": 0.0
+        },
+        "best_reference_fid": 268,
+        "best_is_own": true
+      },
+      "270": {
+        "reference_fid": 269,
+        "date_used": "2013-03-30",
+        "n_pixels": 286,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "268": 0.0,
+          "270": 0.0
+        },
+        "best_reference_fid": 269,
+        "best_is_own": true
+      },
+      "271": {
+        "reference_fid": 270,
+        "date_used": "2013-03-30",
+        "n_pixels": 297,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "269": 0.0,
+          "271": 0.0
+        },
+        "best_reference_fid": 270,
+        "best_is_own": true
+      },
+      "272": {
+        "reference_fid": 271,
+        "date_used": "2013-03-30",
+        "n_pixels": 280,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "270": 0.0,
+          "272": 0.0
+        },
+        "best_reference_fid": 271,
+        "best_is_own": true
+      },
+      "273": {
+        "reference_fid": 272,
+        "date_used": "2013-03-30",
+        "n_pixels": 291,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "271": 0.0,
+          "273": 0.0
+        },
+        "best_reference_fid": 272,
+        "best_is_own": true
+      },
+      "274": {
+        "reference_fid": 273,
+        "date_used": "2013-03-30",
+        "n_pixels": 276,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "272": 0.0,
+          "274": 0.0
+        },
+        "best_reference_fid": 273,
+        "best_is_own": true
+      },
+      "275": {
+        "reference_fid": 274,
+        "date_used": "2013-03-30",
+        "n_pixels": 286,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "273": 0.0,
+          "275": 0.0
+        },
+        "best_reference_fid": 274,
+        "best_is_own": true
+      },
+      "276": {
+        "reference_fid": 275,
+        "date_used": "2013-03-30",
+        "n_pixels": 79,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "274": 0.0,
+          "276": 0.0
+        },
+        "best_reference_fid": 275,
+        "best_is_own": true
+      },
+      "277": {
+        "reference_fid": 276,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "275": 0.0,
+          "277": 0.0
+        },
+        "best_reference_fid": 276,
+        "best_is_own": true
+      },
+      "278": {
+        "reference_fid": 277,
+        "date_used": "2013-03-30",
+        "n_pixels": 289,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "276": 0.0,
+          "278": 0.0
+        },
+        "best_reference_fid": 277,
+        "best_is_own": true
+      },
+      "279": {
+        "reference_fid": 278,
+        "date_used": "2013-03-30",
+        "n_pixels": 278,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "277": 0.0,
+          "279": 0.0
+        },
+        "best_reference_fid": 278,
+        "best_is_own": true
+      },
+      "280": {
+        "reference_fid": 279,
+        "date_used": "2013-03-30",
+        "n_pixels": 288,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "278": 0.0,
+          "280": 0.0
+        },
+        "best_reference_fid": 279,
+        "best_is_own": true
+      },
+      "281": {
+        "reference_fid": 280,
+        "date_used": "2013-03-30",
+        "n_pixels": 287,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "279": 0.0,
+          "281": 0.0
+        },
+        "best_reference_fid": 280,
+        "best_is_own": true
+      },
+      "282": {
+        "reference_fid": 281,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "280": 0.0,
+          "282": 0.0
+        },
+        "best_reference_fid": 281,
+        "best_is_own": true
+      },
+      "283": {
+        "reference_fid": 282,
+        "date_used": "2013-03-30",
+        "n_pixels": 274,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "281": 0.0,
+          "283": 0.0
+        },
+        "best_reference_fid": 282,
+        "best_is_own": true
+      },
+      "284": {
+        "reference_fid": 283,
+        "date_used": "2013-03-30",
+        "n_pixels": 287,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "282": 0.0,
+          "284": 0.0
+        },
+        "best_reference_fid": 283,
+        "best_is_own": true
+      },
+      "285": {
+        "reference_fid": 284,
+        "date_used": "2013-03-30",
+        "n_pixels": 284,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "283": 0.0,
+          "285": 0.0
+        },
+        "best_reference_fid": 284,
+        "best_is_own": true
+      },
+      "286": {
+        "reference_fid": 285,
+        "date_used": "2013-03-30",
+        "n_pixels": 158,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "284": 0.0,
+          "286": 0.0
+        },
+        "best_reference_fid": 285,
+        "best_is_own": true
+      },
+      "287": {
+        "reference_fid": 286,
+        "date_used": "2013-03-30",
+        "n_pixels": 277,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "285": 0.0,
+          "287": 0.0
+        },
+        "best_reference_fid": 286,
+        "best_is_own": true
+      },
+      "288": {
+        "reference_fid": 287,
+        "date_used": "2013-03-30",
+        "n_pixels": 69,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "286": 0.0,
+          "288": 0.0
+        },
+        "best_reference_fid": 287,
+        "best_is_own": true
+      },
+      "289": {
+        "reference_fid": 288,
+        "date_used": "2013-03-30",
+        "n_pixels": 287,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "287": 0.0,
+          "289": 0.0
+        },
+        "best_reference_fid": 288,
+        "best_is_own": true
+      },
+      "290": {
+        "reference_fid": 289,
+        "date_used": "2013-03-30",
+        "n_pixels": 275,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "288": 0.0,
+          "290": 0.0
+        },
+        "best_reference_fid": 289,
+        "best_is_own": true
+      },
+      "291": {
+        "reference_fid": 290,
+        "date_used": "2013-03-30",
+        "n_pixels": 265,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "289": 0.0,
+          "291": 0.0
+        },
+        "best_reference_fid": 290,
+        "best_is_own": true
+      },
+      "292": {
+        "reference_fid": 291,
+        "date_used": "2013-03-30",
+        "n_pixels": 283,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "290": 0.0,
+          "292": 0.0
+        },
+        "best_reference_fid": 291,
+        "best_is_own": true
+      },
+      "293": {
+        "reference_fid": 292,
+        "date_used": "2013-03-30",
+        "n_pixels": 275,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "291": 0.0,
+          "293": 0.0
+        },
+        "best_reference_fid": 292,
+        "best_is_own": true
+      },
+      "294": {
+        "reference_fid": 293,
+        "date_used": "2013-03-30",
+        "n_pixels": 283,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "292": 0.0,
+          "294": 0.0
+        },
+        "best_reference_fid": 293,
+        "best_is_own": true
+      },
+      "295": {
+        "reference_fid": 294,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "293": 0.0,
+          "295": 0.0
+        },
+        "best_reference_fid": 294,
+        "best_is_own": true
+      },
+      "296": {
+        "reference_fid": 295,
+        "date_used": "2013-03-30",
+        "n_pixels": 275,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "294": 0.0,
+          "296": 0.0
+        },
+        "best_reference_fid": 295,
+        "best_is_own": true
+      },
+      "297": {
+        "reference_fid": 296,
+        "date_used": "2013-03-30",
+        "n_pixels": 281,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "295": 0.0,
+          "297": 0.0
+        },
+        "best_reference_fid": 296,
+        "best_is_own": true
+      },
+      "298": {
+        "reference_fid": 297,
+        "date_used": "2013-03-30",
+        "n_pixels": 222,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "296": 0.0,
+          "298": 0.0
+        },
+        "best_reference_fid": 297,
+        "best_is_own": true
+      },
+      "299": {
+        "reference_fid": 298,
+        "date_used": "2013-03-30",
+        "n_pixels": 284,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "297": 0.0,
+          "299": 0.0
+        },
+        "best_reference_fid": 298,
+        "best_is_own": true
+      },
+      "300": {
+        "reference_fid": 299,
+        "date_used": "2013-03-30",
+        "n_pixels": 235,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "298": 0.0,
+          "300": 0.0
+        },
+        "best_reference_fid": 299,
+        "best_is_own": true
+      },
+      "301": {
+        "reference_fid": 300,
+        "date_used": "2013-03-30",
+        "n_pixels": 278,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "299": 0.0,
+          "301": 0.0
+        },
+        "best_reference_fid": 300,
+        "best_is_own": true
+      },
+      "302": {
+        "reference_fid": 301,
+        "date_used": "2013-03-30",
+        "n_pixels": 275,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "300": 0.0,
+          "302": 0.0
+        },
+        "best_reference_fid": 301,
+        "best_is_own": true
+      },
+      "303": {
+        "reference_fid": 302,
+        "date_used": "2013-03-30",
+        "n_pixels": 280,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "301": 0.0,
+          "303": 0.0
+        },
+        "best_reference_fid": 302,
+        "best_is_own": true
+      },
+      "304": {
+        "reference_fid": 303,
+        "date_used": "2013-03-30",
+        "n_pixels": 264,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "302": 0.0,
+          "304": 0.0
+        },
+        "best_reference_fid": 303,
+        "best_is_own": true
+      },
+      "305": {
+        "reference_fid": 304,
+        "date_used": "2013-03-30",
+        "n_pixels": 268,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "303": 0.0,
+          "305": 0.0
+        },
+        "best_reference_fid": 304,
+        "best_is_own": true
+      },
+      "306": {
+        "reference_fid": 305,
+        "date_used": "2013-03-30",
+        "n_pixels": 149,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "304": 0.0,
+          "306": 0.0
+        },
+        "best_reference_fid": 305,
+        "best_is_own": true
+      },
+      "307": {
+        "reference_fid": 306,
+        "date_used": "2013-03-30",
+        "n_pixels": 277,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "305": 0.0,
+          "307": 0.0
+        },
+        "best_reference_fid": 306,
+        "best_is_own": true
+      },
+      "308": {
+        "reference_fid": 307,
+        "date_used": "2013-03-30",
+        "n_pixels": 276,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "306": 0.0,
+          "308": 0.0
+        },
+        "best_reference_fid": 307,
+        "best_is_own": true
+      },
+      "309": {
+        "reference_fid": 308,
+        "date_used": "2013-03-30",
+        "n_pixels": 275,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "307": 0.0,
+          "309": 0.0
+        },
+        "best_reference_fid": 308,
+        "best_is_own": true
+      },
+      "310": {
+        "reference_fid": 309,
+        "date_used": "2013-03-30",
+        "n_pixels": 281,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "308": 0.0,
+          "310": 0.0
+        },
+        "best_reference_fid": 309,
+        "best_is_own": true
+      },
+      "311": {
+        "reference_fid": 310,
+        "date_used": "2013-03-30",
+        "n_pixels": 186,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "309": 0.0,
+          "311": 0.0
+        },
+        "best_reference_fid": 310,
+        "best_is_own": true
+      },
+      "312": {
+        "reference_fid": 311,
+        "date_used": "2013-03-30",
+        "n_pixels": 241,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "310": 0.0,
+          "312": 0.0
+        },
+        "best_reference_fid": 311,
+        "best_is_own": true
+      },
+      "313": {
+        "reference_fid": 312,
+        "date_used": "2013-03-30",
+        "n_pixels": 168,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "311": 0.0,
+          "313": 0.0
+        },
+        "best_reference_fid": 312,
+        "best_is_own": true
+      },
+      "314": {
+        "reference_fid": 313,
+        "date_used": "2013-03-30",
+        "n_pixels": 260,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "312": 0.0,
+          "314": 0.0
+        },
+        "best_reference_fid": 313,
+        "best_is_own": true
+      },
+      "315": {
+        "reference_fid": 314,
+        "date_used": "2013-03-30",
+        "n_pixels": 277,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "313": 0.0,
+          "315": 0.0
+        },
+        "best_reference_fid": 314,
+        "best_is_own": true
+      },
+      "316": {
+        "reference_fid": 315,
+        "date_used": "2013-03-30",
+        "n_pixels": 257,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "314": 0.0,
+          "316": 0.0
+        },
+        "best_reference_fid": 315,
+        "best_is_own": true
+      },
+      "317": {
+        "reference_fid": 316,
+        "date_used": "2013-03-30",
+        "n_pixels": 91,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "315": 0.0,
+          "317": 0.0
+        },
+        "best_reference_fid": 316,
+        "best_is_own": true
+      },
+      "318": {
+        "reference_fid": 317,
+        "date_used": "2013-03-30",
+        "n_pixels": 274,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "316": 0.0,
+          "318": 0.0
+        },
+        "best_reference_fid": 317,
+        "best_is_own": true
+      },
+      "319": {
+        "reference_fid": 318,
+        "date_used": "2013-03-30",
+        "n_pixels": 258,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "317": 0.0,
+          "319": 0.0
+        },
+        "best_reference_fid": 318,
+        "best_is_own": true
+      },
+      "320": {
+        "reference_fid": 319,
+        "date_used": "2013-03-30",
+        "n_pixels": 276,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "318": 0.0,
+          "320": 0.0
+        },
+        "best_reference_fid": 319,
+        "best_is_own": true
+      },
+      "321": {
+        "reference_fid": 320,
+        "date_used": "2013-03-30",
+        "n_pixels": 272,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "319": 0.0,
+          "321": 0.0
+        },
+        "best_reference_fid": 320,
+        "best_is_own": true
+      },
+      "322": {
+        "reference_fid": 321,
+        "date_used": "2013-03-30",
+        "n_pixels": 281,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "320": 0.0,
+          "322": 0.0
+        },
+        "best_reference_fid": 321,
+        "best_is_own": true
+      },
+      "323": {
+        "reference_fid": 322,
+        "date_used": "2013-03-30",
+        "n_pixels": 263,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "321": 0.0,
+          "323": 0.0
+        },
+        "best_reference_fid": 322,
+        "best_is_own": true
+      },
+      "324": {
+        "reference_fid": 323,
+        "date_used": "2013-03-30",
+        "n_pixels": 268,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "322": 0.0,
+          "324": 0.0
+        },
+        "best_reference_fid": 323,
+        "best_is_own": true
+      },
+      "325": {
+        "reference_fid": 324,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "323": 0.0,
+          "325": 0.0
+        },
+        "best_reference_fid": 324,
+        "best_is_own": true
+      },
+      "326": {
+        "reference_fid": 325,
+        "date_used": "2013-03-30",
+        "n_pixels": 280,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "324": 0.0,
+          "326": 0.0
+        },
+        "best_reference_fid": 325,
+        "best_is_own": true
+      },
+      "327": {
+        "reference_fid": 326,
+        "date_used": "2013-03-30",
+        "n_pixels": 279,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "325": 0.0,
+          "327": 0.0
+        },
+        "best_reference_fid": 326,
+        "best_is_own": true
+      },
+      "328": {
+        "reference_fid": 327,
+        "date_used": "2013-03-30",
+        "n_pixels": 274,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "326": 0.0,
+          "328": 0.0
+        },
+        "best_reference_fid": 327,
+        "best_is_own": true
+      },
+      "329": {
+        "reference_fid": 328,
+        "date_used": "2013-03-30",
+        "n_pixels": 272,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "327": 0.0,
+          "329": 0.0
+        },
+        "best_reference_fid": 328,
+        "best_is_own": true
+      },
+      "330": {
+        "reference_fid": 329,
+        "date_used": "2013-03-30",
+        "n_pixels": 278,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "328": 0.0,
+          "330": 0.0
+        },
+        "best_reference_fid": 329,
+        "best_is_own": true
+      },
+      "331": {
+        "reference_fid": 330,
+        "date_used": "2013-03-30",
+        "n_pixels": 273,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "329": 0.0,
+          "331": 0.0
+        },
+        "best_reference_fid": 330,
+        "best_is_own": true
+      },
+      "332": {
+        "reference_fid": 331,
+        "date_used": "2013-03-30",
+        "n_pixels": 284,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "330": 0.0,
+          "332": 0.0
+        },
+        "best_reference_fid": 331,
+        "best_is_own": true
+      },
+      "333": {
+        "reference_fid": 332,
+        "date_used": "2013-03-30",
+        "n_pixels": 267,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "331": 0.0,
+          "333": 0.0
+        },
+        "best_reference_fid": 332,
+        "best_is_own": true
+      },
+      "334": {
+        "reference_fid": 333,
+        "date_used": "2013-03-30",
+        "n_pixels": 277,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "332": 0.0,
+          "334": 0.0
+        },
+        "best_reference_fid": 333,
+        "best_is_own": true
+      },
+      "335": {
+        "reference_fid": 334,
+        "date_used": "2013-03-30",
+        "n_pixels": 276,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "333": 0.0,
+          "335": 0.0
+        },
+        "best_reference_fid": 334,
+        "best_is_own": true
+      },
+      "336": {
+        "reference_fid": 335,
+        "date_used": "2013-03-30",
+        "n_pixels": 274,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "334": 0.0,
+          "336": 0.0
+        },
+        "best_reference_fid": 335,
+        "best_is_own": true
+      },
+      "337": {
+        "reference_fid": 336,
+        "date_used": "2013-03-30",
+        "n_pixels": 281,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "335": 0.0,
+          "337": 0.0
+        },
+        "best_reference_fid": 336,
+        "best_is_own": true
+      },
+      "338": {
+        "reference_fid": 337,
+        "date_used": "2013-03-30",
+        "n_pixels": 191,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "336": 0.0,
+          "338": 0.0
+        },
+        "best_reference_fid": 337,
+        "best_is_own": true
+      },
+      "339": {
+        "reference_fid": 338,
+        "date_used": "2013-03-30",
+        "n_pixels": 272,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "337": 0.0,
+          "339": 0.0
+        },
+        "best_reference_fid": 338,
+        "best_is_own": true
+      },
+      "340": {
+        "reference_fid": 339,
+        "date_used": "2013-03-30",
+        "n_pixels": 273,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "338": 0.0,
+          "340": 0.0
+        },
+        "best_reference_fid": 339,
+        "best_is_own": true
+      },
+      "341": {
+        "reference_fid": 340,
+        "date_used": "2013-03-30",
+        "n_pixels": 266,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "339": 0.0,
+          "341": 0.0
+        },
+        "best_reference_fid": 340,
+        "best_is_own": true
+      },
+      "342": {
+        "reference_fid": 341,
+        "date_used": "2013-03-30",
+        "n_pixels": 278,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "340": 0.0,
+          "342": 0.0
+        },
+        "best_reference_fid": 341,
+        "best_is_own": true
+      },
+      "343": {
+        "reference_fid": 342,
+        "date_used": "2013-03-30",
+        "n_pixels": 251,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "341": 0.0,
+          "343": 0.0
+        },
+        "best_reference_fid": 342,
+        "best_is_own": true
+      },
+      "344": {
+        "reference_fid": 343,
+        "date_used": "2013-03-30",
+        "n_pixels": 209,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "342": 0.0,
+          "344": 0.0
+        },
+        "best_reference_fid": 343,
+        "best_is_own": true
+      },
+      "345": {
+        "reference_fid": 344,
+        "date_used": "2013-03-30",
+        "n_pixels": 270,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "343": 0.0,
+          "345": 0.0
+        },
+        "best_reference_fid": 344,
+        "best_is_own": true
+      },
+      "346": {
+        "reference_fid": 345,
+        "date_used": "2013-03-30",
+        "n_pixels": 277,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "344": 0.0,
+          "346": 0.0
+        },
+        "best_reference_fid": 345,
+        "best_is_own": true
+      },
+      "347": {
+        "reference_fid": 346,
+        "date_used": "2013-03-30",
+        "n_pixels": 275,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "345": 0.0,
+          "347": 0.0
+        },
+        "best_reference_fid": 346,
+        "best_is_own": true
+      },
+      "348": {
+        "reference_fid": 347,
+        "date_used": "2013-03-30",
+        "n_pixels": 274,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "346": 0.0,
+          "348": 0.0
+        },
+        "best_reference_fid": 347,
+        "best_is_own": true
+      },
+      "349": {
+        "reference_fid": 348,
+        "date_used": "2013-03-30",
+        "n_pixels": 275,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "347": 0.0,
+          "349": 0.0
+        },
+        "best_reference_fid": 348,
+        "best_is_own": true
+      },
+      "350": {
+        "reference_fid": 349,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "348": 0.0,
+          "350": 0.0
+        },
+        "best_reference_fid": 349,
+        "best_is_own": true
+      },
+      "351": {
+        "reference_fid": 350,
+        "date_used": "2013-03-30",
+        "n_pixels": 278,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "349": 0.0,
+          "351": 0.0
+        },
+        "best_reference_fid": 350,
+        "best_is_own": true
+      },
+      "352": {
+        "reference_fid": 351,
+        "date_used": "2013-03-30",
+        "n_pixels": 219,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "350": 0.0,
+          "352": 0.0
+        },
+        "best_reference_fid": 351,
+        "best_is_own": true
+      },
+      "353": {
+        "reference_fid": 352,
+        "date_used": "2013-03-30",
+        "n_pixels": 271,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "351": 0.0,
+          "353": 0.0
+        },
+        "best_reference_fid": 352,
+        "best_is_own": true
+      },
+      "354": {
+        "reference_fid": 353,
+        "date_used": "2013-03-30",
+        "n_pixels": 277,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "352": 0.0,
+          "354": 0.0
+        },
+        "best_reference_fid": 353,
+        "best_is_own": true
+      },
+      "355": {
+        "reference_fid": 354,
+        "date_used": "2013-03-30",
+        "n_pixels": 272,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "353": 0.0,
+          "355": 0.0
+        },
+        "best_reference_fid": 354,
+        "best_is_own": true
+      },
+      "356": {
+        "reference_fid": 355,
+        "date_used": "2013-03-30",
+        "n_pixels": 144,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "354": 0.0,
+          "356": 0.0
+        },
+        "best_reference_fid": 355,
+        "best_is_own": true
+      },
+      "357": {
+        "reference_fid": 356,
+        "date_used": "2013-03-30",
+        "n_pixels": 279,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "355": 0.0,
+          "357": 0.0
+        },
+        "best_reference_fid": 356,
+        "best_is_own": true
+      },
+      "358": {
+        "reference_fid": 357,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "356": 0.0,
+          "358": 0.0
+        },
+        "best_reference_fid": 357,
+        "best_is_own": true
+      },
+      "359": {
+        "reference_fid": 358,
+        "date_used": "2013-03-30",
+        "n_pixels": 240,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "357": 0.0,
+          "359": 0.0
+        },
+        "best_reference_fid": 358,
+        "best_is_own": true
+      },
+      "360": {
+        "reference_fid": 359,
+        "date_used": "2013-03-30",
+        "n_pixels": 266,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "358": 0.0,
+          "360": 0.0
+        },
+        "best_reference_fid": 359,
+        "best_is_own": true
+      },
+      "361": {
+        "reference_fid": 360,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "359": 0.0,
+          "361": 0.0
+        },
+        "best_reference_fid": 360,
+        "best_is_own": true
+      },
+      "362": {
+        "reference_fid": 361,
+        "date_used": "2013-03-30",
+        "n_pixels": 275,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "360": 0.0,
+          "362": 0.0
+        },
+        "best_reference_fid": 361,
+        "best_is_own": true
+      },
+      "363": {
+        "reference_fid": 362,
+        "date_used": "2013-03-30",
+        "n_pixels": 265,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "361": 0.0,
+          "363": 0.0
+        },
+        "best_reference_fid": 362,
+        "best_is_own": true
+      },
+      "364": {
+        "reference_fid": 363,
+        "date_used": "2013-03-30",
+        "n_pixels": 268,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "362": 0.0,
+          "364": 0.0
+        },
+        "best_reference_fid": 363,
+        "best_is_own": true
+      },
+      "365": {
+        "reference_fid": 364,
+        "date_used": "2013-03-30",
+        "n_pixels": 293,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "363": 0.0,
+          "365": 0.0
+        },
+        "best_reference_fid": 364,
+        "best_is_own": true
+      },
+      "366": {
+        "reference_fid": 365,
+        "date_used": "2013-03-30",
+        "n_pixels": 289,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "364": 0.0,
+          "366": 0.0
+        },
+        "best_reference_fid": 365,
+        "best_is_own": true
+      },
+      "367": {
+        "reference_fid": 366,
+        "date_used": "2013-03-30",
+        "n_pixels": 272,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "365": 0.0,
+          "367": 0.0
+        },
+        "best_reference_fid": 366,
+        "best_is_own": true
+      },
+      "368": {
+        "reference_fid": 367,
+        "date_used": "2013-03-30",
+        "n_pixels": 291,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "366": 0.0,
+          "368": 0.0
+        },
+        "best_reference_fid": 367,
+        "best_is_own": true
+      },
+      "369": {
+        "reference_fid": 368,
+        "date_used": "2013-03-30",
+        "n_pixels": 288,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "367": 0.0,
+          "369": 0.0
+        },
+        "best_reference_fid": 368,
+        "best_is_own": true
+      },
+      "370": {
+        "reference_fid": 369,
+        "date_used": "2013-03-30",
+        "n_pixels": 265,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "368": 0.0,
+          "370": 0.0
+        },
+        "best_reference_fid": 369,
+        "best_is_own": true
+      },
+      "371": {
+        "reference_fid": 370,
+        "date_used": "2013-03-30",
+        "n_pixels": 288,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "369": 0.0,
+          "371": 0.0
+        },
+        "best_reference_fid": 370,
+        "best_is_own": true
+      },
+      "372": {
+        "reference_fid": 371,
+        "date_used": "2013-03-30",
+        "n_pixels": 288,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "370": 0.0,
+          "372": 0.0
+        },
+        "best_reference_fid": 371,
+        "best_is_own": true
+      },
+      "373": {
+        "reference_fid": 372,
+        "date_used": "2013-03-30",
+        "n_pixels": 280,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "371": 0.0,
+          "373": 0.0
+        },
+        "best_reference_fid": 372,
+        "best_is_own": true
+      },
+      "374": {
+        "reference_fid": 373,
+        "date_used": "2013-03-30",
+        "n_pixels": 272,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "372": 0.0,
+          "374": 0.0
+        },
+        "best_reference_fid": 373,
+        "best_is_own": true
+      },
+      "375": {
+        "reference_fid": 374,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "373": 0.0,
+          "375": 0.0
+        },
+        "best_reference_fid": 374,
+        "best_is_own": true
+      },
+      "376": {
+        "reference_fid": 375,
+        "date_used": "2013-03-30",
+        "n_pixels": 290,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "374": 0.0,
+          "376": 0.0
+        },
+        "best_reference_fid": 375,
+        "best_is_own": true
+      },
+      "377": {
+        "reference_fid": 376,
+        "date_used": "2013-03-30",
+        "n_pixels": 221,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "375": 0.0,
+          "377": 0.0
+        },
+        "best_reference_fid": 376,
+        "best_is_own": true
+      },
+      "378": {
+        "reference_fid": 377,
+        "date_used": "2013-03-30",
+        "n_pixels": 281,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "376": 0.0,
+          "378": 0.0
+        },
+        "best_reference_fid": 377,
+        "best_is_own": true
+      },
+      "379": {
+        "reference_fid": 378,
+        "date_used": "2013-03-30",
+        "n_pixels": 288,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "377": 0.0,
+          "379": 0.0
+        },
+        "best_reference_fid": 378,
+        "best_is_own": true
+      },
+      "380": {
+        "reference_fid": 379,
+        "date_used": "2013-03-30",
+        "n_pixels": 277,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "378": 0.0,
+          "380": 0.0
+        },
+        "best_reference_fid": 379,
+        "best_is_own": true
+      },
+      "381": {
+        "reference_fid": 380,
+        "date_used": "2013-03-30",
+        "n_pixels": 277,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "379": 0.0,
+          "381": 0.0
+        },
+        "best_reference_fid": 380,
+        "best_is_own": true
+      },
+      "382": {
+        "reference_fid": 381,
+        "date_used": "2013-03-30",
+        "n_pixels": 290,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "380": 0.0,
+          "382": 0.0
+        },
+        "best_reference_fid": 381,
+        "best_is_own": true
+      },
+      "383": {
+        "reference_fid": 382,
+        "date_used": "2013-03-30",
+        "n_pixels": 288,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "381": 0.0,
+          "383": 0.0
+        },
+        "best_reference_fid": 382,
+        "best_is_own": true
+      },
+      "384": {
+        "reference_fid": 383,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "382": 0.0,
+          "384": 0.0
+        },
+        "best_reference_fid": 383,
+        "best_is_own": true
+      },
+      "385": {
+        "reference_fid": 384,
+        "date_used": "2013-03-30",
+        "n_pixels": 294,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "383": 0.0,
+          "385": 0.0
+        },
+        "best_reference_fid": 384,
+        "best_is_own": true
+      },
+      "386": {
+        "reference_fid": 385,
+        "date_used": "2013-03-30",
+        "n_pixels": 267,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "384": 0.0,
+          "386": 0.0
+        },
+        "best_reference_fid": 385,
+        "best_is_own": true
+      },
+      "387": {
+        "reference_fid": 386,
+        "date_used": "2013-03-30",
+        "n_pixels": 277,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "385": 0.0,
+          "387": 0.0
+        },
+        "best_reference_fid": 386,
+        "best_is_own": true
+      },
+      "388": {
+        "reference_fid": 387,
+        "date_used": "2013-03-30",
+        "n_pixels": 289,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "386": 0.0,
+          "388": 0.0
+        },
+        "best_reference_fid": 387,
+        "best_is_own": true
+      },
+      "389": {
+        "reference_fid": 388,
+        "date_used": "2013-03-30",
+        "n_pixels": 245,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "387": 0.0,
+          "389": 0.0
+        },
+        "best_reference_fid": 388,
+        "best_is_own": true
+      },
+      "390": {
+        "reference_fid": 389,
+        "date_used": "2013-03-30",
+        "n_pixels": 279,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "388": 0.0,
+          "390": 0.0
+        },
+        "best_reference_fid": 389,
+        "best_is_own": true
+      },
+      "391": {
+        "reference_fid": 390,
+        "date_used": "2013-03-30",
+        "n_pixels": 272,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "389": 0.0,
+          "391": 0.0
+        },
+        "best_reference_fid": 390,
+        "best_is_own": true
+      },
+      "392": {
+        "reference_fid": 391,
+        "date_used": "2013-03-30",
+        "n_pixels": 291,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "390": 0.0,
+          "392": 0.0
+        },
+        "best_reference_fid": 391,
+        "best_is_own": true
+      },
+      "393": {
+        "reference_fid": 392,
+        "date_used": "2013-03-30",
+        "n_pixels": 268,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "391": 0.0,
+          "393": 0.0
+        },
+        "best_reference_fid": 392,
+        "best_is_own": true
+      },
+      "394": {
+        "reference_fid": 393,
+        "date_used": "2013-03-30",
+        "n_pixels": 263,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "392": 0.0,
+          "394": 0.0
+        },
+        "best_reference_fid": 393,
+        "best_is_own": true
+      },
+      "395": {
+        "reference_fid": 394,
+        "date_used": "2013-03-30",
+        "n_pixels": 283,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "393": 0.0,
+          "395": 0.0
+        },
+        "best_reference_fid": 394,
+        "best_is_own": true
+      },
+      "396": {
+        "reference_fid": 395,
+        "date_used": "2013-03-30",
+        "n_pixels": 260,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "394": 0.0,
+          "396": 0.0
+        },
+        "best_reference_fid": 395,
+        "best_is_own": true
+      },
+      "397": {
+        "reference_fid": 396,
+        "date_used": "2013-03-30",
+        "n_pixels": 279,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "395": 0.0,
+          "397": 0.0
+        },
+        "best_reference_fid": 396,
+        "best_is_own": true
+      },
+      "398": {
+        "reference_fid": 397,
+        "date_used": "2013-03-30",
+        "n_pixels": 279,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "396": 0.0,
+          "398": 0.0
+        },
+        "best_reference_fid": 397,
+        "best_is_own": true
+      },
+      "399": {
+        "reference_fid": 398,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "397": 0.0,
+          "399": 0.0
+        },
+        "best_reference_fid": 398,
+        "best_is_own": true
+      },
+      "400": {
+        "reference_fid": 399,
+        "date_used": "2013-03-30",
+        "n_pixels": 283,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "398": 0.0,
+          "400": 0.0
+        },
+        "best_reference_fid": 399,
+        "best_is_own": true
+      },
+      "401": {
+        "reference_fid": 400,
+        "date_used": "2013-03-30",
+        "n_pixels": 127,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "399": 0.0,
+          "401": 0.0
+        },
+        "best_reference_fid": 400,
+        "best_is_own": true
+      },
+      "402": {
+        "reference_fid": 401,
+        "date_used": "2013-03-30",
+        "n_pixels": 228,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "400": 0.0,
+          "402": 0.0
+        },
+        "best_reference_fid": 401,
+        "best_is_own": true
+      },
+      "403": {
+        "reference_fid": 402,
+        "date_used": "2013-03-30",
+        "n_pixels": 275,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "401": 0.0,
+          "403": 0.0
+        },
+        "best_reference_fid": 402,
+        "best_is_own": true
+      },
+      "404": {
+        "reference_fid": 403,
+        "date_used": "2013-03-30",
+        "n_pixels": 281,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "402": 0.0,
+          "404": 0.0
+        },
+        "best_reference_fid": 403,
+        "best_is_own": true
+      },
+      "405": {
+        "reference_fid": 404,
+        "date_used": "2013-03-30",
+        "n_pixels": 270,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "403": 0.0,
+          "405": 0.0
+        },
+        "best_reference_fid": 404,
+        "best_is_own": true
+      },
+      "406": {
+        "reference_fid": 405,
+        "date_used": "2013-03-30",
+        "n_pixels": 283,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "404": 0.0,
+          "406": 0.0
+        },
+        "best_reference_fid": 405,
+        "best_is_own": true
+      },
+      "407": {
+        "reference_fid": 406,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "405": 0.0,
+          "407": 0.0
+        },
+        "best_reference_fid": 406,
+        "best_is_own": true
+      },
+      "408": {
+        "reference_fid": 407,
+        "date_used": "2013-03-30",
+        "n_pixels": 286,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "406": 0.0,
+          "408": 0.0
+        },
+        "best_reference_fid": 407,
+        "best_is_own": true
+      },
+      "409": {
+        "reference_fid": 408,
+        "date_used": "2013-03-30",
+        "n_pixels": 167,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "407": 0.0,
+          "409": 0.0
+        },
+        "best_reference_fid": 408,
+        "best_is_own": true
+      },
+      "410": {
+        "reference_fid": 409,
+        "date_used": "2013-03-30",
+        "n_pixels": 226,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "408": 0.0,
+          "410": 0.0
+        },
+        "best_reference_fid": 409,
+        "best_is_own": true
+      },
+      "411": {
+        "reference_fid": 410,
+        "date_used": "2013-03-30",
+        "n_pixels": 261,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "409": 0.0,
+          "411": 0.0
+        },
+        "best_reference_fid": 410,
+        "best_is_own": true
+      },
+      "412": {
+        "reference_fid": 411,
+        "date_used": "2013-03-30",
+        "n_pixels": 281,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "410": 0.0,
+          "412": 0.0
+        },
+        "best_reference_fid": 411,
+        "best_is_own": true
+      },
+      "413": {
+        "reference_fid": 412,
+        "date_used": "2013-03-30",
+        "n_pixels": 264,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "411": 0.0,
+          "413": 0.0
+        },
+        "best_reference_fid": 412,
+        "best_is_own": true
+      },
+      "414": {
+        "reference_fid": 413,
+        "date_used": "2013-03-30",
+        "n_pixels": 275,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "412": 0.0,
+          "414": 0.0
+        },
+        "best_reference_fid": 413,
+        "best_is_own": true
+      },
+      "415": {
+        "reference_fid": 414,
+        "date_used": "2013-03-30",
+        "n_pixels": 297,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "413": 0.0,
+          "415": 0.0
+        },
+        "best_reference_fid": 414,
+        "best_is_own": true
+      },
+      "416": {
+        "reference_fid": 415,
+        "date_used": "2013-03-30",
+        "n_pixels": 279,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "414": 0.0,
+          "416": 0.0
+        },
+        "best_reference_fid": 415,
+        "best_is_own": true
+      },
+      "417": {
+        "reference_fid": 416,
+        "date_used": "2013-03-30",
+        "n_pixels": 302,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "415": 0.0,
+          "417": 0.0
+        },
+        "best_reference_fid": 416,
+        "best_is_own": true
+      },
+      "418": {
+        "reference_fid": 417,
+        "date_used": "2013-03-30",
+        "n_pixels": 274,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "416": 0.0,
+          "418": 0.0
+        },
+        "best_reference_fid": 417,
+        "best_is_own": true
+      },
+      "419": {
+        "reference_fid": 418,
+        "date_used": "2013-03-30",
+        "n_pixels": 315,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "417": 0.0,
+          "419": 0.0
+        },
+        "best_reference_fid": 418,
+        "best_is_own": true
+      },
+      "420": {
+        "reference_fid": 419,
+        "date_used": "2013-03-30",
+        "n_pixels": 332,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "418": 0.0,
+          "420": 0.0
+        },
+        "best_reference_fid": 419,
+        "best_is_own": true
+      },
+      "421": {
+        "reference_fid": 420,
+        "date_used": "2013-03-30",
+        "n_pixels": 268,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "419": 0.0,
+          "421": 0.0
+        },
+        "best_reference_fid": 420,
+        "best_is_own": true
+      },
+      "422": {
+        "reference_fid": 421,
+        "date_used": "2013-03-30",
+        "n_pixels": 322,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "420": 0.0,
+          "422": 0.0
+        },
+        "best_reference_fid": 421,
+        "best_is_own": true
+      },
+      "423": {
+        "reference_fid": 422,
+        "date_used": "2013-03-30",
+        "n_pixels": 290,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "421": 0.0,
+          "423": 0.0
+        },
+        "best_reference_fid": 422,
+        "best_is_own": true
+      },
+      "424": {
+        "reference_fid": 423,
+        "date_used": "2013-03-30",
+        "n_pixels": 338,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "422": 0.0,
+          "424": 0.0
+        },
+        "best_reference_fid": 423,
+        "best_is_own": true
+      },
+      "425": {
+        "reference_fid": 424,
+        "date_used": "2013-03-30",
+        "n_pixels": 280,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "423": 0.0,
+          "425": 0.0
+        },
+        "best_reference_fid": 424,
+        "best_is_own": true
+      },
+      "426": {
+        "reference_fid": 425,
+        "date_used": "2013-03-30",
+        "n_pixels": 266,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "424": 0.0,
+          "426": 0.0
+        },
+        "best_reference_fid": 425,
+        "best_is_own": true
+      },
+      "427": {
+        "reference_fid": 426,
+        "date_used": "2013-03-30",
+        "n_pixels": 279,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "425": 0.0,
+          "427": 0.0
+        },
+        "best_reference_fid": 426,
+        "best_is_own": true
+      },
+      "428": {
+        "reference_fid": 427,
+        "date_used": "2013-03-30",
+        "n_pixels": 291,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "426": 0.0,
+          "428": 0.0
+        },
+        "best_reference_fid": 427,
+        "best_is_own": true
+      },
+      "429": {
+        "reference_fid": 428,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "427": 0.0,
+          "429": 0.0
+        },
+        "best_reference_fid": 428,
+        "best_is_own": true
+      },
+      "430": {
+        "reference_fid": 429,
+        "date_used": "2013-03-30",
+        "n_pixels": 277,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "428": 0.0,
+          "430": 0.0
+        },
+        "best_reference_fid": 429,
+        "best_is_own": true
+      },
+      "431": {
+        "reference_fid": 430,
+        "date_used": "2013-03-30",
+        "n_pixels": 271,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "429": 0.0,
+          "431": 0.0
+        },
+        "best_reference_fid": 430,
+        "best_is_own": true
+      },
+      "432": {
+        "reference_fid": 431,
+        "date_used": "2013-03-30",
+        "n_pixels": 258,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "430": 0.0,
+          "432": 0.0
+        },
+        "best_reference_fid": 431,
+        "best_is_own": true
+      },
+      "433": {
+        "reference_fid": 432,
+        "date_used": "2013-03-30",
+        "n_pixels": 270,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "431": 0.0,
+          "433": 0.0
+        },
+        "best_reference_fid": 432,
+        "best_is_own": true
+      },
+      "434": {
+        "reference_fid": 433,
+        "date_used": "2013-03-30",
+        "n_pixels": 285,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "432": 0.0,
+          "434": 0.0
+        },
+        "best_reference_fid": 433,
+        "best_is_own": true
+      },
+      "435": {
+        "reference_fid": 434,
+        "date_used": "2013-03-30",
+        "n_pixels": 283,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "433": 0.0,
+          "435": 0.0
+        },
+        "best_reference_fid": 434,
+        "best_is_own": true
+      },
+      "436": {
+        "reference_fid": 435,
+        "date_used": "2013-03-30",
+        "n_pixels": 265,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "434": 0.0,
+          "436": 0.0
+        },
+        "best_reference_fid": 435,
+        "best_is_own": true
+      },
+      "437": {
+        "reference_fid": 436,
+        "date_used": "2013-03-30",
+        "n_pixels": 269,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "435": 0.0,
+          "437": 0.0
+        },
+        "best_reference_fid": 436,
+        "best_is_own": true
+      },
+      "438": {
+        "reference_fid": 437,
+        "date_used": "2013-03-30",
+        "n_pixels": 259,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "436": 0.0,
+          "438": 0.0
+        },
+        "best_reference_fid": 437,
+        "best_is_own": true
+      },
+      "439": {
+        "reference_fid": 438,
+        "date_used": "2013-03-30",
+        "n_pixels": 278,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "437": 0.0,
+          "439": 0.0
+        },
+        "best_reference_fid": 438,
+        "best_is_own": true
+      },
+      "440": {
+        "reference_fid": 439,
+        "date_used": "2013-03-30",
+        "n_pixels": 265,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "438": 0.0,
+          "440": 0.0
+        },
+        "best_reference_fid": 439,
+        "best_is_own": true
+      },
+      "441": {
+        "reference_fid": 440,
+        "date_used": "2013-03-30",
+        "n_pixels": 383,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "439": 0.0,
+          "441": 0.0
+        },
+        "best_reference_fid": 440,
+        "best_is_own": true
+      },
+      "442": {
+        "reference_fid": 441,
+        "date_used": "2013-03-30",
+        "n_pixels": 277,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "440": 0.0,
+          "442": 0.0
+        },
+        "best_reference_fid": 441,
+        "best_is_own": true
+      },
+      "443": {
+        "reference_fid": 442,
+        "date_used": "2013-03-30",
+        "n_pixels": 283,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "441": 0.0,
+          "443": 0.0
+        },
+        "best_reference_fid": 442,
+        "best_is_own": true
+      },
+      "444": {
+        "reference_fid": 443,
+        "date_used": "2013-03-30",
+        "n_pixels": 268,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "442": 0.0,
+          "444": 0.0
+        },
+        "best_reference_fid": 443,
+        "best_is_own": true
+      },
+      "445": {
+        "reference_fid": 444,
+        "date_used": "2013-03-30",
+        "n_pixels": 280,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "443": 0.0,
+          "445": 0.0
+        },
+        "best_reference_fid": 444,
+        "best_is_own": true
+      },
+      "446": {
+        "reference_fid": 445,
+        "date_used": "2013-03-30",
+        "n_pixels": 293,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "444": 0.0,
+          "446": 0.0
+        },
+        "best_reference_fid": 445,
+        "best_is_own": true
+      },
+      "447": {
+        "reference_fid": 446,
+        "date_used": "2013-03-30",
+        "n_pixels": 274,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "445": 0.0,
+          "447": 0.0
+        },
+        "best_reference_fid": 446,
+        "best_is_own": true
+      },
+      "448": {
+        "reference_fid": 447,
+        "date_used": "2013-03-30",
+        "n_pixels": 270,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "446": 0.0,
+          "448": 0.0
+        },
+        "best_reference_fid": 447,
+        "best_is_own": true
+      },
+      "449": {
+        "reference_fid": 448,
+        "date_used": "2013-03-30",
+        "n_pixels": 279,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "447": 0.0,
+          "449": 0.0
+        },
+        "best_reference_fid": 448,
+        "best_is_own": true
+      },
+      "450": {
+        "reference_fid": 449,
+        "date_used": "2013-03-30",
+        "n_pixels": 276,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "448": 0.0,
+          "450": 0.0
+        },
+        "best_reference_fid": 449,
+        "best_is_own": true
+      },
+      "451": {
+        "reference_fid": 450,
+        "date_used": "2013-03-30",
+        "n_pixels": 270,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "449": 0.0,
+          "451": 0.0
+        },
+        "best_reference_fid": 450,
+        "best_is_own": true
+      },
+      "452": {
+        "reference_fid": 451,
+        "date_used": "2013-03-30",
+        "n_pixels": 277,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "450": 0.0,
+          "452": 0.0
+        },
+        "best_reference_fid": 451,
+        "best_is_own": true
+      },
+      "453": {
+        "reference_fid": 452,
+        "date_used": "2013-03-30",
+        "n_pixels": 199,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "451": 0.0,
+          "453": 0.0
+        },
+        "best_reference_fid": 452,
+        "best_is_own": true
+      },
+      "454": {
+        "reference_fid": 453,
+        "date_used": "2013-03-30",
+        "n_pixels": 259,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "452": 0.0,
+          "454": 0.0
+        },
+        "best_reference_fid": 453,
+        "best_is_own": true
+      },
+      "455": {
+        "reference_fid": 454,
+        "date_used": "2013-03-30",
+        "n_pixels": 280,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "453": 0.0,
+          "455": 0.0
+        },
+        "best_reference_fid": 454,
+        "best_is_own": true
+      },
+      "456": {
+        "reference_fid": 455,
+        "date_used": "2013-03-30",
+        "n_pixels": 272,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "454": 0.0,
+          "456": 0.0
+        },
+        "best_reference_fid": 455,
+        "best_is_own": true
+      },
+      "457": {
+        "reference_fid": 456,
+        "date_used": "2013-03-30",
+        "n_pixels": 269,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "455": 0.0,
+          "457": 0.0
+        },
+        "best_reference_fid": 456,
+        "best_is_own": true
+      },
+      "458": {
+        "reference_fid": 457,
+        "date_used": "2013-03-30",
+        "n_pixels": 269,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "456": 0.0,
+          "458": 0.0
+        },
+        "best_reference_fid": 457,
+        "best_is_own": true
+      },
+      "459": {
+        "reference_fid": 458,
+        "date_used": "2013-03-30",
+        "n_pixels": 284,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "457": 0.0,
+          "459": 0.0
+        },
+        "best_reference_fid": 458,
+        "best_is_own": true
+      },
+      "460": {
+        "reference_fid": 459,
+        "date_used": "2013-03-30",
+        "n_pixels": 271,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "458": 0.0,
+          "460": 0.0
+        },
+        "best_reference_fid": 459,
+        "best_is_own": true
+      },
+      "461": {
+        "reference_fid": 460,
+        "date_used": "2013-03-30",
+        "n_pixels": 277,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "459": 0.0,
+          "461": 0.0
+        },
+        "best_reference_fid": 460,
+        "best_is_own": true
+      },
+      "462": {
+        "reference_fid": 461,
+        "date_used": "2013-03-30",
+        "n_pixels": 330,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "460": 0.0,
+          "462": 0.0
+        },
+        "best_reference_fid": 461,
+        "best_is_own": true
+      },
+      "463": {
+        "reference_fid": 462,
+        "date_used": "2013-03-30",
+        "n_pixels": 267,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "461": 0.0,
+          "463": 0.0
+        },
+        "best_reference_fid": 462,
+        "best_is_own": true
+      },
+      "464": {
+        "reference_fid": 463,
+        "date_used": "2013-03-30",
+        "n_pixels": 263,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "462": 0.0,
+          "464": 0.0
+        },
+        "best_reference_fid": 463,
+        "best_is_own": true
+      },
+      "465": {
+        "reference_fid": 464,
+        "date_used": "2013-03-30",
+        "n_pixels": 275,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "463": 0.0,
+          "465": 0.0
+        },
+        "best_reference_fid": 464,
+        "best_is_own": true
+      },
+      "466": {
+        "reference_fid": 465,
+        "date_used": "2013-03-30",
+        "n_pixels": 267,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "464": 0.0,
+          "466": 0.0
+        },
+        "best_reference_fid": 465,
+        "best_is_own": true
+      },
+      "467": {
+        "reference_fid": 466,
+        "date_used": "2013-03-30",
+        "n_pixels": 261,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "465": 0.0,
+          "467": 0.0
+        },
+        "best_reference_fid": 466,
+        "best_is_own": true
+      },
+      "468": {
+        "reference_fid": 467,
+        "date_used": "2013-03-30",
+        "n_pixels": 270,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "466": 0.0,
+          "468": 0.0
+        },
+        "best_reference_fid": 467,
+        "best_is_own": true
+      },
+      "469": {
+        "reference_fid": 468,
+        "date_used": "2013-03-30",
+        "n_pixels": 130,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "467": 0.0,
+          "469": 0.0
+        },
+        "best_reference_fid": 468,
+        "best_is_own": true
+      },
+      "470": {
+        "reference_fid": 469,
+        "date_used": "2013-03-30",
+        "n_pixels": 268,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "468": 0.0,
+          "470": 0.0
+        },
+        "best_reference_fid": 469,
+        "best_is_own": true
+      },
+      "471": {
+        "reference_fid": 470,
+        "date_used": "2013-03-30",
+        "n_pixels": 283,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "469": 0.0,
+          "471": 0.0
+        },
+        "best_reference_fid": 470,
+        "best_is_own": true
+      },
+      "472": {
+        "reference_fid": 471,
+        "date_used": "2013-03-30",
+        "n_pixels": 277,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "470": 0.0,
+          "472": 0.0
+        },
+        "best_reference_fid": 471,
+        "best_is_own": true
+      },
+      "473": {
+        "reference_fid": 472,
+        "date_used": "2013-03-30",
+        "n_pixels": 279,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "471": 0.0,
+          "473": 0.0
+        },
+        "best_reference_fid": 472,
+        "best_is_own": true
+      },
+      "474": {
+        "reference_fid": 473,
+        "date_used": "2013-03-30",
+        "n_pixels": 262,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "472": 0.0,
+          "474": 0.0
+        },
+        "best_reference_fid": 473,
+        "best_is_own": true
+      },
+      "475": {
+        "reference_fid": 474,
+        "date_used": "2013-03-30",
+        "n_pixels": 270,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "473": 0.0,
+          "475": 0.0
+        },
+        "best_reference_fid": 474,
+        "best_is_own": true
+      },
+      "476": {
+        "reference_fid": 475,
+        "date_used": "2013-03-30",
+        "n_pixels": 278,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "474": 0.0,
+          "476": 0.0
+        },
+        "best_reference_fid": 475,
+        "best_is_own": true
+      },
+      "477": {
+        "reference_fid": 476,
+        "date_used": "2013-03-30",
+        "n_pixels": 275,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "475": 0.0,
+          "477": 0.0
+        },
+        "best_reference_fid": 476,
+        "best_is_own": true
+      },
+      "478": {
+        "reference_fid": 477,
+        "date_used": "2013-03-30",
+        "n_pixels": 76,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "476": 0.0,
+          "478": 0.0
+        },
+        "best_reference_fid": 477,
+        "best_is_own": true
+      },
+      "479": {
+        "reference_fid": 478,
+        "date_used": "2013-03-30",
+        "n_pixels": 240,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "477": 0.0,
+          "479": 0.0
+        },
+        "best_reference_fid": 478,
+        "best_is_own": true
+      },
+      "480": {
+        "reference_fid": 479,
+        "date_used": "2013-03-30",
+        "n_pixels": 246,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "478": 0.0,
+          "480": 0.0
+        },
+        "best_reference_fid": 479,
+        "best_is_own": true
+      },
+      "481": {
+        "reference_fid": 480,
+        "date_used": "2013-03-30",
+        "n_pixels": 137,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "479": 0.0,
+          "481": 0.0
+        },
+        "best_reference_fid": 480,
+        "best_is_own": true
+      },
+      "482": {
+        "reference_fid": 481,
+        "date_used": "2013-03-30",
+        "n_pixels": 273,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "480": 0.0,
+          "482": 0.0
+        },
+        "best_reference_fid": 481,
+        "best_is_own": true
+      },
+      "483": {
+        "reference_fid": 482,
+        "date_used": "2013-03-30",
+        "n_pixels": 65,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "481": 0.0,
+          "483": 0.0
+        },
+        "best_reference_fid": 482,
+        "best_is_own": true
+      },
+      "484": {
+        "reference_fid": 483,
+        "date_used": "2013-03-30",
+        "n_pixels": 118,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "482": 0.0,
+          "484": 0.0
+        },
+        "best_reference_fid": 483,
+        "best_is_own": true
+      },
+      "485": {
+        "reference_fid": 484,
+        "date_used": "2013-03-30",
+        "n_pixels": 284,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "483": 0.0,
+          "485": 0.0
+        },
+        "best_reference_fid": 484,
+        "best_is_own": true
+      },
+      "486": {
+        "reference_fid": 485,
+        "date_used": "2013-03-30",
+        "n_pixels": 280,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "484": 0.0,
+          "486": 0.0
+        },
+        "best_reference_fid": 485,
+        "best_is_own": true
+      },
+      "487": {
+        "reference_fid": 486,
+        "date_used": "2013-03-30",
+        "n_pixels": 364,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "485": 0.0,
+          "487": 0.0
+        },
+        "best_reference_fid": 486,
+        "best_is_own": true
+      },
+      "488": {
+        "reference_fid": 487,
+        "date_used": "2013-03-30",
+        "n_pixels": 282,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "486": 0.0,
+          "488": 0.0
+        },
+        "best_reference_fid": 487,
+        "best_is_own": true
+      },
+      "489": {
+        "reference_fid": 488,
+        "date_used": "2013-03-30",
+        "n_pixels": 275,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "487": 0.0,
+          "489": 0.0
+        },
+        "best_reference_fid": 488,
+        "best_is_own": true
+      },
+      "490": {
+        "reference_fid": 489,
+        "date_used": "2013-03-30",
+        "n_pixels": 25,
+        "iou_own_polygon": 1.0,
+        "iou_neighbours": {
+          "488": 0.0
+        },
+        "best_reference_fid": 489,
+        "best_is_own": true
+      }
+    },
+    "n_dates_scanned": 538,
+    "n_best_dates_used": 1
+  },
+  "elapsed_s": 4.6
+}
