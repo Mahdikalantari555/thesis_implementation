@@ -108,3 +108,17 @@ reports/mini_dataset/arch_sweep/*/*/
 
 # Cycle-review PNGs are local review artifacts; never commit images.
 reports/mini_dataset/figures/*.png
+
+# OlmoEarth evaluation (openspec change evaluate-olmoearth-nano-sugarcane):
+# embedding binaries + resume state are regenerable in <6 min (REPORT.md §10);
+# tables/, figures/, raw_bin_features.parquet and REPORT.md stay committed.
+experiments/olmoearth_eval/outputs/*.zarr
+experiments/olmoearth_eval/outputs/*.parquet
+!experiments/olmoearth_eval/outputs/raw_bin_features.parquet
+experiments/olmoearth_eval/outputs/shards*/
+experiments/olmoearth_eval/outputs/manifest*.jsonl
+experiments/olmoearth_eval/outputs/progress*.jsonl
+# vendored upstream clone (pinned 6583a536; regenerate per REPORT.md §10)
+experiments/olmoearth_eval/third_party/
+# model weights live outside the repo (olmoearth/weights.pth symlink)
+experiments/olmoearth_eval/model_store/OlmoEarth-v1_2-Nano/weights.pth
