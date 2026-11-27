@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -12,9 +13,41 @@ import numpy as np
 import pandas as pd
 import zarr
 
+from ..phenology.mini import split_normal_cycles
 from .config import RunConfig
 
+log = logging.getLogger("ssl_anomaly.mini_lab.data")
+
 DEFAULT_ROOT = Path("D:/RS/Thesis/Data/Processed/mini_research_dataset")
+
+#: paths already status-logged this process, so the unresolved-cycle exclusion
+#: is surfaced once per table instead of once per temporal unit.
+_CYCLE_STATUS_SEEN: set[str] = set()
+
+
+def load_normal_cycles(cyc_path: Path) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Load the mini cycle table, fail-closed on the pre-flag schema.
+
+    Returns ``(normal_rows, status_summary)``. The summary retains the
+    ``overlong_unresolved`` / ``short_unresolved`` rows as evidence; it is
+    logged once per table per process and must be surfaced by the caller
+    (run manifest), never silently dropped.
+    """
+    normal, summary = split_normal_cycles(pd.read_parquet(cyc_path), source=str(cyc_path))
+    key = str(cyc_path)
+    if key not in _CYCLE_STATUS_SEEN:
+        _CYCLE_STATUS_SEEN.add(key)
+        if summary["n_unresolved"]:
+            log.warning(
+                "cycle table %s: %d/%d cycles excluded as unresolved %s "
+                "(evidence retained; excluded intervals: %s)",
+                key, summary["n_unresolved"], summary["n_total"],
+                summary["unresolved_by_status"],
+                json.dumps(summary["unresolved_rows"]),
+            )
+        else:
+            log.info("cycle table %s: %d cycles, all status=normal", key, summary["n_total"])
+    return normal, summary
 
 
 @dataclass
@@ -213,7 +246,13 @@ def _patch_features(
 
 
 def _temporal_units(
-    values: np.ndarray, observed: np.ndarray, dates: list[str], delta_t: np.ndarray, cfg: RunConfig
+    values: np.ndarray,
+    observed: np.ndarray,
+    dates: list[str],
+    delta_t: np.ndarray,
+    cfg: RunConfig,
+    *,
+    store_root: Path | None = None,
 ) -> list[tuple[tuple[str, ...], np.ndarray, np.ndarray, np.ndarray]]:
     """Split a unit's series into temporal samples; Δt is always preserved."""
     rep = cfg.representation
@@ -228,14 +267,13 @@ def _temporal_units(
     elif rep.temporal == "sampling":
         idx = [np.arange(0, n, max(1, rep.sample_step))]
     elif rep.temporal in {"seasonal", "variable"}:
-        cyc_path = cfg.store_root / "phenology" / "cycles_mini.parquet"
+        cyc_path = (store_root or cfg.store_root) / "phenology" / "cycles_mini.parquet"
         if not cyc_path.exists():
             raise RuntimeError(f"Temporal repr {rep.temporal} requires {cyc_path}")
         idx = []
-        cycles = pd.read_parquet(cyc_path)
-        # Unresolved long intervals are evidence, not training cycles.
-        if "status" in cycles.columns:
-            cycles = cycles[cycles["status"] == "normal"]
+        # Fail closed on the pre-flag schema; unresolved intervals are
+        # evidence, not training cycles, and their exclusion is logged.
+        cycles, _ = load_normal_cycles(cyc_path)
         for _, row in cycles.iterrows():
             sel = np.array(
                 [i for i, d in enumerate(dates) if str(row["start_date"]) <= d <= str(row["end_date"])]
@@ -283,6 +321,11 @@ def build_dataset(
         "last_date": manifest.get("last_date"),
         "weather_group": cfg.representation.weather_group,
     }
+    if cfg.representation.temporal in {"seasonal", "variable"}:
+        # Surface the unresolved-cycle exclusion in the run manifest: the
+        # excluded intervals are evidence and must be traceable per run.
+        _, cyc_status = load_normal_cycles(root / "phenology" / "cycles_mini.parquet")
+        ds.source_manifest["cycle_status"] = cyc_status
     for farm_id, group in _farm_groups(root):
         if farm_ids is not None and farm_id not in farm_ids:
             continue
@@ -330,7 +373,7 @@ def build_dataset(
             joined = np.concatenate([uvalues, wvalues], axis=1)
             joined_obs = np.concatenate([uobserved, np.isfinite(wvalues)], axis=1)
             for si, (sdates, svalues, sobserved, sdelta) in enumerate(
-                _temporal_units(joined, joined_obs, udates, udelta, cfg)
+                _temporal_units(joined, joined_obs, udates, udelta, cfg, store_root=root)
             ):
                 ds.samples.append(
                     MiniSample(

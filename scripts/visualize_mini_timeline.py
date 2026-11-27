@@ -369,6 +369,29 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"No farm groups found in {STORE}")
 
     cycles = pd.read_parquet(args.cycles)
+    # Surfacing, not deletion: non-normal cycles are drawn as flagged bands
+    # (see _panel); an unflagged (pre-repair) schema is called out loudly.
+    if "status" in cycles.columns:
+        status_counts = {str(k): int(v) for k, v in cycles["status"].value_counts().items()}
+        print(f"cycle status counts: {status_counts}", flush=True)
+        status_note = (
+            f"Cycle-status accounting from `{args.cycles}`: {status_counts}. "
+            "Non-normal cycles are drawn as flagged bands (U = overlong, "
+            "s = short), never deleted from the plot."
+        )
+    else:
+        print(
+            f"WARNING: {args.cycles} has no 'status' column (pre-retention-flag "
+            "schema, pre cycle-detection-vi-repair); unresolved intervals are "
+            "not represented in these bands. Rebuild the phenology output "
+            "before owner review.",
+            flush=True,
+        )
+        status_note = (
+            f"WARNING: `{args.cycles}` has no 'status' column (pre-retention-flag "
+            "schema, pre cycle-detection-vi-repair). Unresolved intervals are "
+            "not represented in these bands."
+        )
     patches = pd.read_parquet(PATCHES)
     flags = patches.groupby(["farm", "date"], as_index=False)["n_suspected"].sum()
     flag_map = {(r.farm, str(r.date)[:10]): int(r.n_suspected) for r in flags.itertuples()}
@@ -415,6 +438,7 @@ def main(argv: list[str] | None = None) -> int:
         "`Data/Processed/mini_research_dataset/satellite.zarr`, masked by `pixel_valid` and `in_field`. "
         "Cycles from `phenology/cycles_mini.parquet`. Flags from "
         "`suspected_stress/suspected_patches.parquet` (weak suspicion from re-masked METRIC products).\n\n"
+        + status_note + "\n\n"
         "**Do not claim:** confirmed stress, water/salinity typing, early warning, or validation of the "
         "SSL model. The flags derive from METRIC products that share LST/NIR inputs with the spectral "
         "signal, so agreement with the NDVI/LST deviation is not independent evidence. "

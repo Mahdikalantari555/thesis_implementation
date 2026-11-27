@@ -39,6 +39,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
+from ssl_anomaly.phenology.mini import split_normal_cycles  # noqa: E402
 from ssl_anomaly.utils.tracking import get_git_commit_sha  # noqa: E402
 from ssl_anomaly.utils.paths import localize  # noqa: E402
 
@@ -74,9 +75,15 @@ def product_index(name: str) -> dict[str, Path]:
 
 
 def stage_of(date: str, cycles: pd.DataFrame) -> str | None:
+    if "status" not in cycles.columns:
+        raise ValueError(
+            "cycle table has no 'status' column (pre-retention-flag schema); "
+            "unresolved intervals cannot be excluded fail-closed — rebuild the "
+            "phenology output first"
+        )
     for _, c in cycles.iterrows():
-        if "status" in cycles.columns and c["status"] != "normal":
-            continue  # overlong_unresolved intervals are not stage-assigned
+        if c["status"] != "normal":
+            continue  # overlong/short unresolved intervals are not stage-assigned
         if str(c["start_date"]) <= date <= str(c["end_date"]):
             start = np.datetime64(str(c["start_date"]), "D")
             end = np.datetime64(str(c["end_date"]), "D")
@@ -121,7 +128,15 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     indexes = {name: product_index(name) for name in INDICATORS}
-    cycles = pd.read_parquet(CYCLES)
+    cycles, cyc_status = split_normal_cycles(pd.read_parquet(CYCLES), source=str(CYCLES))
+    # Surfacing, not deletion: the excluded intervals are printed as evidence.
+    if cyc_status["n_unresolved"]:
+        print(
+            f"CYCLES UNRESOLVED EXCLUDED: {cyc_status['n_unresolved']}/"
+            f"{cyc_status['n_total']} {cyc_status['unresolved_by_status']} — "
+            f"evidence retained: {json.dumps(cyc_status['unresolved_rows'])}",
+            flush=True,
+        )
     rows: list[dict[str, Any]] = []
     product_hashes: dict[str, str] = {}
 

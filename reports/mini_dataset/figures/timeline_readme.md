@@ -6,6 +6,8 @@
 
 **Provenance:** NDVI = (nir−red)/(nir+red) and LST = band `lst`−273.15 from `Data/Processed/mini_research_dataset/satellite.zarr`, masked by `pixel_valid` and `in_field`. Cycles from `phenology/cycles_mini.parquet`. Flags from `suspected_stress/suspected_patches.parquet` (weak suspicion from re-masked METRIC products).
 
+WARNING: `/home/mahdi/RS/Thesis/Data/Processed/mini_research_dataset/phenology/cycles_mini.parquet` has no 'status' column (pre-retention-flag schema, pre cycle-detection-vi-repair). Unresolved intervals are not represented in these bands.
+
 **Do not claim:** confirmed stress, water/salinity typing, early warning, or validation of the SSL model. The flags derive from METRIC products that share LST/NIR inputs with the spectral signal, so agreement with the NDVI/LST deviation is not independent evidence. Claim rung: L1/L2 screening only.
 
 **Renderer note:** figures are drawn with Pillow because matplotlib's native draw/save crashes in this conda environment (matplotlib 3.11.1 + numpy 2.5.2, Windows).

@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
+import pandas as pd
 from scipy.signal import find_peaks
 
 WEAK_PROMINENCE = 0.1
@@ -30,6 +31,61 @@ PHASE_ORDER = (
     "S3_maturity_senescence",
     "S4_harvest_dormancy",
 )
+#: Retention flags approved by the owner (design decisions 4 and 7): over-long
+#: and short bounded intervals are kept as evidence, never silently deleted.
+UNRESOLVED_STATUSES = ("overlong_unresolved", "short_unresolved")
+
+
+def split_normal_cycles(
+    cycles: pd.DataFrame,
+    *,
+    source: str = "cycle table",
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Split a mini cycle table into (``normal`` rows, unresolved evidence).
+
+    Fail closed: a table without the ``status`` column predates the retention
+    flags and cannot prove its over-long/short intervals were not silently
+    deleted, so it must not feed training or stage assignment. Unknown status
+    values also fail. Unresolved rows are **retained in the summary** — this
+    function never deletes evidence; the caller must surface the summary
+    (log line / run manifest) rather than drop it.
+    """
+    if "status" not in cycles.columns:
+        raise ValueError(
+            f"{source}: cycle table has no 'status' column (pre-retention-flag "
+            "schema); rebuild the phenology output before consuming it"
+        )
+    unknown = sorted(
+        set(cycles["status"].dropna().astype(str)) - {"normal", *UNRESOLVED_STATUSES}
+    )
+    if unknown:
+        raise ValueError(f"{source}: unknown cycle status values {unknown}")
+    normal = cycles[cycles["status"] == "normal"].copy()
+    unresolved = cycles[cycles["status"] != "normal"]
+    by_status = {s: int((unresolved["status"] == s).sum()) for s in UNRESOLVED_STATUSES}
+    rows: list[dict[str, Any]] = []
+    for _, r in unresolved.iterrows():
+        rows.append(
+            {
+                "farm": str(r["farm"]) if "farm" in unresolved.columns else None,
+                "cycle_id": int(r["cycle_id"]) if "cycle_id" in unresolved.columns else None,
+                "start_date": str(r["start_date"]) if "start_date" in unresolved.columns else None,
+                "end_date": str(r["end_date"]) if "end_date" in unresolved.columns else None,
+                "length_days": (
+                    int(r["length_days"]) if "length_days" in unresolved.columns else None
+                ),
+                "status": str(r["status"]),
+            }
+        )
+    summary: dict[str, Any] = {
+        "source": source,
+        "n_total": int(len(cycles)),
+        "n_normal": int(len(normal)),
+        "n_unresolved": int(len(unresolved)),
+        "unresolved_by_status": by_status,
+        "unresolved_rows": rows,
+    }
+    return normal, summary
 
 
 @dataclass(frozen=True)

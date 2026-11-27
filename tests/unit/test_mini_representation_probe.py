@@ -16,7 +16,8 @@ import probe_mini_suspected_stress as probe  # noqa: E402
 
 def test_stage_of_uses_cycle_progress_not_calendar_date():
     cycles = pd.DataFrame(
-        [{"start_date": "2020-01-01", "end_date": "2020-12-31"}]
+        [{"start_date": "2020-01-01", "end_date": "2020-12-31",
+          "status": "normal"}]
     )
     assert labels.stage_of("2020-02-01", cycles) == "S1"
     assert labels.stage_of("2020-05-01", cycles) == "S2"
