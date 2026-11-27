@@ -340,6 +340,22 @@ plumbing run carries `stamp = SMOKE FIXTURE` and `ladder_rung = L0`.
   decision (patch cells stay `Deferred` until the store + norm sidecar are bound). Findings numbering:
   27 assigned to the harness/gate record; the results finding gets the next number at completion.
 
+**`evaluate-olmoearth-nano-sugarcane`** — COMPLETE 2026-11-27, 16/16. External
+evidence, isolated under `experiments/olmoearth_eval/`. **Verdict: ADAPT.**
+Gates: G-O1 usability PASS (frozen stage-probe macro-F1 **0.854 ± 0.002** vs
+raw-channel control **0.627 ± 0.000**, CI-separated), G-O2 phase consistency
+PASS (cross-year phase-matched cosine 0.799, margin **+0.197** [0.192, 0.202],
+219/219 fields), G-O3 detection **FAIL** (injected-protocol AUC-PR OE
+0.078 ± 0.001 vs B0 spectral 0.075 ± 0.003, overlapping; only the S3 cell
+favors OE 0.063 vs 0.043; S1/S2 at base rate for every arm), G-O5 feasibility
+PASS (**79 s wall** for the full 370-field store, 22.8 ms/window, 1.35 GB
+peak RSS). Recommended use: phase/seasonality conditioning features for the
+statistical detector, not a detector replacement; re-evaluate on the
+date-centric raw store with true context (current chips are field-only, ~9 %
+of tile, ~3/36 online patch tokens); up144 arm probed best (0.889). Report:
+`experiments/olmoearth_eval/REPORT.md`; tables in `outputs/tables/`; 25 unit
+tests green; embedding binaries gitignored as regenerable.
+
 ### Owner data-prep tasks — architecture benchmark (2026-11-23)
 
 Everything below is a **Drive upload or a repo binding decision**; no code is needed from the owner.
