@@ -239,3 +239,43 @@ Findings (all honest):
 Machine-readable tables: `outputs/tables/{representations,probe_stage,
 detect_anomalies,robustness,benchmark_perf}.json`. Embedding binaries are
 regenerable in < 6 min (gitignored; inventory in `outputs/README.md`).
+
+## 11. Amendment 2026-11-27 — owner scientific review and follow-up validation
+
+The owner's review accepted the ADAPT direction and the reproducibility
+standard, and raised four issues before thesis use. They are resolved (or
+gated) in the follow-up openspec change `validate-olmoearth-temporal-transfer`;
+the two runnable batteries were executed the same day:
+
+1. **Probe temporal confound — rejected.** With field-level bootstrap
+   (1,000 resamples over the 53 evaluation fields; the seed-subsample std of
+   §5.2 is NOT a population CI and is superseded here): timestamp-only probe
+   0.613 [0.572, 0.654], raw-only 0.629, raw+temporal 0.665, OlmoEarth
+   0.854 [0.827, 0.876]. Paired deltas: OE−timestamp-only **+0.239
+   [0.200, 0.279]**, OE−raw+temporal **+0.188 [0.154, 0.225]** (both
+   P(δ>0)=1.000). The §5.2 claim survives in a stronger form: the embeddings
+   carry phase information beyond raw channels, beyond calendar time, and
+   beyond their naive concatenation. The derived labels measure **cycle
+   progression** — never read them as validated biological stages.
+2. **Unseen-year generalization — holds.** Train = 268 fields / 10,226 bins
+   pre-2024; evaluation = 2024–2026 bins of the k-means spatial block fields
+   (73 fields, zero train overlap; the flat `test_fields` overlap train by
+   design and are NOT a spatial holdout — caught by the leakage assertion).
+   Pooled ≥2024: OE 0.825 [0.776, 0.867] vs raw 0.537 → Δ+0.289 [0.242,
+   0.336]. Only −0.03 vs the in-sample probe. Calendar time degrades
+   sharply in holdout years (0.613→0.367 in 2025) while the embedding
+   degrades least — the representation tracks harvest-calendar drift.
+   2026 (5 bins) is not interpretable.
+3. **L2→L1 domain shift — data-gated.** The ≤13 % figure in §3.2 describes
+   DN-scale distance only, not the SR-vs-TOA / LST-vs-brightness semantic
+   gap. All 607 local scenes are L2-only; T3 requires same-date public C2
+   L1 scenes (fetch command specified in the follow-up change) — owner-run.
+4. **AD with real spatial context — deferred** to the date-centric raw
+   store (`date-centric-raw-store`, HELD).
+
+**Interpretation verdict (owner's 3-way question):** the evidence supports
+**(b) transferable agricultural representation** — more than a temporal
+encoder (T1), robust across unseen years and spatial blocks (T2); anomaly-
+detection added value remains unproven (G-O3 FAIL; T4 deferred). The ADAPT
+verdict of §1 stands unchanged. Tables:
+`outputs/tables/temporal_transfer_{probe_arms,holdout_years}.json`.

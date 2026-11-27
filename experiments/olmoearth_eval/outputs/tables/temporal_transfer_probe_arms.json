@@ -1,0 +1,65 @@
+{
+  "arms": {
+    "timestamp_only": {
+      "point": 0.6127296606774215,
+      "ci_low": 0.5723014656289256,
+      "ci_high": 0.6537201013593743
+    },
+    "cycle_progress_only": {
+      "point": 0.9986699969660409,
+      "ci_low": 0.9970549097823219,
+      "ci_high": 1.0
+    },
+    "raw_only": {
+      "point": 0.6288738849226654,
+      "ci_low": 0.5935639558350487,
+      "ci_high": 0.6637186270180817
+    },
+    "raw_plus_temporal": {
+      "point": 0.6651429373836464,
+      "ci_low": 0.6236664992804226,
+      "ci_high": 0.7050302729124382
+    },
+    "olmoearth": {
+      "point": 0.8538484892540983,
+      "ci_low": 0.8272548073586286,
+      "ci_high": 0.8761866939330624
+    }
+  },
+  "paired_deltas": {
+    "olmoearth_minus_timestamp_only": {
+      "mean": 0.2394433879885588,
+      "ci_low": 0.19987171406620818,
+      "ci_high": 0.279214435849862,
+      "p_gt_0": 1.0
+    },
+    "olmoearth_minus_cycle_progress_only": {
+      "mean": -0.14585063454793698,
+      "ci_low": -0.1711738597616807,
+      "ci_high": -0.12208740045429849,
+      "p_gt_0": 0.0
+    },
+    "olmoearth_minus_raw_only": {
+      "mean": 0.22419816925883237,
+      "ci_low": 0.19253290860547412,
+      "ci_high": 0.2581682244578695,
+      "p_gt_0": 1.0
+    },
+    "olmoearth_minus_raw_plus_temporal": {
+      "mean": 0.18778796135972675,
+      "ci_low": 0.15413943175930023,
+      "ci_high": 0.22520731499455082,
+      "p_gt_0": 1.0
+    }
+  },
+  "n_eval_fields": 53,
+  "n_eval_bins": 2278,
+  "n_train_bins": 13461,
+  "n_phases": 4,
+  "label_definition": "derived 4-phase (percent-of-cycle) \u2014 measures cycle progression, NOT validated biological stages",
+  "split": "train = splits_locked_v2 train\u2229patches bins; eval = dev\u2229patches bins; identical to the parent change's protocol (no year restriction here \u2014 T2 applies the year discipline)",
+  "statistics": "field-level bootstrap 1000\u00d7 over 53 dev fields (seed 2026); the parent's seed-subsample std is NOT a population CI",
+  "verdict_t1": "OE beats calendar time alone; check raw+temporal for spectral+time joint value",
+  "validation_ladder": "L1-L2 only",
+  "generated_by": "experiments/olmoearth_eval"
+}

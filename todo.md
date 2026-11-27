@@ -356,6 +356,20 @@ of tile, ~3/36 online patch tokens); up144 arm probed best (0.889). Report:
 `experiments/olmoearth_eval/REPORT.md`; tables in `outputs/tables/`; 25 unit
 tests green; embedding binaries gitignored as regenerable.
 
+
+**`validate-olmoearth-temporal-transfer`** — ACTIVE 6/9 (owner review 2026-11-27). T1 executed:
+temporal-confound REJECTED — OlmoEarth 0.854 [0.827,0.876] vs timestamp-only 0.613 (Δ+0.239
+[0.200,0.279]) and raw+temporal 0.665 (Δ+0.188 [0.154,0.225]); labels measure cycle progression,
+not biological stages. T2 executed: unseen-year generalization HOLDS — train pre-2024 (268
+fields) → eval on k-means spatial blocks (73 fields, zero train overlap; flat test_fields overlap
+train by design and are not a spatial holdout), pooled ≥2024 OE 0.825 vs raw 0.537 (Δ+0.289
+[0.242,0.336]); calendar time collapses in holdout years (0.613→0.367) while OE degrades least.
+Field-level bootstrap replaces seed-subsample std. T3 L1-vs-L2 data-gated (607 local scenes are
+L2-only; public GCS C2 L1 fetch specified — owner runs). T4 Deferred (blocked by
+`date-centric-raw-store` HELD). Verdict for the owner's 3-way question: (b) transferable
+agricultural representation; ADAPT stands. Tables: `experiments/olmoearth_eval/outputs/tables/
+temporal_transfer_*.json`; REPORT.md §11 amended.
+
 ### Owner data-prep tasks — architecture benchmark (2026-11-23)
 
 Everything below is a **Drive upload or a repo binding decision**; no code is needed from the owner.

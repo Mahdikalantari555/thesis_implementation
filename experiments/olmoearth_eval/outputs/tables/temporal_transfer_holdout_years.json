@@ -1,0 +1,196 @@
+{
+  "per_year": {
+    "2024": {
+      "n_bins": 817,
+      "n_fields": 42,
+      "arms": {
+        "timestamp_only": {
+          "point": 0.5768064851712842,
+          "ci_low": 0.4896988451157414,
+          "ci_high": 0.6572579193960789
+        },
+        "cycle_progress_only": {
+          "point": 1.0,
+          "ci_low": 1.0,
+          "ci_high": 1.0
+        },
+        "raw_only": {
+          "point": 0.513754369684323,
+          "ci_low": 0.46351406192067174,
+          "ci_high": 0.5601206886435887
+        },
+        "olmoearth": {
+          "point": 0.8269298473925518,
+          "ci_low": 0.7839376744579188,
+          "ci_high": 0.8663141185106544
+        }
+      },
+      "paired_deltas": {
+        "olmoearth_minus_timestamp_only": {
+          "mean": 0.2512615042063888,
+          "ci_low": 0.17356817658665766,
+          "ci_high": 0.33722879867559935
+        },
+        "olmoearth_minus_cycle_progress_only": {
+          "mean": -0.17249669321954383,
+          "ci_low": -0.21606232554208113,
+          "ci_high": -0.13368588148934554
+        },
+        "olmoearth_minus_raw_only": {
+          "mean": 0.3137737721205506,
+          "ci_low": 0.26603851199710793,
+          "ci_high": 0.3652093649474214
+        }
+      },
+      "low_n": false
+    },
+    "2025": {
+      "n_bins": 143,
+      "n_fields": 24,
+      "arms": {
+        "timestamp_only": {
+          "point": 0.36684225487235067,
+          "ci_low": 0.18562665766795414,
+          "ci_high": 0.6237910430628577
+        },
+        "cycle_progress_only": {
+          "point": 1.0,
+          "ci_low": 1.0,
+          "ci_high": 1.0
+        },
+        "raw_only": {
+          "point": 0.3924170145100378,
+          "ci_low": 0.192803414469236,
+          "ci_high": 0.6442220691837822
+        },
+        "olmoearth": {
+          "point": 0.6794673432974349,
+          "ci_low": 0.3075667408231368,
+          "ci_high": 0.8943548387096774
+        }
+      },
+      "paired_deltas": {
+        "olmoearth_minus_timestamp_only": {
+          "mean": 0.31086703498249824,
+          "ci_low": 0.08629195789907301,
+          "ci_high": 0.553167419560694
+        },
+        "olmoearth_minus_cycle_progress_only": {
+          "mean": -0.3327628650743378,
+          "ci_low": -0.6924332591768633,
+          "ci_high": -0.10564516129032264
+        },
+        "olmoearth_minus_raw_only": {
+          "mean": 0.2913812496995565,
+          "ci_low": 0.10220636256140848,
+          "ci_high": 0.5212563273047535
+        }
+      },
+      "low_n": false
+    },
+    "2026": {
+      "n_bins": 5,
+      "n_fields": 1,
+      "arms": {
+        "timestamp_only": {
+          "point": 0.375,
+          "ci_low": 0.375,
+          "ci_high": 0.375
+        },
+        "cycle_progress_only": {
+          "point": 1.0,
+          "ci_low": 1.0,
+          "ci_high": 1.0
+        },
+        "raw_only": {
+          "point": 0.375,
+          "ci_low": 0.375,
+          "ci_high": 0.375
+        },
+        "olmoearth": {
+          "point": 1.0,
+          "ci_low": 1.0,
+          "ci_high": 1.0
+        }
+      },
+      "paired_deltas": {
+        "olmoearth_minus_timestamp_only": {
+          "mean": 0.625,
+          "ci_low": 0.625,
+          "ci_high": 0.625
+        },
+        "olmoearth_minus_cycle_progress_only": {
+          "mean": 0.0,
+          "ci_low": 0.0,
+          "ci_high": 0.0
+        },
+        "olmoearth_minus_raw_only": {
+          "mean": 0.625,
+          "ci_low": 0.625,
+          "ci_high": 0.625
+        }
+      },
+      "low_n": true
+    },
+    "pooled": {
+      "n_bins": 965,
+      "n_fields": 42,
+      "arms": {
+        "timestamp_only": {
+          "point": 0.5737690068910833,
+          "ci_low": 0.4801191566546963,
+          "ci_high": 0.6535181378406449
+        },
+        "cycle_progress_only": {
+          "point": 1.0,
+          "ci_low": 1.0,
+          "ci_high": 1.0
+        },
+        "raw_only": {
+          "point": 0.5368190452406685,
+          "ci_low": 0.4800480277142615,
+          "ci_high": 0.5885120649735118
+        },
+        "olmoearth": {
+          "point": 0.8250116218890936,
+          "ci_low": 0.7759385014359577,
+          "ci_high": 0.8666651845281812
+        }
+      },
+      "paired_deltas": {
+        "olmoearth_minus_timestamp_only": {
+          "mean": 0.2518817005340028,
+          "ci_low": 0.1778132937853001,
+          "ci_high": 0.3310009862882314
+        },
+        "olmoearth_minus_cycle_progress_only": {
+          "mean": -0.17465472930132328,
+          "ci_low": -0.2240614985640424,
+          "ci_high": -0.1333348154718188
+        },
+        "olmoearth_minus_raw_only": {
+          "mean": 0.2886544587001061,
+          "ci_low": 0.2423338472433173,
+          "ci_high": 0.3358475354216519
+        }
+      },
+      "low_n": false
+    }
+  },
+  "holdout_cut_day": 3929,
+  "train_bins": 10226,
+  "train_fields": 268,
+  "eval_fields": 73,
+  "phase_consistency_ge2024": {
+    "n_fields": 14,
+    "margin_median": 0.21545252203941345,
+    "margin_ci": [
+      0.029420146346092226,
+      0.2516561463475227
+    ],
+    "note": "cross-year phase-matched minus phase-mismatched cosine among cycles that START >= 2024 (bootstrap over fields)"
+  },
+  "protocol": "no adaptation, no threshold or model selection on >=2024 bins; owner authorization 2026-11-27",
+  "validation_ladder": "L1-L2 only",
+  "generated_by": "experiments/olmoearth_eval"
+}
