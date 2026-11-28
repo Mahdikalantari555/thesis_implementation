@@ -573,6 +573,7 @@ def train_one_seed_to_plateau(
         {"config": cfg.config_path or "<the YAML of this run>", "seed": seed},
     ) if verdict in (Verdict.BUDGET_EXHAUSTED_STILL_IMPROVING, Verdict.BUDGET_EXHAUSTED_FLAT) else None
 
+    report_param_count = int(sum(p.numel() for p in model.parameters()))
     report = {
         "schema": "mini-run/v2",
         "protocol": split_name,
@@ -619,6 +620,13 @@ def train_one_seed_to_plateau(
             "evidence for L2 controlled deviation, NOT stress detection."
         ),
         "n_imputed_features": int((~test.observed).sum()),
+        "capacity": {
+            "param_count": report_param_count,
+            "band": 0.20,
+            "note": "cross-architecture comparisons must use mini_lab/capacity.match_capacity "
+                    "to land within the ±20 % band (task 2.4); this field records the "
+                    "arm's own size for the report table",
+        },
         "input_feature_counts": {
             "value_features": len(feature_names),
             "input_columns": int(test.x.shape[-1]),

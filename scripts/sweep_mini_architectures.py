@@ -307,6 +307,23 @@ def run(args: argparse.Namespace) -> int:
                 print(f"  {model:14s} FAILED: {exc}", flush=True)
             rows.append(row)
             unit_rows.append(row)
+        # Task 2.4: capacity report field — every arm's ratio to the smallest
+        # arm, so an unfair comparison cannot hide in a table.
+        try:
+            from ssl_anomaly.mini_lab.capacity import capacity_report_field
+
+            cap_arms = [r["model"] for r in unit_rows if not r.get("error")]
+            if cap_arms:
+                cap_field = capacity_report_field(
+                    cap_arms, d_in,
+                    ModelConfig(name=cap_arms[0], d_model=d_model, latent_dim=latent,
+                                n_layers=n_layers, batch_size=base.model.batch_size),
+                )
+                for r in unit_rows:
+                    if not r.get("error") and r["model"] in cap_field["arms"]:
+                        r["capacity"] = cap_field["arms"][r["model"]]
+        except Exception as exc:
+            print(f"  [capacity] report field failed: {exc!r}", flush=True)
         if plateau:
             cut = equal_step_cut(stage_out, unit_rows, ds, splits, cfg_model_kwargs(
                 d_model, latent, n_layers, seeds, base.model.batch_size))
