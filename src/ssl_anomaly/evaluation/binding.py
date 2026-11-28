@@ -319,6 +319,47 @@ def _resolve(base_dir: Path | None, relative: str) -> Path:
     return (base_dir or REPO_ROOT) / p
 
 
+def _manifest_mode_hash(name: str, path: Path) -> tuple[str | None, str]:
+    """Recompute a manifest-mode artifact's self-hash from its file contents.
+
+    Returns ``(hash_or_None, detail)``. ``None`` means the check could not run
+    (malformed JSON, missing self-hash key, unavailable producer) — the caller
+    must treat that as a mismatch, never as a pass.
+    """
+    producer = MANIFEST_HASH_PRODUCERS[name]
+    hash_key = MANIFEST_HASH_KEYS[name]
+    module_name, func_name = producer.split(":")
+    try:
+        module = __import__(module_name, fromlist=[func_name])
+        hash_fn = getattr(module, func_name)
+    except Exception as exc:  # noqa: BLE001 - report the dependency, never hide it
+        return None, f"manifest-hash producer unavailable: {exc}"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            return None, f"artifact is not a JSON mapping: {path}"
+    except Exception as exc:  # noqa: BLE001
+        return None, f"artifact unreadable as JSON: {exc}"
+    recorded = str(payload.get(hash_key, "")).lower()
+    if not recorded:
+        return None, f"artifact carries no self-recorded {hash_key!r}"
+    try:
+        recomputed = str(hash_fn(payload)).lower()
+    except Exception as exc:  # noqa: BLE001
+        return None, f"manifest-hash recomputation failed: {exc}"
+    if recomputed != recorded:
+        return (
+            None,
+            f"self-inconsistent: recorded {hash_key}={recorded[:SHA_PREFIX_LEN]!r} "
+            f"but contents re-hash to {recomputed[:SHA_PREFIX_LEN]!r}",
+        )
+    return (
+        recomputed,
+        f"{hash_key} recomputed from contents and matches the recorded field "
+        f"(manifest mode, producer {producer})",
+    )
+
+
 def bind_artifacts(
     *,
     prereg: Preregistration | None = None,
@@ -386,12 +427,24 @@ def bind_artifacts(
                 detail="hash not computed (compute_hashes=False)",
             )
         else:
-            actual = sha256_path(path)
-            if expected is None:
+            mode = "manifest" if name in MANIFEST_HASH_PRODUCERS else "bytes"
+            if mode == "manifest":
+                actual, detail = _manifest_mode_hash(name, path)
+            else:
+                actual, detail = sha256_path(path), ""
+            if actual is None:
+                # The artifact exists but its self-hash could not be recomputed
+                # (malformed JSON / missing self-hash key): fail closed.
+                status = ArtifactStatus(
+                    name=name, path=str(path),
+                    expected_sha256_prefix=expected, actual_sha256=None,
+                    status="mismatch", detail=detail or "manifest self-hash unavailable",
+                )
+            elif expected is None:
                 status = ArtifactStatus(
                     name=name,
                     path=str(path),
-                    expected_sha256_prefix=None,
+                    expected_sha256_prefix=expected,
                     actual_sha256=actual,
                     status="bound",
                     detail="no frozen hash recorded (hash observed only)",
@@ -403,6 +456,7 @@ def bind_artifacts(
                     expected_sha256_prefix=expected,
                     actual_sha256=actual,
                     status="bound",
+                    detail=detail,
                 )
             else:
                 status = ArtifactStatus(
@@ -483,10 +537,43 @@ def is_sha_prefix(value: str) -> bool:
 
 
 #: Code-derived hash producers. A name in this map is bound by *calling* the
-#: producer, so a code change that shifts the frozen object fails the gate.
+#: producer, so a code change that shifts the frozen object fails closed.
 CODE_DERIVED_PRODUCERS: dict[str, str] = {
     "severity_table": "ssl_anomaly.monitor.severity_table:severity_table_hash",
 }
+
+#: Manifest-mode artifacts: the frozen prefix names the file's OWN
+#: ``manifest_sha256``/``sha256`` field — a canonical hash over the payload
+#: with that key removed — which this module RECOMPUTES from the file contents
+#: and compares (never trusts the recorded field alone). A raw byte hash can
+#: never match here: a file cannot contain its own byte hash, so byte-mode
+#: binding for these artifacts would fail closed on every machine where they
+#: exist. The producers are the exact functions that wrote the fields.
+MANIFEST_HASH_PRODUCERS: dict[str, str] = {
+    "splits_locked_v2": "ssl_anomaly.monitor.splits:manifest_hash",
+    "holdout_manifest_v2": "ssl_anomaly.monitor.holdout:holdout_manifest_hash",
+    "norm_stats_full_v2": "ssl_anomaly.evaluation.binding:norm_stats_document_hash",
+}
+
+#: The self-recorded hash key per manifest-mode artifact.
+MANIFEST_HASH_KEYS: dict[str, str] = {
+    "splits_locked_v2": "manifest_sha256",
+    "holdout_manifest_v2": "manifest_sha256",
+    "norm_stats_full_v2": "sha256",
+}
+
+
+def norm_stats_document_hash(payload: dict) -> str:
+    """Canonical hash of a norm-stats sidecar (``sha256`` key removed).
+
+    Mirrors the writer recipe: ``sha256(json.dumps(payload - sha256,
+    sort_keys=True))`` — verified byte-for-byte against the committed
+    ``norm_stats_full_v2.json`` (its self-recorded ``493f0395…``).
+    """
+    body = {k: v for k, v in payload.items() if k != "sha256"}
+    return hashlib.sha256(
+        json.dumps(body, sort_keys=True).encode("utf-8")
+    ).hexdigest()
 
 
 def code_derived_status(name: str, expected: str | None) -> ArtifactStatus:

@@ -288,17 +288,85 @@ def test_absent_artifacts_are_reported_not_substituted(tmp_path):
 
 
 def test_bound_artifact_matches_prefix(tmp_path):
-    target = tmp_path / "splits.json"
+    # cycles_490_v2 is byte-mode in the real pre-registration (sha recorded at
+    # freeze time is impossible for a file that carries its own hash); the
+    # manifest-mode artifacts (splits/holdout/norm) are covered below.
+    target = tmp_path / "cycles.parquet"
     target.write_text("{}", encoding="utf-8")
     digest = sha256_file(target)
     pre = _prereg_with(tmp_path, {
-        "splits_locked_v2": {"path": "splits.json", "sha256_prefix": digest[:8]},
+        "cycles_490_v2": {"path": "cycles.parquet", "sha256_prefix": digest[:8]},
     })
     report = bind_artifacts(prereg=load_preregistration(pre), base_dir=tmp_path)
     assert report.ok
     file_bound = [a for a in report.bound if not a.path.startswith("<code:")]
     assert len(file_bound) == 1
     assert file_bound[0].actual_sha256 == digest
+
+
+def test_manifest_mode_artifact_binds_by_recomputed_self_hash(tmp_path):
+    # splits_locked_v2's frozen prefix names its OWN manifest_sha256 field,
+    # which the binder RECOMPUTES from the contents (a file cannot contain its
+    # own byte hash, so byte-mode binding for these artifacts would fail
+    # closed on every machine where they exist).
+    from ssl_anomaly.monitor.splits import manifest_hash
+
+    manifest = {
+        "version": 2,
+        "created": "2026-11-23",
+        "counts": {"train": 2105, "dev": 340, "test": 773},
+        "cycles": {"1": ["c1", "c2"]},
+    }
+    manifest["manifest_sha256"] = manifest_hash(manifest)
+    target = tmp_path / "splits_locked_v2.json"
+    target.write_text(json.dumps(manifest), encoding="utf-8")
+    pre = _prereg_with(tmp_path, {
+        "splits_locked_v2": {
+            "path": "splits_locked_v2.json",
+            "sha256_prefix": manifest["manifest_sha256"][:8],
+        },
+    })
+    report = bind_artifacts(prereg=load_preregistration(pre), base_dir=tmp_path)
+    assert report.ok
+    bound = [a for a in report.bound if a.name == "splits_locked_v2"]
+    assert bound and bound[0].actual_sha256 == manifest["manifest_sha256"]
+    assert "recomputed" in bound[0].detail
+
+
+def test_manifest_mode_artifact_fails_closed_when_tampered(tmp_path):
+    from ssl_anomaly.monitor.splits import manifest_hash
+
+    manifest = {"version": 2, "counts": {"train": 2105}}
+    manifest["manifest_sha256"] = manifest_hash(manifest)
+    target = tmp_path / "splits_locked_v2.json"
+    target.write_text(json.dumps(manifest), encoding="utf-8")
+    pre = _prereg_with(tmp_path, {
+        "splits_locked_v2": {
+            "path": "splits_locked_v2.json",
+            "sha256_prefix": manifest["manifest_sha256"][:8],
+        },
+    })
+    # Tamper AFTER computing the hash: recorded field and contents disagree.
+    manifest["counts"]["train"] = 9999
+    target.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ArtifactBindingError, match="deviates"):
+        bind_artifacts(prereg=load_preregistration(pre), base_dir=tmp_path, strict=True)
+    report = bind_artifacts(prereg=load_preregistration(pre), base_dir=tmp_path,
+                            strict=False)
+    assert report.mismatched[0].detail.startswith("self-inconsistent")
+
+
+def test_manifest_mode_artifact_without_self_hash_is_mismatch(tmp_path):
+    target = tmp_path / "norm_stats_full_v2.json"
+    target.write_text('{"stat": {}}', encoding="utf-8")     # no self sha256 key
+    pre = _prereg_with(tmp_path, {
+        "norm_stats_full_v2": {"path": "norm_stats_full_v2.json",
+                               "sha256_prefix": "493f0395"},
+    })
+    report = bind_artifacts(prereg=load_preregistration(pre), base_dir=tmp_path,
+                            strict=False)
+    assert not report.ok
+    assert report.mismatched[0].detail.startswith("artifact carries no self-recorded")
 
 
 def test_hash_mismatch_fails_closed(tmp_path):
@@ -349,17 +417,17 @@ def test_presence_only_probe_skips_hashing(tmp_path):
 
 
 def test_overrides_reroute_paths(tmp_path):
-    alt = tmp_path / "elsewhere" / "splits.json"
+    alt = tmp_path / "elsewhere" / "cycles.parquet"
     alt.parent.mkdir()
     alt.write_text("{}", encoding="utf-8")
     digest = sha256_file(alt)
     pre = _prereg_with(tmp_path, {
-        "splits_locked_v2": {"path": "nowhere.json", "sha256_prefix": digest[:8]},
+        "cycles_490_v2": {"path": "nowhere.json", "sha256_prefix": digest[:8]},
     })
     report = bind_artifacts(
         prereg=load_preregistration(pre),
         base_dir=tmp_path,
-        overrides={"splits_locked_v2": str(alt)},
+        overrides={"cycles_490_v2": str(alt)},
     )
     file_bound = [a for a in report.bound if not a.path.startswith("<code:")]
     assert report.ok and len(file_bound) == 1
