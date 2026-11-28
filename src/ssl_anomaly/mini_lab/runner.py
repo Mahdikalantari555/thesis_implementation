@@ -65,8 +65,11 @@ def _barlow_loss(z1: torch.Tensor, z2: torch.Tensor, lambda_coeff: float = 0.005
     z2 = (z2 - z2.mean(0)) / (z2.std(0, unbiased=False) + 1e-6)
     cross = z1.T @ z2 / z1.shape[0]
     on_diag = torch.diagonal(cross).add_(-1).pow_(2).sum()
-    off = cross - torch.eye(cross.shape[0], device=cross.device)
-    return on_diag + lambda_coeff * off.pow_(2).sum()
+    # canonical Barlow off-diagonal term: the diagonal must be EXCLUDED
+    # (the previous `cross - eye` kept (c_ii-1)^2 in the off term, double-
+    # counting the invariance term; rst_bt.barlow_twins_loss was correct)
+    off = (cross - torch.diag(torch.diagonal(cross))).pow_(2).sum()
+    return on_diag + lambda_coeff * off
 
 
 def _augment(x: torch.Tensor, seed: int) -> torch.Tensor:
