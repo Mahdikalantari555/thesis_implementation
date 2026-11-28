@@ -358,7 +358,8 @@ class BenchmarkRunner:
                               data_source=self.frame.data_source, notes=list(self.frame.notes))
             b = _inputs.build_tensors(inj, self.cfg, input_id=iid, fusion="W1")
             self.bundles[iid] = b
-            self.tensors[iid] = {**b.tensors.to_torch(self.device.device), **b.tensors.index_tensors()}
+            self.tensors[iid] = {**b.tensors.to_torch(self.device.device), **b.tensors.index_tensors(),
+                                 "start_days": getattr(b.tensors, "start_days", None)}
         self.hashes = {
             "data_sha256": _sha(self.frame.x),
             "panel_x_sha256": _sha(self.panel.x),
@@ -968,27 +969,54 @@ class BenchmarkRunner:
         """Map the arm's dev scores to probabilities and pick the operating threshold.
 
         The reference distribution is the arm's own **train** scores (never the
-        scored partition), and the threshold quantile is taken on **dev** at the
-        contract's shared alarm budget, so every arm is held to the same alert rate.
+        scored partition), pooled at the level the calibration axis names — C1 the
+        farm's own history, C2 the farm's own history at the same stage, C3 global —
+        and the threshold quantile is taken on **dev** at the contract's shared alarm
+        budget, so every arm is held to the same alert rate.
         """
-        from ssl_anomaly.benchmarking.calibration import calibrate, threshold_at_budget
+        from ssl_anomaly.benchmarking.calibration import (calibrate, calibration_holdout_check,
+                                                          cycle_stage, threshold_at_budget)
 
         tr, ev = self.train_idx, self.eval_idx
         s_bin = scores_bin
         s_cycle = _nanmax(s_bin, axis=1)
         s_train_cycle = _nanmax(self._score_rows(arm, tensors, tr), axis=1)
         y_cycle = np.asarray(self.panel.labels_cycle, dtype=int)[ev]
+        normality = self.cfg.raw.get("normality", {}) or {}
+        min_history = int(normality.get("min_history_cycles", 2))
+        cal_kwargs: dict = {}
+        stage_rec: dict = {}
+        if cell.calibration in ("C1", "C2"):
+            farm_tr = np.asarray(self.frame.field_ids, dtype=np.int64)[tr]
+            farm_ev = np.asarray(self.frame.field_ids, dtype=np.int64)[ev]
+            if cell.calibration == "C1":
+                cal_kwargs = {"train_keys": farm_tr, "eval_keys": farm_ev}
+            else:
+                stages, rec_st = cycle_stage(
+                    tensors.get("phase_bin"), stage_bins=int(normality.get("stage_bins", 12)),
+                    start_days=tensors.get("start_days"))
+                stage_rec = {"stage_source": rec_st.get("source"),
+                             "stage_bins": int(normality.get("stage_bins", 12)),
+                             "stage_note": rec_st.get("note", "")}
+                cal_kwargs = {"train_keys": np.column_stack([farm_tr, stages[tr]]),
+                              "eval_keys": np.column_stack([farm_ev, stages[ev]])}
+            cal_kwargs["min_history"] = min_history
         p_eval, fit = calibrate(
             cell.calibration, scores_dev=s_cycle[ev], labels_dev=y_cycle,
-            train_scores=s_train_cycle, scores_eval=s_cycle[ev], split="dev",
+            train_scores=s_train_cycle[tr], scores_eval=s_cycle[ev], split="dev", **cal_kwargs,
         )
         budget = float(self.cfg.raw["calibration"]["alarm_budget"])
         try:
             thr = threshold_at_budget(p_eval, budget=budget)
         except ValueError as exc:
             thr = {"threshold": None, "budget": budget, "error": str(exc)}
+        if cell.calibration in ("C1", "C2"):
+            thr["stage_axis"] = stage_rec
+        # task 7.7 — the threshold's optimism on rows it was not picked on, recorded
+        # beside the threshold instead of being claimed away (dev picks and reports).
+        thr["calibration_holdout_check"] = calibration_holdout_check(
+            p_eval, budget=budget, farm_ids=np.asarray(self.frame.field_ids)[ev])
         cal_contract = dict(self.cfg.raw["calibration"])
-        fit_rec = getattr(fit, "aux", None)
         thr["contract"] = {
             "sources": list(cal_contract.get("sources") or []),
             "thresholds_selected_on": cal_contract.get("thresholds_selected_on"),
@@ -1074,6 +1102,7 @@ class BenchmarkRunner:
                            "fitted_on": "dev (pooled over cells, never per cell)"}
         thr["bin_threshold"] = thr["bin_threshold"] if thr.get("bin_threshold") is not None else t_bin
         per: list[_metrics.CellMetrics] = []
+        per_combo: list[_metrics.CellMetrics] = []
         delayed: list[float] = []
         for pc in self.panel.cells:
             if pc.cell not in usable:
@@ -1097,12 +1126,28 @@ class BenchmarkRunner:
                                           bin_days=int(self.cfg.raw["training"].get("bin_days", 15)))
                 m.median_delay_days = _round(dl["median_days"])
                 m.aux["delay_detail"] = dl
-                delayed.extend([float(dl["median_days"])] if np.isfinite(dl["median_days"]) else [])
-            per.append(m)
+                if not getattr(pc, "is_combined", False):
+                    delayed.extend([float(dl["median_days"])] if np.isfinite(dl["median_days"]) else [])
+            # Task 4.9: combined-scenario cells are scored per-cell but the headline macro
+            # stays the pre-registered 5 families × 3 severities — letting designed
+            # multi-family events silently re-weight the headline would move the target
+            # the contract froze without an amendment.
+            (per_combo if getattr(pc, "is_combined", False) else per).append(m)
         macro = _metrics.macro_summary(per)
         macro["median_of_cell_medians_delay_days"] = _round(float(np.median(delayed))) if delayed else None
+        macro["headline_grid"] = str(self.cfg.raw["evaluation"].get("headline_grid"))
+        macro["n_combined_cells"] = len(per_combo)
+        combined = {
+            "cells": [c.to_dict() for c in per_combo],
+            "macro": (_metrics.macro_summary(per_combo) if per_combo else
+                      {"available": False, "reason": "no combined-scenario cell is usable"}),
+            "note": ("designed multi-family events (task 4.9): reported per-cell with their component "
+                     "families; excluded from the headline macro, which stays the 5 families × 3 "
+                     "severities the contract pre-registers"),
+        }
         return {"cells_used": [c.cell for c in per], "macro": macro,
-                "per_cell": [c.to_dict() for c in per],
+                "per_cell": [c.to_dict() for c in per] + [c.to_dict() for c in per_combo],
+                "combined_cells": combined,
                 "threshold": _jsonable(thr), "calibration": {"method": cell.calibration},
                 "prevalence": {"target": self.panel.prevalence_target,
                                "eval_bin": _round(float(self.panel.labels_bin[ev].mean())),

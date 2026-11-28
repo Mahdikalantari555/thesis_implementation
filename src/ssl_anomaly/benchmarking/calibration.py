@@ -92,18 +92,22 @@ def rank_to_probability(scores: np.ndarray, train_scores: np.ndarray) -> np.ndar
     return np.clip(np.where(np.isfinite(s), p, np.nan), 1e-6, 1.0 - 1e-6)
 
 
-def zscore_to_probability(scores: np.ndarray, train_scores: np.ndarray) -> np.ndarray:
+def zscore_to_probability(scores: np.ndarray, train_scores: np.ndarray,
+                          *, min_ref: int = 32) -> np.ndarray:
     """Gaussian-tail probability from robust train statistics (the fixed reference).
 
     Used where a raw objective value should become comparable across arms without
     any fitted map: ``Φ̄((s − median)/MAD_scale)``. It is a *reference* scale, not a
-    calibrated probability, and :func:`calibrate` marks it as such.
+    calibrated probability, and :func:`calibrate` marks it as such. The default
+    ``min_ref`` floor guards the *global* map; a per-pool reference (C2's farm × stage
+    pools) is small by design and passes its own floor instead — the pool's coarseness
+    is reported, not hidden behind a raised exception.
     """
     s = np.asarray(scores, dtype=np.float64).ravel()
     ref = np.asarray(train_scores, dtype=np.float64).ravel()
     ref = ref[np.isfinite(ref)]
-    if ref.size < 32:
-        raise ValueError(f"z-score reference needs ≥32 train scores, got {ref.size}")
+    if ref.size < min_ref:
+        raise ValueError(f"z-score reference needs ≥{min_ref} train scores, got {ref.size}")
     mu = float(np.median(ref))
     sd = float(np.median(np.abs(ref - mu)) * 1.4826) or float(np.std(ref)) or 1.0
     from scipy.stats import norm
@@ -233,32 +237,268 @@ def expected_calibration_error(p: np.ndarray, y: np.ndarray, *, bins: int = ECE_
             "n_bins_used": len(rows), "n_bins_requested": int(bins)}
 
 
+def cycle_stage(phase_bin: np.ndarray | None, *, stage_bins: int = 12,
+                start_days: np.ndarray | None = None) -> tuple[np.ndarray, dict]:
+    """One stage id per cycle, for the C2 ``farm × stage`` reference pool.
+
+    The preferred source is the cycle's own ``phase_bin`` (the active ``PhaseAxis``): a
+    cycle's stage is its modal phase bin rescaled onto ``stage_bins`` groups. Where the
+    phase axis is degenerate (every cycle has the same modal bin — the default
+    bin-index tile before a real PhaseAxis is bound) the stage collapses to one value and
+    C2 would silently equal C1; that collapse is *recorded*, and when a calendar axis
+    exists the stage falls back to the cycle's start position on the year, labelled as
+    the calendar fallback it is. No planting date is invented anywhere.
+    """
+    rec: dict = {"stage_bins": int(stage_bins)}
+    if phase_bin is not None:
+        pb = np.asarray(phase_bin, dtype=np.int64)
+        if pb.ndim != 2:
+            raise ValueError(f"phase_bin must be (N, T), got {pb.shape}")
+        T = pb.shape[1]
+        modes = np.array([int(np.bincount(np.clip(row, 0, None)).argmax()) for row in pb])
+        if len(np.unique(modes)) > 1:
+            rec["source"] = "phase_axis_modal_bin"
+            stage = np.minimum((modes / max(T, 1) * stage_bins).astype(np.int64), stage_bins - 1)
+            return stage, rec
+        rec["phase_axis_degenerate"] = True
+    if start_days is not None:
+        sd = np.asarray(start_days, dtype=np.float64)
+        if sd.ndim != 1 or sd.size == 0 or not np.isfinite(sd).all():
+            rec["calendar_fallback"] = "unusable_start_days"
+        else:
+            doy = np.mod(sd, 365.25)
+            stage = np.minimum((doy / 365.25 * stage_bins).astype(np.int64), stage_bins - 1)
+            rec["source"] = "calendar_fallback_start_day"
+            rec["note"] = ("phase axis degenerate; stages derived from the cycle's start "
+                           "position on the calendar year — a seasonal block, not a "
+                           "segmentation-derived phenological label")
+            return stage, rec
+    if phase_bin is None and start_days is None:
+        raise ValueError(
+            "cycle_stage needs phase_bin or start_days to place cycles on a stage axis; "
+            "supplying neither and defaulting every cycle to stage 0 would present a "
+            "collapsed pool as a farm × stage calibration")
+    n = len(np.asarray(phase_bin)) if phase_bin is not None else len(np.asarray(start_days))
+    rec["source"] = "single_stage"
+    rec["note"] = ("phase axis present but degenerate and no calendar axis: every cycle lands in "
+                   "one stage, so the farm × stage pool collapses to the farm pool — recorded, "
+                   "never fabricated")
+    return np.zeros(n, dtype=np.int64), rec
+
+
+def _ecdf_percentile(scores: np.ndarray, ref: np.ndarray) -> np.ndarray:
+    """Empirical-CDF percentile of ``scores`` against ``ref`` (monotone ⇒ AUC-preserving).
+
+    Unlike :func:`rank_to_probability` (the pooled C1 map, which refuses <32 points
+    because a global quantile map on a handful of rows is fiction), a *per-key* reference
+    is allowed to be small by design — a farm's own history is a handful of cycles — so
+    the caller's ``min_history`` floor governs and the coarseness is reported.
+    """
+    s = np.asarray(scores, dtype=np.float64).ravel()
+    r = np.asarray(ref, dtype=np.float64).ravel()
+    r = r[np.isfinite(r)]
+    lo = np.searchsorted(r, s, side="left") / max(r.size, 1)
+    hi = np.searchsorted(r, s, side="right") / max(r.size, 1)
+    p = 0.5 * (lo + hi)
+    return np.clip(np.where(np.isfinite(s), p, np.nan), 1e-6, 1.0 - 1e-6)
+
+
+def pooled_reference_map(
+    scores_eval: np.ndarray, train_scores: np.ndarray, *, eval_keys: np.ndarray,
+    train_keys: np.ndarray, min_history: int = 2, map_name: str = "ecdf",
+) -> tuple[np.ndarray, dict]:
+    """Map every eval row through the reference distribution of its OWN pool.
+
+    This is the design's hybrid-normality rule in code: a farm is compared to its own
+    history (C1) or its own history at the same stage (C2) first; pooled cross-farm
+    statistics only fill a per-farm deficit (fewer than ``min_history`` clean cycles),
+    and every such fill is counted — the contract's ``pooled_fill``. Keys must be a
+    per-row identifier (farm id, or ``(farm_id, stage)`` tuples as a 2-column array).
+    """
+    se = np.asarray(scores_eval, dtype=np.float64).ravel()
+    st = np.asarray(train_scores, dtype=np.float64).ravel()
+    ek = np.asarray(eval_keys)
+    tk = np.asarray(train_keys)
+    if ek.ndim == 1:
+        ek = ek[:, None]
+    if tk.ndim == 1:
+        tk = tk[:, None]
+    if ek.shape[0] != se.size or tk.shape[0] != st.size:
+        raise ValueError(
+            f"pooled_reference_map: keys and scores disagree (eval {ek.shape[0]} vs {se.size}, "
+            f"train {tk.shape[0]} vs {st.size}); misaligned keys would score a cycle against "
+            "another farm's history")
+    ok = np.isfinite(st)
+    ref_by_key: dict[tuple, np.ndarray] = {}
+    for key in np.unique(tk[ok], axis=0):
+        ref_by_key[tuple(int(v) for v in key)] = st[ok & (tk == key).all(axis=1)]
+    global_ref = st[ok]
+    p = np.full(se.size, np.nan)
+    pooled_fill = 0
+    ref_sizes: list[int] = []
+    for i in range(se.size):
+        key = tuple(int(v) for v in ek[i])
+        ref = ref_by_key.get(key)
+        src = "own_pool"
+        if ref is None or ref.size < max(1, int(min_history)):
+            ref, src = global_ref, "pooled_fill"
+            pooled_fill += 1
+        if ref.size < max(1, int(min_history)):
+            raise ValueError(
+                f"pooled_reference_map: row {i} has no usable reference even after pooled fill "
+                f"({int(global_ref.size)} finite train scores); calibration cannot invent one")
+        ref_sizes.append(int(ref.size))
+        if map_name == "ecdf":
+            p[i] = _ecdf_percentile(np.array([se[i]]), ref)[0]
+        elif map_name == "zscore":
+            p[i] = float(zscore_to_probability(np.array([se[i]]), ref, min_ref=max(1, int(min_history)))[0])
+        else:
+            raise KeyError(f"unknown per-pool map {map_name!r}")
+    sizes = np.array(ref_sizes) if ref_sizes else np.zeros(1)
+    rec = {
+        "pooling_level": "farm" if ek.shape[1] == 1 else "farm_stage",
+        "map": map_name,
+        "min_history": int(min_history),
+        "pooled_fill": int(pooled_fill),
+        "pooled_fill_note": ("eval rows scored against the pooled train reference because their "
+                             "own pool had fewer than min_history clean cycles"),
+        "n_pools": int(len(ref_by_key)),
+        "ref_size_median": float(np.median(sizes)),
+        "ref_size_min": int(sizes.min()),
+        "coarse_reference_pools": int((sizes < 8).sum()),
+        "coarse_note": ("an ECDF over fewer than 8 same-pool cycles is coarse; the mapping stays "
+                        "monotone inside the pool, so ranking within a farm is unaffected"),
+    }
+    return p, rec
+
+
+def calibration_holdout_check(
+    probs: np.ndarray, *, budget: float, farm_ids: np.ndarray | None = None,
+    seed: int = 2026,
+) -> dict:
+    """Task 7.7: measure the threshold's optimism on a partition it was not picked on.
+
+    The contract picks thresholds on ``dev`` and reports on ``dev`` — the same rows — so
+    the honest check is *internal*: split the scored rows into two disjoint halves (whole
+    farms, when farm ids exist, so a farm's cycles never straddle the split), pick the
+    alarm-budget threshold on the calibration half, and report the false-alarm rate it
+    achieves on the held-out half. The gap between that rate and the budget is the
+    optimism a reader should keep in mind; it is recorded next to the threshold instead
+    of being claimed away.
+    """
+    p = np.asarray(probs, dtype=np.float64).ravel()
+    ok = np.isfinite(p)
+    if farm_ids is not None:
+        f = np.asarray(farm_ids).ravel()[ok]
+        uniq = np.unique(f)
+        if uniq.size < 4:
+            return {"available": False, "reason": (f"{uniq.size} farms; a farm-stratified "
+                    "half split needs ≥4 to give both halves farm diversity")}
+        rng = np.random.default_rng(int(seed))
+        perm = rng.permutation(uniq.size)
+        cal_f = set(int(k) for k in uniq[perm[: uniq.size // 2]])
+        cal = ok & np.isin(np.asarray(farm_ids).ravel(), np.array(sorted(cal_f)))
+        strat = "farm_stratified_whole_farm"
+    else:
+        rng = np.random.default_rng(int(seed))
+        idx = np.flatnonzero(ok)
+        perm = rng.permutation(idx.size)
+        cal = np.zeros(p.size, dtype=bool)
+        cal[idx[perm[: idx.size // 2]]] = True
+        strat = "row_half"
+    n_cal, n_hold = int(cal.sum()), int(ok.sum() - cal.sum())
+    if n_cal < 10 or n_hold < 10:
+        return {"available": False, "n_calibration_half": n_cal, "n_holdout_half": n_hold,
+                "reason": (f"halves too small to place a quantile ({n_cal}/{n_hold}); "
+                           "threshold_at_budget needs ≥10 scored cycles per half")}
+    thr_cal = threshold_at_budget(p[cal], budget=float(budget))
+    far_hold = float((p[~cal] >= thr_cal["threshold"]).mean())
+    return {
+        "available": True,
+        "split": strat,
+        "seed": int(seed),
+        "n_calibration_half": n_cal, "n_holdout_half": n_hold,
+        "threshold_on_calibration_half": round(float(thr_cal["threshold"]), 6),
+        "holdout_far": round(far_hold, 5),
+        "budget": float(budget),
+        "optimism": round(far_hold - float(budget), 5),
+        "note": ("threshold picked on one half of the scored partition, FAR measured on the "
+                 "other half: the budget minus the holdout FAR is how far '10 % alarms' holds "
+                 "on rows the threshold never saw — an internal check, not a substitute for "
+                 "the locked test split"),
+    }
+
+
+def _attach_dev_diagnostics(p_dev: np.ndarray, labels_dev: np.ndarray,
+                            fit: CalibrationFit) -> CalibrationFit:
+    """Task 7.6: Brier + ECE of the fitted mapping, computed on dev (a permitted source).
+
+    Raw reconstruction errors are not probabilities, so a "before" value is only defined
+    where the input already was one (C3's logit path); for C1/C2 the mapped output is the
+    first probability-like statement and "before" stays NaN — recorded as absent rather
+    than dressed up as a baseline.
+    """
+    y = np.asarray(labels_dev).ravel().astype(float)
+    if p_dev is not None and np.unique(y).size == 2 and np.isfinite(p_dev).sum() >= 16:
+        fit.brier_after = round(brier(p_dev, y), 5)
+        fit.ece_after = round(float(expected_calibration_error(p_dev, y)["ece"]), 5)
+    return p_dev
+
+
 def calibrate(
     method: str, *, scores_dev: np.ndarray, labels_dev: np.ndarray,
     train_scores: np.ndarray | None = None, scores_eval: np.ndarray | None = None,
-    split: str = "dev",
+    split: str = "dev", eval_keys: np.ndarray | None = None,
+    train_keys: np.ndarray | None = None, min_history: int = 2,
 ) -> tuple[np.ndarray, CalibrationFit]:
     """Fit (if needed) and map ``scores_eval`` to probabilities.
 
-    ``method`` is the contract's calibration id: ``C1`` → ``ecdf``, ``C2`` →
-    ``zscore`` (fixed robust reference), ``C3`` → ``temperature`` then ``isotonic``
-    whichever reduces NLL more, with the choice recorded in ``params``.
+    ``method`` is the contract's calibration id. ``C1`` (farm-specific) and ``C2``
+    (farm × stage) map every row through the reference distribution of its own pool
+    (:func:`pooled_reference_map`) when pooling keys are supplied, falling back to the
+    pre-registered global maps when they are not — the fallback is recorded, never
+    silent. ``C3`` is the global fitted mapping: temperature then isotonic, whichever
+    reduces NLL more, with the choice recorded in ``params``.
     """
+    if method in ("C1", "C2") and eval_keys is not None and train_keys is not None:
+        if train_scores is None:
+            raise ValueError(f"{method} pooling needs train scores; dev scores would "
+                             "calibrate on the scored partition")
+        p, rec = pooled_reference_map(
+            scores_eval if scores_eval is not None else scores_dev, train_scores,
+            eval_keys=eval_keys, train_keys=train_keys, min_history=min_history,
+            map_name="ecdf" if method == "C1" else "zscore",
+        )
+        fit = CalibrationFit(
+            method="pooled_ecdf" if method == "C1" else "pooled_zscore",
+            params=rec, fitted_on="train",
+            n_fit=int(np.asarray(train_scores).size))
+        fit.warnings.append(
+            f"reference pools sized from the train partition only ({rec['n_pools']} pools; "
+            f"{rec['pooled_fill']} pooled fills)")
+        return _attach_dev_diagnostics(p, labels_dev, fit), fit
     if method == "C1":
         if train_scores is None:
             raise ValueError("C1 needs train scores for its ECDF; dev scores would calibrate on the eval set")
         p = rank_to_probability(scores_eval if scores_eval is not None else scores_dev, train_scores)
-        return p, CalibrationFit(method="ecdf", params={"train_n": int(len(train_scores))}, fitted_on="train")
+        fit = CalibrationFit(method="ecdf", params={"train_n": int(len(train_scores)),
+                                                    "pooling_level": "global_fallback",
+                                                    "fallback_note": "no pooling keys supplied"},
+                             fitted_on="train")
+        return _attach_dev_diagnostics(p, labels_dev, fit), fit
     if method == "C2":
         src = train_scores if train_scores is not None else scores_dev
         p = zscore_to_probability(scores_eval if scores_eval is not None else scores_dev, src)
-        return p, CalibrationFit(method="zscore", params={"reference": "train_robust_z"},
-                                 fitted_on="train" if train_scores is not None else split)
+        fit = CalibrationFit(method="zscore", params={"reference": "train_robust_z",
+                                                      "pooling_level": "global_fallback",
+                                                      "fallback_note": "no pooling keys supplied"},
+                             fitted_on="train" if train_scores is not None else split)
+        return _attach_dev_diagnostics(p, labels_dev, fit), fit
     if method != "C3":
         raise KeyError(f"unknown calibration id {method!r} (expected C1/C2/C3)")
     z = np.log(np.clip(scores_dev, 1e-6, 1 - 1e-6) / (1 - np.clip(scores_dev, 1e-6, 1 - 1e-6)))
     t, tfit = fit_temperature(z, labels_dev, split=split)
-    ifit = fit_isotonic(scores_dev, labels_dev, split=split)
+    ifit = fit_isotonic(scores_dev, labels_dev, split="dev")
     p_t = apply_calibration("temperature", z, {"temperature": t})
     p_i = apply_calibration("isotonic", scores_dev, {"fitter": _iso_fit(scores_dev, labels_dev)})
     pick, fit, params = (
@@ -271,8 +511,10 @@ def calibrate(
     ev = scores_eval if scores_eval is not None else scores_dev
     if pick == "temperature":
         zz = np.log(np.clip(ev, 1e-6, 1 - 1e-6) / (1 - np.clip(ev, 1e-6, 1 - 1e-6)))
-        return apply_calibration("temperature", zz, {"temperature": t}), fit
-    return apply_calibration("isotonic", ev, {"fitter": _iso_fit(scores_dev, labels_dev)}), fit
+        return _attach_dev_diagnostics(apply_calibration("temperature", zz, {"temperature": t}),
+                                       labels_dev, fit), fit
+    return _attach_dev_diagnostics(apply_calibration("isotonic", ev, {"fitter": _iso_fit(scores_dev, labels_dev)}),
+                                   labels_dev, fit), fit
 
 
 def _iso_fit(scores: np.ndarray, labels: np.ndarray):
