@@ -513,10 +513,29 @@ def train_candidate(
     reinit_parameters(model, cfg.seed)
     torch.manual_seed(cfg.seed)
     np.random.seed(cfg.seed)
+
+    # Objective 'statistical' (C-stat): nothing to train, by declaration. The
+    # arm is probed, never gradient-trained — a silent no-op train loop would
+    # look like evidence of learning where there is none.
+    if spec.objective == "statistical":
+        return {
+            "candidate": spec.name,
+            "objective": spec.objective,
+            "loss_history": [],
+            "final_loss": None,
+            "params": count_parameters(model),
+            "config": cfg.to_dict(),
+            "device": device,
+            "trained": False,
+            "note": "non-learning statistical reference arm: no pretext exists",
+        }
+
     model.to(device).train()
-    opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
+    opt = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad],
+                            lr=cfg.lr, weight_decay=cfg.weight_decay)
     n = data.n_cycles
     history: list[float] = []
+    farm_ids = np.asarray(getattr(data, "field_ids", []))
 
     for epoch in range(cfg.epochs):
         order = np.random.default_rng(cfg.seed + epoch).permutation(n)
@@ -528,8 +547,16 @@ def train_candidate(
             x, m, dsh = _batch_tensors(data, idx, device)
             opt.zero_grad(set_to_none=True)
 
-            if spec.objective == "reconstruction":
-                recon, _ = model(x, m, dsh)
+            if spec.objective in ("reconstruction", "film-recon"):
+                if spec.objective == "film-recon":
+                    if farm_ids.size != n:
+                        raise ValueError(
+                            "objective 'film-recon' needs data.field_ids to "
+                            "route per-farm adapters; refusing to guess farms"
+                        )
+                    recon = model(x, m, dsh, farm_ids[idx])
+                else:
+                    recon, _ = model(x, m, dsh)
                 xx = torch.where(m, torch.nan_to_num(x, nan=0.0), torch.zeros_like(x))
                 diff = (recon - xx).abs() * m.to(recon.dtype)
                 loss = diff.sum() / m.to(recon.dtype).sum().clamp(min=1.0)
@@ -571,16 +598,25 @@ def train_candidate(
 def embed_candidates(model: nn.Module, data, *, device: str = "cpu",
                      batch_size: int = 64) -> np.ndarray:
     """Frozen embeddings for a dataset, in cycle order."""
+    from ssl_anomaly.evaluation.research_arms import FiLMFieldAdapter
+
     model.to(device).eval()
     out = []
     for start in range(0, data.n_cycles, batch_size):
         idx = np.arange(start, min(start + batch_size, data.n_cycles))
         x, m, dsh = _batch_tensors(data, idx, device)
-        out.append(model.embed(x, m, dsh).cpu().numpy())
+        if isinstance(model, FiLMFieldAdapter):
+            farm_ids = np.asarray(data.field_ids)[idx]
+            out.append(model.embed(x, m, dsh, farm_ids).cpu().numpy())
+        else:
+            out.append(model.embed(x, m, dsh).cpu().numpy())
     return np.vstack(out) if out else np.zeros((0, 0))
 
 
-def screening_verdict(level1_by_candidate: dict, capacity: dict) -> dict:
+def screening_verdict(level1_by_candidate: dict, capacity: dict, *,
+                      absent_candidates: dict[str, str] | None = None,
+                      order: tuple[str, ...] | None = None,
+                      non_selectable: dict[str, str] | None = None) -> dict:
     """G-A applied mechanically: evidence in, verdict out. No judgement calls.
 
     G-A (pre-registered): "SSL beats A-rand on >=2 of {farm-separability, phase
@@ -592,8 +628,18 @@ def screening_verdict(level1_by_candidate: dict, capacity: dict) -> dict:
     separability. The frozen-head T1 term is the phase probe (T1 = DSH-bin
     estimation), so the max is over the two probes available at screening time;
     the report records which terms were decidable.
+
+    ``absent_candidates`` are recorded in the verdict with their reason (a
+    candidate whose inputs are missing is VISIBLE, never dropped silently).
+    ``non_selectable`` arms (e.g. the non-learning C-stat reference) carry
+    evidence but can never be the winner.
     """
-    verdict: dict = {"gate": "G-A", "candidates": {}, "winner": None}
+    from ssl_anomaly.evaluation.research_arms import FULL_CANDIDATE_ORDER, NON_SELECTABLE_ARMS
+
+    order = order if order is not None else FULL_CANDIDATE_ORDER
+    non_selectable = {**NON_SELECTABLE_ARMS, **(non_selectable or {})}
+    verdict: dict = {"gate": "G-A", "candidates": {}, "winner": None,
+                     "absent_candidates": dict(absent_candidates or {})}
     for name, ev in level1_by_candidate.items():
         terms = {
             "farm_separability": float(ev["farm_separability_top1"])
@@ -604,12 +650,15 @@ def screening_verdict(level1_by_candidate: dict, capacity: dict) -> dict:
         passed_terms = sum(bool(v) for v in terms.values())
         collapse = bool(ev["collapse_disqualified"])
         cap_ok = bool(capacity[name]["band_ok"])
-        passed = passed_terms >= 2 and not collapse and cap_ok
+        selectable = name not in non_selectable
+        passed = passed_terms >= 2 and not collapse and cap_ok and selectable
         reasons = []
         if collapse:
             reasons.append("disqualified-collapse")
         if not cap_ok:
             reasons.append("capacity-band")
+        if not selectable:
+            reasons.append("non-selectable: " + non_selectable[name])
         if passed_terms < 2:
             reasons.append(f"only {passed_terms}/2 probe terms beaten")
         verdict["candidates"][name] = {
@@ -617,16 +666,18 @@ def screening_verdict(level1_by_candidate: dict, capacity: dict) -> dict:
             "terms_passed": passed_terms,
             "collapse_disqualified": collapse,
             "capacity_ok": cap_ok,
+            "selectable": selectable,
             "passed": passed,
             "reasons": reasons,
             "params": int(capacity[name]["params"]),
             "encoder_params": int(capacity[name].get("encoder_params", 0)),
         }
-    passed_names = [n for n, v in verdict["candidates"].items() if v["passed"]]
+    passed_names = [n for n, v in verdict["candidates"].items()
+                    if v["passed"] and v["selectable"]]
     if passed_names:
         # Deterministic tie-break: pre-declared order, NOT a metric ranking.
-        verdict["winner"] = next(n for n in CANDIDATES if n in passed_names)
-        verdict["selection_rule"] = "first passing candidate in the pre-declared order"
+        verdict["winner"] = next(n for n in order if n in passed_names)
+        verdict["selection_rule"] = "first passing SELECTABLE candidate in the pre-declared order"
     else:
         verdict["selection_rule"] = (
             "no candidate passed G-A; the capstone records the negative result and "

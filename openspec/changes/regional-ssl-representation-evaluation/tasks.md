@@ -65,6 +65,29 @@ long jobs — they are handed to the owner as exact commands. Checkpoints and
       gate evidence.
 - [ ] 3.3 Selection by G-A…G-E aggregates only; losing candidates recorded
       with reasons; no post-hoc candidate additions.
+- [ ] 3.4 SCOPE EXTENSION (recorded 2026-11-28, workflow package WP-4, BEFORE
+      implementation; additive only, gates G-A…G-E unchanged): fold the
+      research plan's three arms
+      (`thesis_research/SSL_Proposal/ssl-hierarchical-agri-model/REPORT.md`
+      Level A / C / E) in as additional screening candidates —
+      C-stat (Level A: per-field per-date statistical quantile summaries from
+      `Data/Processed/satellite/stats.zarr`, a non-learning representation
+      arm), C-patch (Level C: small patched transformer with Δt-aware
+      positional encoding) and C-film (Level E: frozen backbone + FiLM-style
+      per-farm adapters). Discrepancy recorded: the research text says "61-dim"
+      summaries and "≤1.5M-param" transformer; the actual store yields 58
+      features/field-date and the frozen pre-registration capacity band
+      (±20 % of 100 k encoder params, 250 k total hard cap) is AUTHORITATIVE —
+      the screening candidate is configured inside the band and the research
+      ceilings are recorded in the candidate's manifest, never used to widen
+      the band (no post-hoc preregistration amendment).
+- [ ] 3.5 Screening runner aggregates over ALL THREE pre-registered seeds
+      {13, 42, 2026} (mean ± spread per probe; collapse on any seed
+      disqualifies) and writes `screening_report.json` alongside
+      `pretraining_quality.json`.
+- [ ] 3.6 C-film adapter arm: base encoder frozen, only per-farm FiLM γ/β +
+      farm embeddings trainable; adaptation budget recorded; a farm outside
+      the adapter table is recorded absent (never routed to a zero adapter).
 
 ## 4. Downstream transfer suite (Capability 2)
 
