@@ -64,6 +64,31 @@ def sha256_file(path: str | Path, *, chunk: int = 1 << 20) -> str:
     return h.hexdigest()
 
 
+def sha256_path(path: str | Path, *, chunk: int = 1 << 20) -> str:
+    """sha256 of a file OR a directory store (e.g. a ``.zarr`` chunk tree).
+
+    ``patch_store_v3`` in the pre-registration is a directory store; hashing it
+    with :func:`sha256_file` raised ``IsADirectoryError`` on any machine where
+    the store exists, so every real manifest build failed before this dispatch
+    existed. A directory is hashed deterministically: relative POSIX paths in
+    sorted order, each file's digest folded in — any byte change anywhere in the
+    tree changes the digest, so binding stays fail-closed.
+    """
+    p = Path(path)
+    if not p.is_dir():
+        return sha256_file(p, chunk=chunk)
+    h = hashlib.sha256()
+    files = sorted(f for f in p.rglob("*") if f.is_file())
+    if not files:
+        raise ArtifactBindingError(f"directory store has no files to hash: {p}")
+    for f in files:
+        rel = f.relative_to(p).as_posix()
+        h.update(rel.encode("utf-8"))
+        h.update(b"\x00")
+        h.update(bytes.fromhex(sha256_file(f, chunk=chunk)))
+    return h.hexdigest()
+
+
 def sha256_prefix(digest: str, n: int = SHA_PREFIX_LEN) -> str:
     return digest[:n].lower()
 
@@ -361,7 +386,7 @@ def bind_artifacts(
                 detail="hash not computed (compute_hashes=False)",
             )
         else:
-            actual = sha256_file(path)
+            actual = sha256_path(path)
             if expected is None:
                 status = ArtifactStatus(
                     name=name,

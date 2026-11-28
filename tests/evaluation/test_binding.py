@@ -182,6 +182,67 @@ def test_sha256_file_streams_and_matches_hashlib(tmp_path):
     assert sha256_prefix(sha256_file(p)) == hashlib.sha256(data).hexdigest()[:8]
 
 
+def test_sha256_path_hashes_a_directory_store_deterministically(tmp_path):
+    # patch_store_v3 is a .zarr DIRECTORY store: sha256_file raised
+    # IsADirectoryError on any machine where the store exists, failing every
+    # real manifest build (tests/evaluation/test_runner.py
+    # ::test_real_manifest_points_at_the_gates). The directory digest must be
+    # deterministic, name-sensitive and content-sensitive.
+    from ssl_anomaly.evaluation.binding import sha256_path
+
+    store = tmp_path / "patches.zarr"
+    (store / "0.0").mkdir(parents=True)
+    (store / "0.0" / "a").write_bytes(b"one")
+    (store / "0.0" / "b").write_bytes(b"two")
+    (store / ".zattrs").write_text("{}", encoding="utf-8")
+
+    d1 = sha256_path(store)
+    assert d1 == sha256_path(store), "digest must be deterministic across calls"
+    assert d1 != sha256_path(store / "0.0" / "a"), "not a single file's hash"
+
+    # Renaming a chunk changes the digest (path-sensitive).
+    (store / "0.0" / "b").rename(store / "0.0" / "c")
+    d2 = sha256_path(store)
+    assert d2 != d1
+
+    # Rewriting a chunk with the same name changes the digest (content-sensitive).
+    (store / "0.0" / "c").write_bytes(b"two!")
+    assert sha256_path(store) != d2
+
+
+def test_directory_store_binds_and_fails_closed_like_a_file(tmp_path):
+    from ssl_anomaly.evaluation.binding import sha256_path
+
+    store = tmp_path / "store.zarr"
+    (store / "chunks").mkdir(parents=True)
+    (store / "chunks" / "0").write_bytes(b"payload")
+    digest = sha256_path(store)
+    pre = _prereg_with(tmp_path, {
+        "patch_store_v3": {"path": "store.zarr", "sha256_prefix": digest[:8]},
+    })
+    report = bind_artifacts(prereg=load_preregistration(pre), base_dir=tmp_path)
+    assert report.ok
+    bound = [a for a in report.bound if a.name == "patch_store_v3"]
+    assert bound and bound[0].actual_sha256 == digest
+
+    # Mutation of one chunk must fail closed, exactly like a file artifact.
+    (store / "chunks" / "0").write_bytes(b"tampered")
+    pre_bad = _prereg_with(tmp_path, {
+        "patch_store_v3": {"path": "store.zarr", "sha256_prefix": digest[:8]},
+    })
+    with pytest.raises(ArtifactBindingError, match="deviates"):
+        bind_artifacts(prereg=load_preregistration(pre_bad), base_dir=tmp_path, strict=True)
+
+
+def test_empty_directory_store_is_reported_not_hashed(tmp_path):
+    from ssl_anomaly.evaluation.binding import sha256_path
+
+    empty = tmp_path / "empty.zarr"
+    empty.mkdir()
+    with pytest.raises(ArtifactBindingError, match="no files to hash"):
+        sha256_path(empty)
+
+
 def test_canonical_json_hash_is_order_independent():
     a = canonical_json_sha256({"b": 2, "a": 1})
     b = canonical_json_sha256({"a": 1, "b": 2})
