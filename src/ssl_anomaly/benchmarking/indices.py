@@ -20,10 +20,13 @@ published work:
   :func:`assert_not_circular` refuses when the index's inputs intersect the label
   source named in the pre-registration.
 
-Task 9.18 (dependency-aware uncertainty) is handled by :func:`block_bootstrap_corr`:
-the correlation between an index and an arm's score is a *farm-level* quantity, so the
-bootstrap resamples whole farms; per-cycle resampling would report an interval four
-times too narrow and make every index look "significantly different" from every arm.
+Task 9.18 (dependency-aware uncertainty) is handled by :func:`index_agreement`:
+the correlation between an index and an arm's score is a *blocked* quantity, so the
+bootstrap resamples whole (field, year) blocks — the contract's
+``block_bootstrap_by_field_year`` — falling back to whole fields when no year axis is
+supplied, with the fallback recorded. Per-cycle resampling would report an interval
+several times too narrow and make every index look "significantly different" from
+every arm.
 """
 
 from __future__ import annotations
@@ -322,12 +325,16 @@ def compute_all(x, channel_names, *, weather=None, fit_idx, scored_idx,
 
 
 def index_agreement(scores_bin: np.ndarray, index_scores: np.ndarray, *, farm_ids: np.ndarray,
-                    n_boot: int = 2000, seed: int = 2026) -> dict:
-    """Task 9.18: farm-block-bootstrap Spearman/Kendall between an arm and an index.
+                    years: np.ndarray | None = None, n_boot: int = 2000, seed: int = 2026) -> dict:
+    """Task 9.18: block-bootstrap Spearman/Kendall between an arm and an index.
 
-    Reported with the interval, not just the point estimate: if the arm and the index
-    agree to ρ=0.4 with a CI spanning 0.2–0.6, "the model is redundant" is not a
-    conclusion the data supports.
+    The contract names the dependence form ``block_bootstrap_by_field_year``: when
+    ``years`` is supplied, whole (field, year) blocks are resampled — a field's cycles
+    inside one year share weather and management, so they are one draw, not several.
+    Without ``years`` the bootstrap falls back to field blocks and the record says so,
+    rather than quietly claiming the narrower unit. Reported with the interval, not just
+    the point estimate: if the arm and the index agree to ρ=0.4 with a CI spanning
+    0.2–0.6, "the model is redundant" is not a conclusion the data supports.
     """
     from scipy import stats as sps
 
@@ -338,19 +345,38 @@ def index_agreement(scores_bin: np.ndarray, index_scores: np.ndarray, *, farm_id
     if int(ok.sum()) < 64:
         return {"available": False, "reason": f"{int(ok.sum())} paired finite bins"}
     s, v, f = s[ok], v[ok], f[ok]
-    uniq = np.unique(f)
-    if uniq.size < 8:
-        return {"available": False,
-                "reason": (f"{uniq.size} distinct farm cluster(s); a block bootstrap over fewer than 8 "
-                           "clusters would report a confidence interval with no meaning"),
-                "n_farms": int(uniq.size)}
-    idx_by_farm = {int(k): np.flatnonzero(f == k) for k in uniq}
+    if years is not None:
+        y = np.asarray(years).ravel()
+        if y.size != f.size:
+            return {"available": False, "reason": (f"years ({y.size}) and farm_ids ({f.size}) "
+                    "disagree; misaligned block keys would resample the wrong rows")}
+        keys = np.stack([f, y], axis=1)
+        uniq = np.unique(keys, axis=0)
+        if uniq.shape[0] < 8:
+            return {"available": False,
+                    "reason": (f"{uniq.shape[0]} distinct (field, year) blocks; a block bootstrap over "
+                               "fewer than 8 clusters would report a confidence interval with no meaning"),
+                    "n_farms": int(np.unique(f).size), "resampled_clustered_by": "farm_year"}
+        idx_by_block = {tuple(int(x) for x in k): np.flatnonzero((keys == k).all(axis=1))
+                        for k in uniq}
+        block_keys = [tuple(int(x) for x in k) for k in uniq]
+        clustered_by = "farm_year"
+    else:
+        uniq = np.unique(f)
+        if uniq.size < 8:
+            return {"available": False,
+                    "reason": (f"{uniq.size} distinct farm cluster(s); a block bootstrap over fewer than 8 "
+                               "clusters would report a confidence interval with no meaning"),
+                    "n_farms": int(uniq.size), "resampled_clustered_by": "farm"}
+        idx_by_block = {int(k): np.flatnonzero(f == k) for k in uniq}
+        block_keys = [int(k) for k in uniq]
+        clustered_by = "farm"
     rho, tau = sps.spearmanr(s, v).statistic, sps.kendalltau(s, v).statistic
     rng = np.random.default_rng(int(seed))
     rr, tt = [], []
     for _ in range(int(n_boot)):
-        pick = rng.choice(uniq, size=uniq.size, replace=True)
-        ii = np.concatenate([idx_by_farm[int(k)] for k in pick])
+        pick = rng.choice(len(block_keys), size=len(block_keys), replace=True)
+        ii = np.concatenate([idx_by_block[block_keys[k]] for k in pick])
         a, b = s[ii], v[ii]
         if np.unique(a).size < 3 or np.unique(b).size < 3:
             continue
@@ -361,12 +387,17 @@ def index_agreement(scores_bin: np.ndarray, index_scores: np.ndarray, *, farm_id
     def _ci(a):
         return [round(float(np.quantile(a, 0.025)), 4), round(float(np.quantile(a, 0.975)), 4)] if a.size else [None, None]
 
+    note = ("correlations are of pooled bins; the block bootstrap is what makes the interval "
+            "honest, since bins within a block are not independent draws")
+    if clustered_by == "farm":
+        note += (" — the contract's field-year form was NOT used: no year axis was supplied, "
+                 "so whole fields are the resampling unit and the interval is the wider of the two")
     return {"available": bool(rr.size >= 20), "spearman": round(float(rho), 4),
             "spearman_ci": _ci(rr), "kendall": round(float(tau), 4), "kendall_ci": _ci(tt),
-            "n_bins": int(s.size), "n_farms": int(uniq.size), "bootstrap_draws": int(rr.size),
-            "resampled_clustered_by": "farm",
-            "note": ("correlations are of pooled bins; the block bootstrap over farms is what makes the "
-                     "interval honest, since bins within a farm are not independent draws")}
+            "n_bins": int(s.size), "n_farms": int(np.unique(f).size),
+            "n_blocks": int(len(block_keys)), "bootstrap_draws": int(rr.size),
+            "resampled_clustered_by": clustered_by,
+            "note": note}
 
 
 def reference_metrics(index: IndexScore, labels_bin: np.ndarray, *, eval_idx: np.ndarray,

@@ -285,17 +285,66 @@ print(json.dumps(rows, indent=1)[:2500])
     # 14 -----------------------------------------------------------------
     md("## ۱۴. شاخص‌های محیطی — مرجع، نه ground truth")
     code("""
-from ssl_anomaly.benchmarking import indices
+from ssl_anomaly.benchmarking import indices, runner as b_runner
 
-n = int(frame.n)
-fit_idx, scored = np.arange(0, n * 3 // 4), np.arange(n * 3 // 4, n)
-scores = indices.compute_all(frame.x, frame.channel_names, weather=None,
+# The frame the agreement is computed on is named beside every row: a fixture frame and
+# the real v2 archive are different claims, and a table that hid which one it used would
+# be a provenance defect.
+real_ok = (pathlib.Path(REPO_DIR) / "data/processed/cycles_490_v2.parquet").is_file()
+env_frame = b_runner.load_clean_data(cfg, base=pathlib.Path(REPO_DIR), fixture=not real_ok)
+print("env frame data_source:", env_frame.data_source, "| fixture:", not real_ok)
+
+n = int(env_frame.n)
+is_dev = np.asarray(env_frame.split).astype(str) != "train"
+fit_idx, scored = np.flatnonzero(~is_dev), np.flatnonzero(is_dev)
+scores = indices.compute_all(env_frame.x, env_frame.channel_names, weather=None,
                              fit_idx=fit_idx, scored_idx=scored)
 for name, idx in scores.items():
     print(json.dumps({"index": name, "available": idx.available, "missing": list(idx.missing),
                       "note": (idx.note or "")[:120]}, sort_keys=True))
 print("CWSI_ET عمداً unavailable است: آرشیو جملهٔ مقاومت آیرودینامیکی را ندارد و جایگزینی‌اش "
       "با CWSI_LST یک شاخص دما را با نام ET معرفی می‌کرد")
+
+# Task 9.18 in the contract's own form: arm-vs-index agreement with the
+# block_bootstrap_by_field_year uncertainty. The arm score comes from the most recent
+# run's bin_scores.npz (eval rows, self-describing); the year axis is the archive-year
+# block derived from start_days, and the record states the block semantics — a calendar
+# name would need the epoch sidecar, which is not part of the v2 bundle yet.
+npz = None
+for root in (pathlib.Path(RUN), pathlib.Path(BENCH)):
+    if not root.is_dir():
+        continue
+    hits = sorted(root.glob("runs/*/bin_scores.npz"))
+    if hits:
+        npz = hits[-1]
+        break
+if npz is None:
+    print("no bin_scores.npz yet — run section 9 or 10 first; agreement rows follow the run")
+else:
+    d = np.load(npz, allow_pickle=False)
+    arm_bins, field_ids, split = d["bin_scores"], d["field_ids"], d["split"]
+    assert (split.astype(str) == "dev").all(), "bin_scores.npz rows are the eval partition only"
+    assert int(field_ids.size) == arm_bins.shape[0] == int(scored.size), (
+        "run frame and env frame disagree; agreement rows would be misaligned")
+    farms = np.repeat(np.asarray(field_ids), arm_bins.shape[1])
+    start = np.asarray(env_frame.start_days)[scored]
+    year_block = ((start - float(start.min())) // 365.25).astype(int)
+    year_block = np.repeat(year_block, arm_bins.shape[1])
+    cols = np.tile(np.arange(arm_bins.shape[1]), arm_bins.shape[0])
+    lin = np.repeat(np.arange(arm_bins.shape[0]), arm_bins.shape[1]) * arm_bins.shape[1] + cols
+    arm_flat = arm_bins.reshape(-1)[lin]
+    caveat = str(cfg.raw["evaluation"]["environmental"]["caveat"])
+    print("caveat:", caveat[:160], "...")
+    for name, idx in scores.items():
+        if not idx.available or idx.scores is None:
+            print(json.dumps({"index": name, "agreement": "unavailable",
+                              "reason": "index not computable on this archive"}, sort_keys=True))
+            continue
+        ag = indices.index_agreement(arm_flat, idx.scores[scored].reshape(-1)[lin],
+                                     farm_ids=farms, years=year_block, n_boot=500)
+        print(json.dumps({"index": name, **{k: ag.get(k) for k in
+                            ("available", "spearman", "spearman_ci", "kendall",
+                             "resampled_clustered_by", "n_blocks")}}, sort_keys=True))
 """)
 
     # 15 -----------------------------------------------------------------

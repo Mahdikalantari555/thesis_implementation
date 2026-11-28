@@ -178,6 +178,32 @@ def test_agreement_uses_farm_blocks_and_refuses_one_cluster(grid):
         "a one-cluster block bootstrap must refuse rather than print a confident interval"
 
 
+def test_agreement_field_year_blocks_are_the_contracted_unit(grid):
+    """9.18 — with a year axis, whole (field, year) blocks are one draw, and the record says so."""
+    tv = _tvdi(grid)
+    arm = np.asarray(grid["x"], dtype=np.float64)[:, :, 0] + 0.5 * np.asarray(grid["x"], dtype=np.float64)[:, :, 1]
+    T, sc = grid["T"], grid["sc"]
+    cols = np.tile(np.arange(T), sc.size)
+    lin = np.repeat(sc, T) * T + cols
+    farms = np.repeat(grid["farm"][sc], T)
+    years = np.repeat(sc // 10, T)                          # 2 archive-year blocks over the scored rows
+    out = indices.index_agreement(arm.reshape(-1)[lin], tv.scores.reshape(-1)[lin],
+                                  farm_ids=farms, years=years, n_boot=200)
+    assert out["available"] and out["resampled_clustered_by"] == "farm_year", out
+    assert out["n_blocks"] == int(len(np.unique(np.stack([farms, years], 1), axis=0)))
+    assert out["n_blocks"] >= 8, "the fixture must supply enough (field, year) blocks to bootstrap"
+    assert "field-year" in out["note"] or "farm_year" == out["resampled_clustered_by"]
+    lo, hi = out["spearman_ci"]
+    assert lo <= out["spearman"] <= hi
+    misaligned = indices.index_agreement(arm.reshape(-1)[lin], tv.scores.reshape(-1)[lin],
+                                         farm_ids=farms, years=years[:-1], n_boot=50)
+    assert not misaligned["available"] and "disagree" in misaligned["reason"]
+    fallback = indices.index_agreement(arm.reshape(-1)[lin], tv.scores.reshape(-1)[lin],
+                                       farm_ids=farms, n_boot=50)
+    assert fallback["resampled_clustered_by"] == "farm" and "NOT used" in fallback["note"], (
+        "without a year axis the record must say the contract's field-year form was not used")
+
+
 # --------------------------------------------------------------------------- protocols
 
 
