@@ -81,10 +81,19 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
   not a fraction of full canopy amplitude. Otherwise the cycle starts at
   harvest. Field_318 now starts 2018-09-05 as the owner indicated. Mini smoke:
   36 rows = 32 normal / 3 overlong / 1 short; 14 cycles have rest (median 80.5 d).
-  **Awaiting owner review** of plots with distinct S1–S4 colours/labels,
-  legend and gray rest spans: `/tmp/opencode/vi_review4/mini/{L02-02,R12-08,R15-18}.png`
-  and `/tmp/opencode/vi_review4/fields/field_*.png` (+ `review_summary.json`).
-  Canonical mini phenology output NOT yet rebuilt; Path B still blocked.
+  **Awaiting owner review** — artifacts regenerated 2026-11-27 (WP-1; the
+  2026-11-26 `/tmp/opencode/vi_review4/` set was lost with the tmp dir):
+  `mini/{L02-02,R12-08,R15-18}.png`, `fields/field_{012,087,164,241,318,455}.png`
+  and `review_summary.json` (per subdir + mechanical merge at top), via
+  `scripts/visualize_vi_cycle_review.py` (+ new `--skip-archive-fields`);
+  detection re-run on the fly = 36 rows (32 normal / 3 overlong / 1 short).
+  Dated addendum §7 in `docs/audits/cycle_gap_diagnosis_2026-11-26.md`;
+  verdict PENDING. Retention flags now surfaced fail-closed in every mini
+  cycle consumer (b9d5583). Canonical mini phenology output NOT yet rebuilt
+  (owner-gated); Path B still blocked. E0 cycle-completeness audit done
+  (`docs/audits/e0_cycle_completeness_2026-11-27.md`): v2 GO / v1 NO-GO for
+  completeness; alias verified IoU 1.0 on all 490 fields; G0 NaN/
+  harmonization arms not covered by that audit.
 
 - ▶ **NEXT SESSION — owner cycle-timeline visual check (2026-11-25)** —
   The PNGs are **local review artifacts only** (not committed; regenerate with
@@ -297,25 +306,38 @@ openspec change when we start it (per user, 2026-11-07). Items ✅ are done;
   only); proxy circularity flagged — METRIC CWSI is quasi-independent evidence at
   best, L4 wording must be agreement-never-truth.
 
-## Active openspec changes (updated 2026-11-27) — derived from the change folders; full task lists live in each `tasks.md`; triage index = `openspec/changes/INDEX.md`
+## Active openspec changes (updated 2026-11-28, WP-3 entry) — derived from the change folders; full task lists live in each `tasks.md`; triage index = `openspec/changes/INDEX.md`
 
-**`regional-ssl-representation-evaluation`** — PROPOSED, 15/42. The capstone. Code built and green
-(`pytest tests/evaluation` 355 passed; six scripts smoke-pass), but **no real number exists yet** —
-every artifact needs owner-side data (v2 parquet/splits/holdout, T4 hour budget, v2 patch store) and
-owner-run training. Next actions (in order):
-1. Phase 0 registration: freeze `configs/evaluation/pre_registration.yaml` (H1–H5, G-A…G-E, fractions, seeds) on owner approval to apply;
-   verify artifact bindings (`cycles_490_v2.parquet`, `splits_locked_v2.json` sha 30ecbe10…, `holdout_manifest_v2.json` sha d501bf81…);
-   rebuild/record the v2 normalization sidecar; commit the pre-registration hash.
-   *Frozen in-tree* (`configs/evaluation/pre_registration.yaml`, gates G-A…G-E with executable
-   thresholds, `bind_artifacts` rejects a weakened criterion); the v2 bindings are still owner-side.
-2. B1–B5 ladder first (Phase 1) — the FAR-matched `ndvi_lst_rule` control must exist before any SSL claim;
-   capacity manifest; scoring bridge; causality tests.
-3. Level-1 pretraining-quality battery (Phase 2) → architecture screening of region model v0 (Phase 3),
-   dev-only, 3 seeds, selection by gates only.
-4. Level-2 transfer suite + T3 retrieval with near-match listing (Phase 4) → generalization rolls (Phase 5)
-   → decision gates + findings 26 (Phase 6). Capstone claims nothing above L3; applied ambition (vision.md item 9) is vision-stage.
-- Blocked by: owner approval to run `/opsx:apply`; v2 store re-extraction/norm v2 for the patch-dependent parts stays out of scope here.
+**`farm-subset-anomaly-probe`** — ACTIVE, 15/20 (WP-3 2026-11-28, commits `c56c394`+`5c57153`). Harness done and
+smoke-passed end-to-end: subset extraction rebuilt (date-epoch bug fixed — stats.zarr `time` is days since
+**2013-03-30**, the pre-repair script misaligned 370/538 dates; membership from `pixels/*.parquet` with the
+WP-1-verified `archive_fid = OGC_FID + 1` alias), parity checker vs `stats_long.parquet` (smoke PASS, 0
+failures), probe package `src/ssl_anomaly/probe/` (B2 multi-band phenology, pixel CNN-AE 197,895 params,
+Barlow Twins trajectories, GRU-AE wrapper; persistence + cold-LST gates; event framing, no-"stress"
+wording enforced by test; Stage-2 ONNXRuntime CPU, torch↔ORT parity 3.4e-7; provenance.json complete).
+Owner-run next: H-1 extraction (≈12 min) → H-2 parity → H-3 probe ×3 seeds (commands in
+`.scratch/workflow_2026-11-27/entries/WP-3-handovers.md`). Open owner decisions: E1 ΔAUC-PR labels (D-3),
+onnxruntime env change (D-2). All probe claims are L2 screening only — the pilot precedent
+(raw 0.498 vs SSL 0.327) means the SSL arm may lose; verdict is reported honestly once data exists.
 
+
+**`regional-ssl-representation-evaluation`** — PROPOSED, 35/45 (WP-4 sync 2026-11-28). The capstone.
+Harness complete and verified: prereg freeze + v2 artifact bindings recorded, fail-closed
+(`reports/regional_representation/preregistration_freeze.json`; JSON manifests bound by recomputed
+self-recorded hashes, .zarr stores by tree digest); pre-registered B1–B5 INPUT ladder implemented
+(B1 `ndvi_lst_rule` FAR-matched control first, causality-tested builders, capacity manifest, common
+scoring bridge); research Level A/C/E arms folded in as candidates (recorded additive scope
+extension, §3.4); screening runner aggregates all 3 seeds and writes `screening_report.json`;
+downstream suite T1–T5 built (frozen-table injection pools, two-track T3 + near_matches, cut-based
+T4, exploratory T5); generalization rolls verified. `pytest tests/evaluation` 438 passed at
+`4361496`. **Still no real number exists** — owner runs H-WP4-0..6 (exact commands in
+`.scratch/workflow_2026-11-27/entries/WP-4-handovers.md`): real screening (H-1), clean-calibration
+subset (D-WP4-2) → input ladder (H-2), transfer curves (H-3), downstream suite (H-4), rolls (H-5),
+gates + findings 26 (H-6). Open owner decisions D-WP4-1..6 (tag, calibration subset, T4 forecaster,
+Track-2 producer, dual-ladder framing, local-vs-Colab). Open boxes: 3.3 (actual selection — needs
+H-1), 6.2/7.5 (findings 26 EN+FA — needs real results, then persian-writing audit), 7.4 (Colab
+bundle — only after an escalated run), 8.1–8.4 (acceptance). Claims stay ≤ L3; the applied ambition
+(vision.md item 9) is vision-stage.
 **`benchmark-latent-reconstruction-prediction-architectures`** — IN PROGRESS, 26/37 (ticked 2026-11-23; 11 boxes annotated with what is missing).
 Harness built and green (26/37 boxes ticked, each open box annotated with what is missing): `src/ssl_anomaly/benchmarking/` (config, matrix, registry, bindings, inputs,
 splits, synthetic, capacity, collapse, interface, arms+suppression, metrics, calibration, scoring,
@@ -372,6 +394,17 @@ public GCS C2 L1 fetch specified — owner runs). T4 Deferred (blocked by `date-
 HELD). Owner's 3-way verdict: (b) transferable agricultural representation, within-region/
 within-crop scope; ADAPT stands. Tables: `experiments/olmoearth_eval/outputs/tables/
 temporal_transfer_*.json`; REPORT.md §11 amended.
+
+**`continual-hybrid-representation-design`** — WP-2 infrastructure DONE 2026-11-28 (23/55): input
+data contract (0A.1-0A.5: LSDS-1619 pins + manifest + sensor_id in mini store + measured L8/L9
+same-phase offsets + min_obs exclusion + N0-N4 normalization arms), convergence-controlled trainer
+(1.1-1.6: PlateauMonitor verdicts, representation monitors + probes, eligibility-filtered best.pt,
+atomic checkpoints with exact-resume, verbose progress.jsonl, mini runner retrofit with dev split,
+resume semantics, owner-run throughput probe), model hygiene (2.1-2.4: distinct mamba arms +
+duplicate guard, JEPA/Barlow full-field root-caused to a batch-1 NaN barlow loss — fixed, mask+Δt
+token channels, ±20 % capacity matcher), 3.1 verified from WP-1's E0 audit (490/490 IoU 1.0).
+Owner-gated open: 0.4 (δ values after E5, regression cells after E1). 1.6 full throughput probe is
+OWNER-RUN: `python scripts/probe_mini_throughput.py` (see workflow handovers).
 
 ### Owner data-prep tasks — architecture benchmark (2026-11-23)
 
@@ -738,14 +771,19 @@ two experiments.
 - M2 normal-bank scorer as an *experimental* arm (openspec change; final adoption gated on A1/A3).
 - M3 event-FAR + POT declustering re-computation of finding-16 metrics (analysis-only, no retraining).
 - Items 1–3, 6–11 openspec candidates once their user-gated questions (B1) are answered.
-- **Item 12 `novelty-positioning-verification`** (owner guide §10, 2026-11-15): the claim "first
+- ✅ **Item 12 `novelty-positioning-verification`** (owner guide §10, 2026-11-15) — DONE 2026-11-27 (WP-8): the claim "first
   unsupervised agricultural anomaly detection" is NOT defensible — 2017 unsupervised RS anomaly
   paper, 2024 aerial-MIM AD (already in corpus: Shikhar & Sobti 2404.08931), Oct-2026
-  Mediterranean water-use screening (Scientific Reports). Verify the 2017 + 2026 papers against
-  the 84-paper matrix, then phrase novelty as the COMBINATION (long-term per-farm Landsat +
+  Mediterranean water-use screening (Scientific Reports). ✅ 2017 paper verified as Liu et al.,
+  *Unsupervised Detection of Contextual Anomaly in Remotely Sensed Data*, RSE 202:75–87
+  (polar AVHRR/SSM-I, not agricultural); Oct-2026 paper verified as Kakoulli et al., AI4WaterGuard,
+  Sci Rep doi:10.1038/s41598-026-76069-9 (Cyprus water-use screening) — both confirmed ABSENT
+  from the 84-paper matrix. Novelty phrased as the COMBINATION (long-term per-farm Landsat +
   per-farm historical pattern learning + phenology-cycle awareness + SSL temporal representation +
   label-free growth-deviation detection + multi-level validation) — hypothesis pending
-  verification, not a proven claim — in method_design_ssl.md and the thesis text.
+  verification, not a proven claim — in method_design_ssl.md §7, proposal_english.md/proposal_persian.md §10,
+  literature_review_ssl.md (thesis_research commit `caba388`). Matrix/bib row additions for the two new
+  papers parked for owner approval (WP-8 decisions D-3; PAPERS_CATALOG.md untouched — pre-existing dirt).
 
 ## Thesis-level reminders
 
