@@ -42,6 +42,22 @@ def _apply_overrides(cfg: RunConfig, args: argparse.Namespace) -> None:
         cfg.out_root = Path(args.out)
     if args.resume:
         cfg.resume = True
+        cfg.model.resume_mode = "resume"
+    if args.init_from:
+        # Task 1.5: --init-from starts a NEW run from a checkpoint's weights;
+        # neither it nor --resume ever silently re-initializes.
+        cfg.model.resume_mode = "init-from"
+        cfg.model.init_from = args.init_from
+    if args.from_scratch:
+        cfg.model.resume_mode = "from-scratch"
+    if args.to_plateau:
+        cfg.model.to_plateau = True
+    if args.max_steps is not None:
+        cfg.model.max_steps = args.max_steps
+    if args.max_wall_minutes is not None:
+        cfg.model.max_wall_minutes = args.max_wall_minutes
+    if args.eval_every is not None:
+        cfg.model.eval_every = args.eval_every
     if args.claim_rung:
         cfg.claim_rung = args.claim_rung
     if args.smoke:
@@ -49,6 +65,12 @@ def _apply_overrides(cfg: RunConfig, args: argparse.Namespace) -> None:
         cfg.model.seeds = (13,)
         cfg.n_trials = 1
         cfg.name = cfg.name + "_smoke"
+        if args.to_plateau:
+            cfg.model.max_steps = args.max_steps or 30
+            cfg.model.eval_every = 10
+            cfg.model.min_steps = 0
+            cfg.model.patience = 2
+            cfg.model.window = 3
 
 
 def _execute(cfg: RunConfig) -> dict:
@@ -77,7 +99,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seeds", nargs="+", type=int, default=None)
     ap.add_argument("--device", default=None)
     ap.add_argument("--out", type=Path, default=None)
-    ap.add_argument("--resume", action="store_true")
+    ap.add_argument("--resume", action="store_true",
+                    help="continue the same run from last.pt (fail closed when absent)")
+    ap.add_argument("--init-from", type=Path, default=None,
+                    help="start a NEW run from this checkpoint's weights (fresh optimizer/monitor)")
+    ap.add_argument("--from-scratch", action="store_true",
+                    help="refuse to start when last.pt already exists (fail closed)")
+    ap.add_argument("--to-plateau", action="store_true",
+                    help="convergence-controlled training (task 1.4); requires --max-steps or --max-wall-minutes")
+    ap.add_argument("--max-steps", type=int, default=None)
+    ap.add_argument("--max-wall-minutes", type=float, default=None)
+    ap.add_argument("--eval-every", type=int, default=None)
     ap.add_argument("--claim-rung", choices=("L1", "L2"), default=None)
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument("--all-protocols-smoke", action="store_true")

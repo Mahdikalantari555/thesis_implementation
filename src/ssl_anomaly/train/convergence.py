@@ -392,7 +392,8 @@ class PlateauMonitor:
     def budget_exhausted(self, step: int, steps_per_eval: float) -> EvalOutcome:
         """Classify a run that hit ``max_steps``/wall cap before plateauing."""
         outcome = EvalOutcome(step=step)
-        improving = [n for n, s in self.signals.items() if self._signal_improving(s) and not n.startswith("__")]
+        improving = [n for n, s in self.signals.items()
+                     if self._signal_improving(s) and not n.startswith("__") and n != "total"]
         outcome.improving_signals = improving
         if improving:
             outcome.verdict = Verdict.BUDGET_EXHAUSTED_STILL_IMPROVING

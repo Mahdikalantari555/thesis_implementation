@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import torch
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "src") not in sys.path:
@@ -65,6 +66,9 @@ def make_cfg(
     d_model: int,
     latent: int,
     n_layers: int,
+    *,
+    plateau: bool = False,
+    eval_every: int = 25,
 ) -> RunConfig:
     if len(farms) >= 2:
         proto = ProtocolConfig(
@@ -98,6 +102,17 @@ def make_cfg(
             name=model, d_model=d_model, latent_dim=latent, n_layers=n_layers,
             dropout=0.1, epochs=epochs, max_steps=max_steps,
             batch_size=8, lr=1e-3, seeds=seeds, device="cpu",
+            # Task 1.4: to-plateau arms train under the convergence-controlled
+            # trainer; max_steps stays the hard cap and per-eval checkpoints
+            # enable the equal-step cut (design §4.5).
+            to_plateau=plateau,
+            keep_eval_ckpts=plateau,
+            eval_every=eval_every,
+            min_steps=2 * eval_every,
+            patience=4,
+            window=5,
+            lr_patience=None,
+            max_lr_drops=0,
         ),
         out_root=OUT,
         n_trials=1,
@@ -112,6 +127,97 @@ def n_params(model: str, d_in: int, cfg: ModelConfig) -> int:
         return -1
 
 
+def cfg_model_kwargs(d_model: int, latent: int, n_layers: int, seeds, batch_size: int) -> dict:
+    """Model-config kwargs for equal-step-cut scoring (must match run configs)."""
+    return dict(d_model=d_model, latent_dim=latent, n_layers=n_layers,
+                dropout=0.1, seeds=tuple(seeds), batch_size=batch_size, lr=1e-3)
+
+
+def _load_model_at_step(run_dir: Path, target_step: int) -> tuple[int, dict] | None:
+    """Nearest saved per-eval checkpoint at or before ``target_step``."""
+    ckpt_dir = run_dir / "eval_ckpts"
+    if not ckpt_dir.exists():
+        return None
+    steps = sorted(int(p.stem.split("_")[1]) for p in ckpt_dir.glob("step_*.pt"))
+    if not steps:
+        return None
+    eligible = [s for s in steps if s <= target_step] or [steps[0]]
+    step = eligible[-1]
+    payload = torch.load(ckpt_dir / f"step_{step:07d}.pt", map_location="cpu", weights_only=False)
+    return step, payload["model"]
+
+
+def equal_step_cut(stage_out: Path, unit_rows: list[dict], ds, splits, mk_kwargs: dict):
+    """Design §4.5: re-score every arm at the smallest arm's plateau step.
+
+    Per seed: cut step = min over arms of (plateau step when the arm stopped
+    at CONVERGED_PLATEAU, else its last eval step). Each arm is scored from
+    its per-eval checkpoint at that step; random-init controls are already
+    step-independent and reused from the arm's report. Arms without saved
+    eval checkpoints report None — never a fabricated number.
+    """
+    from ssl_anomaly.mini_lab.trainer import score_state_dict
+
+    device = torch.device("cpu")
+    out: list[dict | None] = []
+    for name, train, dev, test in splits:
+        xtr = torch.from_numpy(train.x)
+        xte = torch.from_numpy(test.x)
+        obs_te = torch.from_numpy(test.observed)
+        # cut step per seed: smallest arm's plateau/last-eval step
+        cut_steps: dict[int, int] = {}
+        for r in unit_rows:
+            for psd in (r.get("to_plateau_detail") or []):
+                seed = psd.get("seed")
+                step = (
+                    psd.get("best_primary_step")
+                    if psd.get("verdict") == "CONVERGED_PLATEAU" and psd.get("best_primary_step")
+                    else psd.get("steps_done")
+                )
+                if seed is None or step is None:
+                    continue
+                cut_steps[seed] = min(cut_steps.get(seed, step), int(step))
+        if not cut_steps:
+            out.append(None)
+            continue
+        per_seed: dict[str, Any] = {}
+        for r in unit_rows:
+            if r.get("error") or not r.get("to_plateau"):
+                continue
+            run_dir = stage_out / f"{r['unit']}__{r['model']}"
+            per_seed[r["model"]] = {}
+            for seed, cut_step in sorted(cut_steps.items()):
+                loaded = _load_model_at_step(run_dir / name / f"seed_{seed}", cut_step)
+                if loaded is None:
+                    per_seed[r["model"]][str(seed)] = None  # honest absence
+                    continue
+                actual_step, state = loaded
+                from ssl_anomaly.mini_lab.models import MODEL_REGISTRY
+
+                cfg_m = ModelConfig(name=r["model"], **mk_kwargs)
+                scores = score_state_dict(
+                    RunConfig(name="cut", model=cfg_m), state, xtr, xte, obs_te,
+                    MODEL_REGISTRY[r["model"]], seed, device, ds.feature_names,
+                )
+                scores["cut_step"] = cut_step
+                scores["actual_step"] = actual_step
+                per_seed[r["model"]][str(seed)] = scores
+        # aggregate cut AUPRC per arm (mean over seeds with a value)
+        arms: dict[str, Any] = {}
+        for model_name, seeds_scores in per_seed.items():
+            vals = [v["synthetic_auprc"] for v in seeds_scores.values() if v]
+            steps_used = [v["actual_step"] for v in seeds_scores.values() if v]
+            arms[model_name] = {
+                "equal_step_auprc_mean": (
+                    float(np.mean([v for v in vals if v is not None])) if vals else None
+                ),
+                "n_seeds_scored": len(vals),
+                "actual_steps": steps_used,
+            }
+        out.append({"cut_steps": cut_steps, "arms": arms})
+    return out
+
+
 def run(args: argparse.Namespace) -> int:
     t0 = time.monotonic()
     out_root = Path(args.out) if getattr(args, "out", None) else OUT
@@ -123,6 +229,8 @@ def run(args: argparse.Namespace) -> int:
         else (int(args.d_model), int(args.latent_dim), int(args.n_layers))
     )
     models = list(args.models or MODEL_REGISTRY)
+    plateau = bool(getattr(args, "plateau", False))
+    eval_every = int(getattr(args, "eval_every", 25))
     stage_out = out_root / stage
     stage_out.mkdir(parents=True, exist_ok=True)
 
@@ -135,7 +243,7 @@ def run(args: argparse.Namespace) -> int:
         try:
             ds = build_dataset(base, farm_ids=tuple(args.farms))
             splits = split_datasets(ds, base)
-            n_train, n_test = splits[0][1].n, splits[0][2].n
+            n_train, n_test = splits[0][1].n, splits[0][3].n
             d_in = splits[0][1].x.shape[-1]
             n_batch = max(1, int(np.ceil(n_train / base.model.batch_size)))
             epochs = max(1, round(target_steps / n_batch))
@@ -144,10 +252,12 @@ def run(args: argparse.Namespace) -> int:
             print(f"[skip] {unit_name}: dataset failed: {exc}", flush=True)
             continue
         print(f"[unit] {unit_name}: samples train={n_train} test={n_test} d_in={d_in} "
-              f"steps/run={epochs*n_batch} epochs={epochs}", flush=True)
+              f"steps/run={epochs*n_batch} epochs={epochs} plateau={plateau}", flush=True)
+        unit_rows: list[dict[str, Any]] = []
         for model in models:
             cfg = make_cfg(f"{unit_name}__{model}", spatial, sizes, model, tuple(args.farms),
-                           target_steps, target_steps, seeds, d_model, latent, n_layers)
+                           target_steps, target_steps, seeds, d_model, latent, n_layers,
+                           plateau=plateau, eval_every=eval_every)
             cfg.model.batch_size = base.model.batch_size
             row: dict[str, Any] = {
                 "unit": unit_name, "spatial": spatial, "patch_size": sizes[0] if sizes else None,
@@ -156,6 +266,7 @@ def run(args: argparse.Namespace) -> int:
                 "params": n_params(model, d_in, cfg.model),
                 "family": MODEL_REGISTRY[model].family,
                 "placement": MODEL_REGISTRY[model].placement,
+                "to_plateau": plateau,
             }
             try:
                 summary = run_experiment(cfg, ds, out_root=stage_out / f"{unit_name}__{model}")
@@ -171,6 +282,15 @@ def run(args: argparse.Namespace) -> int:
                     "wall_s": summary["wall_s"],
                     "report": str(stage_out / f"{unit_name}__{model}" / "report.json"),
                 })
+                if plateau:
+                    per_seed_verdicts = [
+                        {"seed": r.get("seed"), "verdict": r.get("verdict"),
+                         "steps_done": r.get("steps_done"),
+                         "best_primary_step": r.get("best_primary_step"),
+                         "extra_steps_estimate": r.get("extra_steps_estimate")}
+                        for r in summary.get("per_seed", [])
+                    ]
+                    row["to_plateau_detail"] = per_seed_verdicts
                 print(f"  {model:14s} AUPRC={row['synthetic_auprc']['mean']:.4f} "
                       f"rand={row['random_init_auprc']['mean']:.4f} "
                       f"gain={row['ssl_gain_over_random']:+.4f}", flush=True)
@@ -179,6 +299,18 @@ def run(args: argparse.Namespace) -> int:
                 row["traceback"] = traceback.format_exc()
                 print(f"  {model:14s} FAILED: {exc}", flush=True)
             rows.append(row)
+            unit_rows.append(row)
+        if plateau:
+            cut = equal_step_cut(stage_out, unit_rows, ds, splits, cfg_model_kwargs(
+                d_model, latent, n_layers, seeds, base.model.batch_size))
+            if cut:
+                for r, cut_row in zip(unit_rows, cut):
+                    if cut_row:
+                        r["equal_step_cut"] = cut_row
+                cut_all = [v for c in cut if c and c.get("cut_steps") for v in c["cut_steps"].values()]
+                if cut_all:
+                    print(f"  [equal-step cut] smallest cut step={min(cut_all)} "
+                          f"arms_scored={sum(1 for c in cut if c)}", flush=True)
 
     good = [r for r in rows if r.get("synthetic_auprc")]
     ranked = sorted(good, key=lambda r: (r["ssl_gain_over_random"] is None,
@@ -192,6 +324,7 @@ def run(args: argparse.Namespace) -> int:
         "store": str(STORE),
         "manifest_sha256": __import__("hashlib").sha256((STORE / "manifest.json").read_bytes()).hexdigest(),
         "target_steps_per_run": target_steps,
+        "to_plateau": plateau,
         "seeds": list(seeds),
         "d_model": d_model, "latent_dim": latent, "n_layers": n_layers,
         "n_configs": len(rows), "n_success": len(good), "n_failed": len(rows) - len(good),
@@ -199,7 +332,10 @@ def run(args: argparse.Namespace) -> int:
         "rows": rows,
         "wall_s": round(time.monotonic() - t0, 2),
         "claim": "CPU screening only; equal optimiser steps, random-init control recorded; "
-                 "no claim above L2 and no SSL-advantage claim without CI excluding zero.",
+                 "no claim above L2 and no SSL-advantage claim without CI excluding zero."
+                 + (" To-plateau arms report both the to-plateau result and the "
+                    "equal-step cut at the smallest arm's plateau step (design §4.5)."
+                    if plateau else ""),
     }
     path = stage_out / "sweep.json"
     path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
@@ -215,6 +351,10 @@ def run(args: argparse.Namespace) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--stage", choices=("screen", "confirm"), default="screen")
+    ap.add_argument("--plateau", action="store_true",
+                    help="to-plateau arms (task 1.4) with the equal-step cut (design §4.5)")
+    ap.add_argument("--eval-every", type=int, default=25,
+                    help="evaluations every N optimizer steps in --plateau mode")
     ap.add_argument("--farms", nargs="+", default=["L02-02", "R12-08"])
     ap.add_argument("--seeds", nargs="+", type=int, default=list(SEEDS))
     ap.add_argument("--models", nargs="+", default=None)

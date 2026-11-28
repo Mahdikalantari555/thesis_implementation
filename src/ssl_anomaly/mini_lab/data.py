@@ -454,8 +454,14 @@ def _hash_arrays(*arrays: np.ndarray) -> str:
     return h.hexdigest()[:16]
 
 
-def split_datasets(ds: MiniDataset, cfg: RunConfig) -> list[tuple[str, Split, Split]]:
-    """Create protocol splits. Normalization is fitted on train samples only."""
+def split_datasets(ds: MiniDataset, cfg: RunConfig) -> list[tuple[str, Split, Split, Split]]:
+    """Create protocol splits: (name, train, dev, test).
+
+    Task 1.4: the plateau trainer evaluates on a DEV split that is never the
+    test split (design §4.1). Normalization is fitted on train samples only.
+    ``dev_boundary`` (default 2023-01-01) separates train from dev; the
+    ``holdout_boundary`` (2024-01-01) separates dev from test.
+    """
     proto = cfg.protocol
     if proto.name == "single_farm":
         store_farms = sorted({s.farm_id for s in ds.samples})
@@ -478,14 +484,19 @@ def split_datasets(ds: MiniDataset, cfg: RunConfig) -> list[tuple[str, Split, Sp
 
     out = []
     for name, train_farms, test_farms in rotations:
-        train_samples, test_samples = [], []
+        train_samples, dev_samples, test_samples = [], [], []
         for s in ds.samples:
             is_train_farm = s.farm_id in train_farms
             is_test_farm = s.farm_id in test_farms
             if proto.name == "intra_farm_temporal":
-                tr = [i for i, d in enumerate(s.dates) if d < proto.holdout_boundary]
-                te = [i for i, d in enumerate(s.dates) if d >= proto.holdout_boundary]
-                for idx, bucket in ((tr, train_samples), (te, test_samples)):
+                # three-way temporal split: <=2022 train, 2023 dev, >=2024 test
+                tr = [i for i, d in enumerate(s.dates)
+                      if d and d < proto.dev_boundary]
+                dv = [i for i, d in enumerate(s.dates)
+                      if d and proto.dev_boundary <= d < proto.holdout_boundary]
+                te = [i for i, d in enumerate(s.dates)
+                      if d and d >= proto.holdout_boundary]
+                for idx, bucket in ((tr, train_samples), (dv, dev_samples), (te, test_samples)):
                     if len(idx) >= 2:
                         bucket.append(
                             MiniSample(
@@ -501,13 +512,25 @@ def split_datasets(ds: MiniDataset, cfg: RunConfig) -> list[tuple[str, Split, Sp
                 train_samples.append(s)
             elif is_test_farm:
                 test_samples.append(s)
+            # farm-level protocols have no temporal dev: cross-farm holdout is
+            # the dev proxy ONLY when a dev farm set exists; otherwise dev=test
+            # farms are NOT used and the trainer falls back to a train holdout
+        # For farm-level protocols (single_farm / lodo) there is no temporal
+        # dev year by construction: dev_samples stays None and the trainer
+        # derives an INTRA-TRAIN validation slice (most recent train windows,
+        # still <=2022), which it records in the run manifest. The test split
+        # is never used for plateau evaluation.
+        if not dev_samples:
+            dev_samples = None  # trainer derives an intra-train dev slice
+
         if not train_samples or not test_samples:
             raise RuntimeError(f"Empty split for protocol {name}: train={len(train_samples)} test={len(test_samples)}")
 
         # Temporal protocols can truncate windows to different lengths. Pad to
         # a common T with absent values (observed=False), never with fabricated
         # measurements, so batching is possible without leaking or imputing.
-        max_t = max(s.values.shape[0] for s in train_samples + test_samples)
+        all_samples = train_samples + test_samples
+        max_t = max(s.values.shape[0] for s in all_samples)
 
         def pad(s: MiniSample) -> MiniSample:
             t, f = s.values.shape
@@ -524,6 +547,8 @@ def split_datasets(ds: MiniDataset, cfg: RunConfig) -> list[tuple[str, Split, Sp
 
         train_samples = [pad(s) for s in train_samples]
         test_samples = [pad(s) for s in test_samples]
+        if dev_samples is not None:
+            dev_samples = [pad(s) for s in dev_samples]
 
         train_raw = np.stack([s.values for s in train_samples])
         finite = np.isfinite(train_raw) & np.stack([s.observed for s in train_samples])
@@ -548,5 +573,6 @@ def split_datasets(ds: MiniDataset, cfg: RunConfig) -> list[tuple[str, Split, Sp
                 sha256=_hash_arrays(x, obs, dt),
             )
 
-        out.append((name, to_split(train_samples), to_split(test_samples)))
+        dev_split = to_split(dev_samples) if dev_samples is not None else None
+        out.append((name, to_split(train_samples), dev_split, to_split(test_samples)))
     return out

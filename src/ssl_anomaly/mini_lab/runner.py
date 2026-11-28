@@ -131,12 +131,22 @@ def _one_seed(
     cfg: RunConfig,
     split_name: str,
     train: Split,
+    dev: Split | None,
     test: Split,
     seed: int,
     out_root: Path,
     feature_names: list[str],
     valid_patch_counts: dict[str, Any],
 ) -> dict[str, Any]:
+    # Task 1.4: convergence-controlled arms run the plateau trainer; legacy
+    # fixed-epoch runs keep the old loop for screen compatibility.
+    if cfg.model.to_plateau:
+        from .trainer import train_one_seed_to_plateau
+
+        return train_one_seed_to_plateau(
+            cfg, split_name, train, dev, test, seed, out_root,
+            feature_names, valid_patch_counts,
+        )
     t0 = time.monotonic()
     device = _device(cfg.model.device)
     seed_everything(seed)
@@ -406,10 +416,10 @@ def run_experiment(
     splits = split_datasets(dataset, cfg)
     device = _device(cfg.model.device)
     all_reports: list[dict[str, Any]] = []
-    for name, train, test in splits:
+    for name, train, dev, test in splits:
         for seed in cfg.model.seeds:
             report = _one_seed(
-                cfg, name, train, test, seed, out, dataset.feature_names, dataset.valid_patch_counts
+                cfg, name, train, dev, test, seed, out, dataset.feature_names, dataset.valid_patch_counts
             )
             rp = out / cfg.name / name / f"seed_{seed}" / "report.json"
             _mlflow_log(cfg, name, report, rp, out)

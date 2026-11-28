@@ -80,7 +80,7 @@ def test_lodo_protocol_splits_are_farm_disjoint_and_normalization_train_only():
     cfg.protocol.name = "lodo"
     splits = split_datasets(_dataset(), cfg)
     assert len(splits) == 3
-    for name, train, test in splits:
+    for name, train, dev, test in splits:
         assert set(train.farm_ids).isdisjoint(test.farm_ids)
         assert train.n > 0 and test.n > 0
         # Train-only fit: the mean of train features is ~0 even if test is
@@ -94,12 +94,15 @@ def test_temporal_protocol_preserves_boundary_and_pads_absent_values():
     cfg = RunConfig()
     cfg.protocol.name = "intra_farm_temporal"
     cfg.protocol.holdout_boundary = "2015-01-15"
+    cfg.protocol.dev_boundary = "2015-01-08"
     splits = split_datasets(_dataset(), cfg)
     assert len(splits) == 3
-    for name, train, test in splits:
-        assert all(r[1] < cfg.protocol.holdout_boundary for r in train.date_ranges if r[1])
+    for name, train, dev, test in splits:
+        assert all(r[1] < cfg.protocol.dev_boundary for r in train.date_ranges if r[1])
+        assert all(r[0] >= cfg.protocol.dev_boundary and r[1] < cfg.protocol.holdout_boundary
+                   for r in dev.date_ranges if r[0])
         assert all(r[0] >= cfg.protocol.holdout_boundary for r in test.date_ranges if r[0])
-        assert train.x.shape[1] == test.x.shape[1]  # padded to common T
+        assert train.x.shape[1] == test.x.shape[1] == dev.x.shape[1]  # padded to common T
 
 
 def test_single_farm_and_protocol_validation(tmp_path):
@@ -110,7 +113,7 @@ def test_single_farm_and_protocol_validation(tmp_path):
     assert len(splits) == 1
     assert set(splits[0][1].farm_ids) == {"R12-08"}
     # Empty test_farms = every other farm in the store.
-    assert set(splits[0][2].farm_ids) == {"R12-06", "R12-10"}
+    assert set(splits[0][3].farm_ids) == {"R12-06", "R12-10"}
     # Empty train_farms = first farm in the store (names are never hard-coded).
     cfg.protocol.train_farms = ()
     splits = split_datasets(_dataset(), cfg)
