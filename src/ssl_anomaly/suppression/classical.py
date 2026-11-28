@@ -97,6 +97,58 @@ def assert_transfer(baseline_id: str, suppression_id: str, applicability_reason:
 # ---------------------------------------------------------------------------
 
 
+def _pcp_inexact_alm(x: np.ndarray, *, rank: int, lam: float, iters: int,
+                     tol: float = 1e-7, rho: float = 1.6) -> tuple[np.ndarray, np.ndarray, dict]:
+    """Principal component pursuit by inexact ALM (Lin, Chen & Ma 2010, Alg. 5 variant).
+
+    Solves ``min ‖L‖_* + lam·‖S‖₁  s.t.  X = L + S`` deterministically (pure numpy, no
+    RNG): alternate a truncated-SVD step for L and a soft-threshold step for S, then
+    update the dual variable Y and the penalty μ. Iterations stop early when the
+    relative residual of ``X − L − S`` falls below ``tol`` — the recorded
+    ``alm_iters_run``/``alm_rel_residual`` in the fit record are what let a reader check
+    the searched ``iters`` was actually the convergence knob and not a label.
+
+    The returned score model is ``L``'s row space; the caller scores new rows by their
+    distance to that subspace, so ``lam``/``iters`` move the *learned* subspace, not
+    just a fit statistic.
+    """
+    x = np.asarray(x, dtype=np.float64)
+    if not np.isfinite(x).all():
+        # PCP has no NaN semantics; a non-finite train row is a data defect that must
+        # stop the fit here rather than propagate NaN through every downstream score.
+        raise TransferError(
+            f"rpca_pca: {int((~np.isfinite(x)).sum())} non-finite values in the fit matrix; "
+            "impute nothing — fix the binding or drop the rows upstream, and record it"
+        )
+    n, d = x.shape
+    rank = max(1, min(int(rank), min(n, d) - 1)) if min(n, d) > 1 else 1
+    spec = float(np.linalg.norm(x, 2))
+    if spec <= 0:
+        return x.copy(), np.zeros_like(x), {"iters_run": 0, "rel_residual": 0.0}
+    mu = 1.25 / spec
+    mu_bar = mu * 1e7
+    y = x / max(spec, float(np.abs(x).max()) / max(lam, 1e-12), 1e-12)
+    l_mat = np.zeros_like(x)
+    s_mat = np.zeros_like(x)
+    it_run = 0
+    rel = float("inf")
+    for _ in range(max(1, int(iters))):
+        it_run += 1
+        # L-step: truncated SVD of (X − S + Y/μ) at the requested rank
+        u, sv, vt = np.linalg.svd(x - s_mat + y / mu, full_matrices=False)
+        l_mat = u[:, :rank] * sv[:rank] @ vt[:rank]
+        # S-step: soft-threshold at lam/μ
+        r = x - l_mat + y / mu
+        s_mat = np.sign(r) * np.clip(np.abs(r) - lam / mu, 0.0, None)
+        z = x - l_mat - s_mat
+        rel = float(np.linalg.norm(z) / max(spec, 1e-12))
+        y += mu * z
+        mu = min(mu * rho, mu_bar)
+        if rel < tol:
+            break
+    return l_mat, s_mat, {"iters_run": int(it_run), "rel_residual": round(rel, 10)}
+
+
 def robust_centre(x: np.ndarray, weights: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
     """Weighted median centre + MAD scale — the B1 rule's fittable core.
 
@@ -143,12 +195,17 @@ FITTERS: dict[str, str] = {
 }
 #: the search-space keys each fitter reads. Anything else in a selection is refused, not dropped:
 #: a knob that no code consumes turns a "tuned" arm into an untuned one wearing a tuned label.
+#: The set must state exactly what :func:`fit_score` reads for that kind — the contract's
+#: BL-RPCA space declares ``lam``/``iters`` (tasks 8.3/11.1), so ``rpca_pca`` is the PCP
+#: estimator below, and ``contamination`` is *not* listed because PCP has no contamination
+#: parameter: declaring it consumable would let a selection carry a knob that is silently
+#: dropped, which is the failure this table exists to prevent.
 FITTER_CONSUMED: dict[str, frozenset[str]] = {
     "robust_centre": frozenset(),
     "fixed_rule": frozenset(),
     "sklearn_isolation_forest": frozenset({"n_estimators", "max_samples", "contamination"}),
     "sklearn_one_class_svm": frozenset({"nu", "gamma", "kernel", "contamination"}),
-    "rpca_pca": frozenset({"n_components", "contamination"}),
+    "rpca_pca": frozenset({"n_components", "lam", "iters"}),
 }
 
 
@@ -190,6 +247,10 @@ def fit_score(
     xs = xs.reshape(xs.shape[0], -1)
     fin = np.isfinite(xt).all(axis=1)
     if not fin.all():
+        # dropping a broken train row is the shared policy of every fitter here, but it
+        # must be countable: a fit that silently shrank its training set is exactly the
+        # kind of provenance gap AGENTS.md §7 flags.
+        record["n_fit_rows_dropped_nonfinite"] = int((~fin).sum())
         xt = xt[fin]
     record: dict = {"kind": kind, "n_fit_rows": int(len(xt)), "seed": int(seed)}
 
@@ -202,7 +263,24 @@ def fit_score(
         return np.asarray([np.nan if not np.isfinite(v) else v for v in s], dtype=np.float64), record
 
     if kind == "rpca_pca":
+        # Robust PCA as principal component pursuit (Candès et al. 2011): X = L + S with
+        # L low-rank and S sparse, solved by inexact ALM (Lin et al. 2010). The contract's
+        # declared search space for BL-RPCA is {lam, iters}; this branch is the estimator
+        # that actually reads them. The previous implementation here was a plain-SVD
+        # projection residual — PCA wearing the Robust name — and it read neither knob, so
+        # every searched trial fitted the identical model and HPO refused the arm rather
+        # than report a tuned arm that was not.
+        #
+        # Scoring: the sparse part S carries the anomalies in the *training* decomposition;
+        # for new rows the same statement is "the part of x the low-rank normal subspace
+        # does not explain", i.e. the distance to the subspace spanned by L. lam and iters
+        # act on the fit (how aggressively train rows are demoted to S before the subspace
+        # is estimated), so a searched knob changes the learned model, not just a label.
         n_comp = int(p.get("n_components", 3))
+        n, d = xt.shape
+        lam_default = float(1.0 / np.sqrt(max(n, d)))   # the PCP-theoretical lam (Candès 2011)
+        lam = float(p["lam"]) if p.get("lam") is not None else lam_default
+        iters = int(p.get("iters", 100))
         if weights is not None:
             w = np.asarray(weights, dtype=np.float64).ravel()
             w = np.resize(w, len(xt)) if w.size != len(xt) else w
@@ -210,18 +288,34 @@ def fit_score(
             sw = np.sqrt(w / w.mean())
             mu = (xt * sw[:, None]).mean(axis=0)
             fit_mat = (xt - mu) * sw[:, None]
-            record["suppression_applied"] = "row_rescaling_before_pca"
+            record["suppression_applied"] = "row_rescaling_before_pcp"
         else:
             mu = xt.mean(axis=0)
             fit_mat = xt - mu
             record["suppression_applied"] = "none"
         n_comp = max(1, min(n_comp, min(fit_mat.shape) - 1))
-        u, sv, vt = np.linalg.svd(fit_mat, full_matrices=False)
-        proj = (xs - mu) @ vt[:n_comp].T
+        l_mat, s_mat, info = _pcp_inexact_alm(fit_mat, rank=n_comp, lam=lam, iters=iters)
+        u, sv, vt = np.linalg.svd(l_mat, full_matrices=False)
+        # distance from the row to the low-rank subspace L spans — the PCP analogue of
+        # "the part the normal model does not explain". (The previous implementation
+        # projected onto vtᵀ and subtracted that (rows, r) matrix from the (rows, d)
+        # input, which cannot broadcast for any real feature count: BL-RPCA could never
+        # have completed a cell. The residual is the subspace distance, in d dimensions.)
+        proj = ((xs - mu) @ vt[:n_comp].T) @ vt[:n_comp]
         resid = (xs - mu) - proj
         s = np.linalg.norm(resid, axis=1)
-        record.update(n_components=n_comp, singular_values=sv.tolist(),
-                      explained_var=float((sv[:n_comp] ** 2).sum() / max((sv ** 2).sum(), 1e-12)))
+        row_sparse = np.abs(s_mat).sum(axis=1)
+        sparse_thr = float(np.median(row_sparse[row_sparse > 0])) if (row_sparse > 0).any() else np.inf
+        record.update(
+            estimator="pcp_inexact_alm",
+            n_components=n_comp, lam=round(lam, 6), lam_default=round(lam_default, 6),
+            lam_source="selection" if p.get("lam") is not None else "pcp_theory_1_over_sqrt_max_nd",
+            iters=iters, alm_iters_run=info["iters_run"], alm_rel_residual=info["rel_residual"],
+            singular_values=sv.tolist(),
+            explained_var=float((sv[:n_comp] ** 2).sum() / max((sv ** 2).sum(), 1e-12)),
+            train_sparse_fraction=round(float((row_sparse > sparse_thr).mean()), 4),
+            train_sparse_l1_mean=round(float(row_sparse.mean()) / max(int(fit_mat.shape[1]), 1), 6),
+        )
         return s, record
 
     if kind in ("sklearn_isolation_forest", "sklearn_one_class_svm"):
