@@ -340,9 +340,22 @@ def _weather_manifest() -> dict[str, FeatureSpec]:
         )
     for base, (unit, rng) in WEATHER_BASE_SPECS.items():
         for suf in _ROLLING_SUFFIXES:
+            n_days = int(suf[1:-1])  # "_3d" -> 3
+            # Rolling SUMS accumulate over the window, so their bound scales
+            # with the window length (a 3-day ET0 sum legitimately reaches
+            # ~3× the daily ceiling — caught on real data 2026-11-28);
+            # rolling means/quantities stay within the daily bound.
+            if base.endswith("_sum"):
+                lo = rng[0]
+                hi = rng[1] * n_days if rng[1] is not None else None
+                rng_w: tuple[float | None, float | None] = (lo, hi)
+                conv = f"{base} rolling SUM over {n_days} days (bound × {n_days})"
+            else:
+                rng_w = rng
+                conv = f"{base} rolling mean over {n_days} days"
             m[base + suf] = FeatureSpec(
-                name=base + suf, unit=unit, conversion=f"{base} rolling mean over {suf[1:]}",
-                valid_range=rng, source=f"{_WEATHER_SOURCE} (rolling {suf[1:]})",
+                name=base + suf, unit=unit, conversion=conv,
+                valid_range=rng_w, source=f"{_WEATHER_SOURCE} (rolling {suf[1:]})",
                 from_product_guide=False,
             )
     return m
