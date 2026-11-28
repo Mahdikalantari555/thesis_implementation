@@ -80,7 +80,15 @@ class CausalGRUEncoder(nn.Module):
 
 
 class BarlowTwinsProjector(nn.Module):
-    """2-layer MLP projector for Barlow Twins loss."""
+    """2-layer MLP projector for Barlow Twins loss (batch-size-1 safe, task 2.2).
+
+    The recorded full-field failure was BatchNorm1d raising "Expected more
+    than 1 value per channel" on a trailing batch of one window. The guard
+    below runs the BN in eval mode (running statistics) for a single-sample
+    training batch and restores the mode afterwards — the update proceeds
+    with visibly reduced BN fidelity instead of crashing or silently
+    dropping the batch.
+    """
 
     def __init__(self, d_in: int = 96, d_hidden: int = 192, d_out: int = 64) -> None:
         super().__init__()
@@ -90,8 +98,17 @@ class BarlowTwinsProjector(nn.Module):
             nn.GELU(),
             nn.Linear(d_hidden, d_out),
         )
+        self.n_batch1_fallbacks = 0  # visible counter, never reset silently
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        bn = self.net[1]
+        if bn.training and x.shape[0] <= 1:
+            self.n_batch1_fallbacks += 1
+            bn.eval()
+            try:
+                return self.net(x)
+            finally:
+                bn.train()
         return self.net(x)
 
 

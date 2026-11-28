@@ -50,8 +50,19 @@ def _masked_reconstruction_loss(
 
 
 def _barlow_loss(z1: torch.Tensor, z2: torch.Tensor, lambda_coeff: float = 0.005) -> torch.Tensor:
-    z1 = (z1 - z1.mean(0)) / (z1.std(0) + 1e-6)
-    z2 = (z2 - z2.mean(0)) / (z2.std(0) + 1e-6)
+    """Barlow Twins loss (task 2.2 fix).
+
+    ``std(0)`` with a batch of 1 previously produced NaN (zero degrees of
+    freedom), which poisoned the weights and made every downstream score NaN —
+    the actual root cause of the recorded "JEPA full-field
+    'NoneType' object is not subscriptable" failure (finding 28). Population
+    std (unbiased=False) keeps batch-1 finite; the loss on a single pair is
+    then the constant on-diagonal term, which is computable and honest.
+    """
+    if z1.shape != z2.shape:
+        raise ValueError(f"barlow views differ in shape: {tuple(z1.shape)} vs {tuple(z2.shape)}")
+    z1 = (z1 - z1.mean(0)) / (z1.std(0, unbiased=False) + 1e-6)
+    z2 = (z2 - z2.mean(0)) / (z2.std(0, unbiased=False) + 1e-6)
     cross = z1.T @ z2 / z1.shape[0]
     on_diag = torch.diagonal(cross).add_(-1).pow_(2).sum()
     off = cross - torch.eye(cross.shape[0], device=cross.device)

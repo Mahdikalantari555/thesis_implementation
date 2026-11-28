@@ -291,9 +291,16 @@ def run(args: argparse.Namespace) -> int:
                         for r in summary.get("per_seed", [])
                     ]
                     row["to_plateau_detail"] = per_seed_verdicts
-                print(f"  {model:14s} AUPRC={row['synthetic_auprc']['mean']:.4f} "
-                      f"rand={row['random_init_auprc']['mean']:.4f} "
-                      f"gain={row['ssl_gain_over_random']:+.4f}", flush=True)
+                # None aggregates are reported honestly (finding 28's recorded
+                # "JEPA full-field 'NoneType' object is not subscriptable" was
+                # this print crashing on a None aggregate, itself caused by
+                # NaN scores from a batch-of-1 barlow loss — fixed in runner).
+                def _fmt(v):
+                    return (f"{v['mean']:.4f}"
+                            if isinstance(v, dict) and v.get("mean") is not None else "None")
+                print(f"  {model:14s} AUPRC={_fmt(row['synthetic_auprc'])} "
+                      f"rand={_fmt(row['random_init_auprc'])} "
+                      f"gain={row['ssl_gain_over_random']}", flush=True)
             except Exception as exc:
                 row["error"] = str(exc)
                 row["traceback"] = traceback.format_exc()

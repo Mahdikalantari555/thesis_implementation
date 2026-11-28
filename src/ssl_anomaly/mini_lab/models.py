@@ -166,12 +166,21 @@ def _cnn(d_in: int, cfg: ModelConfig) -> nn.Module:
 
 
 def _mamba(d_in: int, cfg: ModelConfig) -> nn.Module:
+    """Compact Mamba arm (task 2.1).
+
+    Finding 28 showed ``_mamba`` and ``_cnn_mamba`` produced IDENTICAL models
+    under the confirm config (both resolved to ``TinyCNNMamba(d_state=16,
+    n_layers=2)``) and must never be counted as a two-architecture
+    replication. The arms are now DISTINCT configurations of the same family:
+    this one is the compact SSM (d_state=8, the caller's width/depth).
+    """
     from ssl_anomaly.models.cnn_mamba import TinyCNNMamba
 
     return _Adapter(
         TinyCNNMamba(
             d_in=d_in,
             d_model=cfg.d_model,
+            d_state=8,
             n_layers=cfg.n_layers,
             latent_dim=cfg.latent_dim,
             dropout=cfg.dropout,
@@ -180,6 +189,7 @@ def _mamba(d_in: int, cfg: ModelConfig) -> nn.Module:
 
 
 def _cnn_mamba(d_in: int, cfg: ModelConfig) -> nn.Module:
+    """Wider CNN+SSM arm (task 2.1): d_state=16, depth >= 2, width >= 32."""
     from ssl_anomaly.models.cnn_mamba import TinyCNNMamba
 
     return _Adapter(
@@ -260,6 +270,37 @@ def build_model(name: str, d_in: int, cfg: ModelConfig) -> nn.Module:
     if not spec.available:
         raise RuntimeError(f"Model {name} unavailable: {spec.note}")
     return spec.builder(d_in, cfg)
+
+
+def assert_models_distinct(d_in: int, cfg: ModelConfig) -> dict[str, Any]:
+    """Registry duplicate guard (task 2.1).
+
+    Builds every available arm and asserts no two share the same parameter
+    count AND state-dict signature — the finding-28 failure mode where two
+    registry names silently resolved to the same module. Returns the
+    signature table for reports; raises on any collision.
+    """
+    signatures: dict[str, tuple[int, tuple[str, ...]]] = {}
+    seen: dict[tuple[int, tuple[str, ...]], str] = {}
+    for name, spec in MODEL_REGISTRY.items():
+        if not spec.available:
+            continue
+        model = build_model(name, d_in, cfg)
+        sd = model.state_dict()
+        sig = (
+            int(sum(p.numel() for p in model.parameters())),
+            tuple(sorted(sd.keys())),
+        )
+        if sig in seen:
+            raise RuntimeError(
+                f"registry duplicate: {name!r} and {seen[sig]!r} built IDENTICAL "
+                f"models ({sig[0]} params, same module signature) under config "
+                f"{cfg!r} — architecture comparisons would be meaningless "
+                "(finding 28 failure mode)"
+            )
+        seen[sig] = name
+        signatures[name] = sig
+    return {name: {"params": p, "modules": len(k)} for name, (p, k) in signatures.items()}
 
 
 def model_specs() -> list[dict[str, Any]]:
