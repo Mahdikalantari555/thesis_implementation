@@ -1,0 +1,298 @@
+{
+  "schema": "l8-l9-same-phase-consistency/v1",
+  "created_utc": "2026-11-28T04:44:26.397882+00:00",
+  "git_sha": "aadd2f09420819b282a15ecb8c7a7fd354c48bfd",
+  "store": "/home/mahdi/RS/Thesis/Data/Processed/mini_research_dataset",
+  "min_pairs": 10,
+  "phase_window_days": 8,
+  "farms": {
+    "L02-02": {
+      "phase_window_days": 8,
+      "n_l8_dates": 406,
+      "n_l9_dates": 132,
+      "n_pairs": 132,
+      "min_pairs": 10,
+      "bands": {
+        "blue": {
+          "band": "blue",
+          "offset": 0.00193,
+          "ci_low": -0.00214,
+          "ci_high": 0.006,
+          "n_pairs": 130,
+          "mad": 0.01598,
+          "robust_sigma": 0.02369,
+          "resolved": false,
+          "convention": "median(blue_L8 - blue_L9)",
+          "note": "CI straddles zero or too few pairs: no correction (fail closed)"
+        },
+        "green": {
+          "band": "green",
+          "offset": 0.00423,
+          "ci_low": -0.00154,
+          "ci_high": 0.00999,
+          "n_pairs": 130,
+          "mad": 0.02263,
+          "robust_sigma": 0.03355,
+          "resolved": false,
+          "convention": "median(green_L8 - green_L9)",
+          "note": "CI straddles zero or too few pairs: no correction (fail closed)"
+        },
+        "red": {
+          "band": "red",
+          "offset": 0.00342,
+          "ci_low": -0.00433,
+          "ci_high": 0.01116,
+          "n_pairs": 130,
+          "mad": 0.0304,
+          "robust_sigma": 0.04506,
+          "resolved": false,
+          "convention": "median(red_L8 - red_L9)",
+          "note": "CI straddles zero or too few pairs: no correction (fail closed)"
+        },
+        "nir": {
+          "band": "nir",
+          "offset": 0.02426,
+          "ci_low": 0.01765,
+          "ci_high": 0.03087,
+          "n_pairs": 130,
+          "mad": 0.02594,
+          "robust_sigma": 0.03846,
+          "resolved": true,
+          "convention": "median(nir_L8 - nir_L9)",
+          "note": "resolved: candidate for the E7 offset arm, pending the score-level acceptance rule (decide_applied)"
+        },
+        "swir1": {
+          "band": "swir1",
+          "offset": -0.00226,
+          "ci_low": -0.01228,
+          "ci_high": 0.00776,
+          "n_pairs": 130,
+          "mad": 0.03931,
+          "robust_sigma": 0.05828,
+          "resolved": false,
+          "convention": "median(swir1_L8 - swir1_L9)",
+          "note": "CI straddles zero or too few pairs: no correction (fail closed)"
+        },
+        "swir2": {
+          "band": "swir2",
+          "offset": 0.00172,
+          "ci_low": -0.00727,
+          "ci_high": 0.01072,
+          "n_pairs": 130,
+          "mad": 0.03528,
+          "robust_sigma": 0.0523,
+          "resolved": false,
+          "convention": "median(swir2_L8 - swir2_L9)",
+          "note": "CI straddles zero or too few pairs: no correction (fail closed)"
+        },
+        "lst": {
+          "band": "lst",
+          "offset": -0.6875,
+          "ci_low": -1.32466,
+          "ci_high": -0.05034,
+          "n_pairs": 130,
+          "mad": 2.5,
+          "robust_sigma": 3.7065,
+          "resolved": true,
+          "convention": "median(lst_L8 - lst_L9)",
+          "note": "resolved: candidate for the E7 offset arm, pending the score-level acceptance rule (decide_applied)"
+        }
+      },
+      "resolved_count": 2,
+      "decision": "no correction applied: measured same-phase differences are reported for the E7 arms; a correction requires a resolved CI AND the pre-registered score-level acceptance rule"
+    },
+    "R12-08": {
+      "phase_window_days": 8,
+      "n_l8_dates": 406,
+      "n_l9_dates": 132,
+      "n_pairs": 132,
+      "min_pairs": 10,
+      "bands": {
+        "blue": {
+          "band": "blue",
+          "offset": -0.00537,
+          "ci_low": -0.00922,
+          "ci_high": -0.00152,
+          "n_pairs": 131,
+          "mad": 0.01517,
+          "robust_sigma": 0.02249,
+          "resolved": true,
+          "convention": "median(blue_L8 - blue_L9)",
+          "note": "resolved: candidate for the E7 offset arm, pending the score-level acceptance rule (decide_applied)"
+        },
+        "green": {
+          "band": "green",
+          "offset": -0.00888,
+          "ci_low": -0.01364,
+          "ci_high": -0.00412,
+          "n_pairs": 131,
+          "mad": 0.01874,
+          "robust_sigma": 0.02778,
+          "resolved": true,
+          "convention": "median(green_L8 - green_L9)",
+          "note": "resolved: candidate for the E7 offset arm, pending the score-level acceptance rule (decide_applied)"
+        },
+        "red": {
+          "band": "red",
+          "offset": -0.00696,
+          "ci_low": -0.01394,
+          "ci_high": 2e-05,
+          "n_pairs": 131,
+          "mad": 0.0275,
+          "robust_sigma": 0.04077,
+          "resolved": false,
+          "convention": "median(red_L8 - red_L9)",
+          "note": "CI straddles zero or too few pairs: no correction (fail closed)"
+        },
+        "nir": {
+          "band": "nir",
+          "offset": -0.00421,
+          "ci_low": -0.01458,
+          "ci_high": 0.00616,
+          "n_pairs": 131,
+          "mad": 0.04083,
+          "robust_sigma": 0.06054,
+          "resolved": false,
+          "convention": "median(nir_L8 - nir_L9)",
+          "note": "CI straddles zero or too few pairs: no correction (fail closed)"
+        },
+        "swir1": {
+          "band": "swir1",
+          "offset": -0.03076,
+          "ci_low": -0.03998,
+          "ci_high": -0.02154,
+          "n_pairs": 131,
+          "mad": 0.03632,
+          "robust_sigma": 0.05384,
+          "resolved": true,
+          "convention": "median(swir1_L8 - swir1_L9)",
+          "note": "resolved: candidate for the E7 offset arm, pending the score-level acceptance rule (decide_applied)"
+        },
+        "swir2": {
+          "band": "swir2",
+          "offset": -0.02487,
+          "ci_low": -0.03535,
+          "ci_high": -0.01439,
+          "n_pairs": 131,
+          "mad": 0.04129,
+          "robust_sigma": 0.06122,
+          "resolved": true,
+          "convention": "median(swir2_L8 - swir2_L9)",
+          "note": "resolved: candidate for the E7 offset arm, pending the score-level acceptance rule (decide_applied)"
+        },
+        "lst": {
+          "band": "lst",
+          "offset": -2.0,
+          "ci_low": -2.88861,
+          "ci_high": -1.11139,
+          "n_pairs": 131,
+          "mad": 3.5,
+          "robust_sigma": 5.1891,
+          "resolved": true,
+          "convention": "median(lst_L8 - lst_L9)",
+          "note": "resolved: candidate for the E7 offset arm, pending the score-level acceptance rule (decide_applied)"
+        }
+      },
+      "resolved_count": 5,
+      "decision": "no correction applied: measured same-phase differences are reported for the E7 arms; a correction requires a resolved CI AND the pre-registered score-level acceptance rule"
+    },
+    "R15-18": {
+      "phase_window_days": 8,
+      "n_l8_dates": 406,
+      "n_l9_dates": 132,
+      "n_pairs": 132,
+      "min_pairs": 10,
+      "bands": {
+        "blue": {
+          "band": "blue",
+          "offset": 0.00226,
+          "ci_low": -0.00293,
+          "ci_high": 0.00744,
+          "n_pairs": 129,
+          "mad": 0.02026,
+          "robust_sigma": 0.03004,
+          "resolved": false,
+          "convention": "median(blue_L8 - blue_L9)",
+          "note": "CI straddles zero or too few pairs: no correction (fail closed)"
+        },
+        "green": {
+          "band": "green",
+          "offset": 0.00946,
+          "ci_low": 0.00278,
+          "ci_high": 0.01614,
+          "n_pairs": 129,
+          "mad": 0.02612,
+          "robust_sigma": 0.03873,
+          "resolved": true,
+          "convention": "median(green_L8 - green_L9)",
+          "note": "resolved: candidate for the E7 offset arm, pending the score-level acceptance rule (decide_applied)"
+        },
+        "red": {
+          "band": "red",
+          "offset": 0.00745,
+          "ci_low": -0.0023,
+          "ci_high": 0.01719,
+          "n_pairs": 129,
+          "mad": 0.03809,
+          "robust_sigma": 0.05647,
+          "resolved": false,
+          "convention": "median(red_L8 - red_L9)",
+          "note": "CI straddles zero or too few pairs: no correction (fail closed)"
+        },
+        "nir": {
+          "band": "nir",
+          "offset": -0.00781,
+          "ci_low": -0.01762,
+          "ci_high": 0.00199,
+          "n_pairs": 129,
+          "mad": 0.03833,
+          "robust_sigma": 0.05683,
+          "resolved": false,
+          "convention": "median(nir_L8 - nir_L9)",
+          "note": "CI straddles zero or too few pairs: no correction (fail closed)"
+        },
+        "swir1": {
+          "band": "swir1",
+          "offset": 0.00488,
+          "ci_low": -0.00524,
+          "ci_high": 0.015,
+          "n_pairs": 129,
+          "mad": 0.03955,
+          "robust_sigma": 0.05864,
+          "resolved": false,
+          "convention": "median(swir1_L8 - swir1_L9)",
+          "note": "CI straddles zero or too few pairs: no correction (fail closed)"
+        },
+        "swir2": {
+          "band": "swir2",
+          "offset": 0.0072,
+          "ci_low": -0.00426,
+          "ci_high": 0.01866,
+          "n_pairs": 129,
+          "mad": 0.0448,
+          "robust_sigma": 0.06642,
+          "resolved": false,
+          "convention": "median(swir2_L8 - swir2_L9)",
+          "note": "CI straddles zero or too few pairs: no correction (fail closed)"
+        },
+        "lst": {
+          "band": "lst",
+          "offset": -0.25,
+          "ci_low": -1.14547,
+          "ci_high": 0.64547,
+          "n_pairs": 129,
+          "mad": 3.5,
+          "robust_sigma": 5.1891,
+          "resolved": false,
+          "convention": "median(lst_L8 - lst_L9)",
+          "note": "CI straddles zero or too few pairs: no correction (fail closed)"
+        }
+      },
+      "resolved_count": 1,
+      "decision": "no correction applied: measured same-phase differences are reported for the E7 arms; a correction requires a resolved CI AND the pre-registered score-level acceptance rule"
+    }
+  },
+  "n_resolved_total": 8,
+  "decision": "measurement only; corrections go through the E7 sensor-handling arms with sensor_offset.decide_applied's pre-registered rule",
+  "wall_s": 2.32
+}

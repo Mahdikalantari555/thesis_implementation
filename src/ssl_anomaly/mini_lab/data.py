@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import zarr
 
+from ..io.data_contract import assert_band_order, validate_delta_t, validate_feature_set
 from ..phenology.mini import split_normal_cycles
 from .config import RunConfig
 
@@ -66,6 +67,10 @@ class MiniDataset:
     feature_names: list[str] = field(default_factory=list)
     valid_patch_counts: dict[str, dict[str, int]] = field(default_factory=dict)
     source_manifest: dict[str, Any] = field(default_factory=dict)
+    #: per-farm per-observation sensor codes (0=L8, 1=L9) from the store's
+    #: ``sensor_id`` array; a farm without the array maps to None (absent is
+    #: recorded, never imputed).
+    sensor_ids: dict[str, "np.ndarray | None"] = field(default_factory=dict)
 
     @property
     def n_units(self) -> int:
@@ -329,9 +334,20 @@ def build_dataset(
     for farm_id, group in _farm_groups(root):
         if farm_ids is not None and farm_id not in farm_ids:
             continue
+        # Task 0A.3: fail closed on a mis-ordered scene (a swapped band order
+        # silently relabels spectral features).
+        assert_band_order(group.attrs["band_order"])
         dates = [str(d) for d in group["dates"][:]]
         day_nums = np.array([(np.datetime64(d, "D") - np.datetime64("2013-03-30", "D")).astype(int) for d in dates])
         delta_t = np.diff(day_nums, prepend=day_nums[0]).astype(np.float32)
+        validate_delta_t(delta_t, series=True)
+        # Task 0A.3: per-observation sensor id from the store's additive
+        # ``sensor_id`` array (scripts/add_sensor_ids_mini.py); absence is
+        # recorded, never imputed.
+        if "sensor_id" in group:
+            ds.sensor_ids[farm_id] = np.asarray(group["sensor_id"][:], dtype=np.int8)
+        else:
+            ds.sensor_ids[farm_id] = None
 
         if cfg.representation.spatial == "full_field":
             values, observed, names = _field_features(group, dates, cfg.representation.include_indices)
@@ -359,6 +375,7 @@ def build_dataset(
             raise ValueError(cfg.representation.spatial)
 
         wvalues = weather.reindex(dates)[weather_cols].to_numpy(dtype=np.float32)
+        validated_this_farm = False
         wnames = list(weather_cols)
         if cfg.representation.include_delta_t:
             delta_col = delta_t.reshape(-1, 1).astype(np.float32)
@@ -372,6 +389,14 @@ def build_dataset(
                 raise RuntimeError("unit/date length mismatch")
             joined = np.concatenate([uvalues, wvalues], axis=1)
             joined_obs = np.concatenate([uobserved, np.isfinite(wvalues)], axis=1)
+            if not validated_this_farm:
+                # Task 0A.2: the loader refuses features with no manifest
+                # entry or observed ranges that violate the manifest. Run once
+                # per farm on the joined feature set (bands + indices +
+                # weather + Δt); failures name the feature (fail closed).
+                farm_features = {n: joined[:, j] for j, n in enumerate(names + wnames)}
+                ds.source_manifest["feature_validation"] = validate_feature_set(farm_features)
+                validated_this_farm = True
             for si, (sdates, svalues, sobserved, sdelta) in enumerate(
                 _temporal_units(joined, joined_obs, udates, udelta, cfg, store_root=root)
             ):
@@ -385,6 +410,10 @@ def build_dataset(
                         delta_t=sdelta.astype(np.float32),
                     )
                 )
+    ds.source_manifest["sensor_id"] = {
+        farm: ("present" if arr is not None else "absent (run scripts/add_sensor_ids_mini.py)")
+        for farm, arr in ds.sensor_ids.items()
+    }
     return ds
 
 
