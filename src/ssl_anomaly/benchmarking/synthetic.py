@@ -111,7 +111,15 @@ FAMILY_SHAPES: dict[str, Callable[..., np.ndarray]] = {
 
 @dataclass
 class InjectionCell:
-    """One (family, severity) cell: where events were placed and how they audited."""
+    """One (family, severity) cell: where events were placed and how they audited.
+
+    ``family`` starting with ``combined:`` marks a *designed combined scenario* (task
+    4.9): the cell carries several families at once, ``scenario_families`` names them in
+    the contract's order, and ``components`` records each family's own (onset, length,
+    channels) per event. The headline macro stays over the single-family 5 × 3 grid —
+    the contract pre-registers ``headline_grid: "5 families × 3 severities"`` — while
+    combined cells are scored per-cell and reported separately.
+    """
 
     family: str
     severity: str
@@ -125,10 +133,21 @@ class InjectionCell:
     n_affected_bins: int = 0
     mean_length_bins: float = float("nan")
     audit: dict = field(default_factory=dict)
+    scenario: str | None = None
+    scenario_families: tuple[str, ...] = ()
+    components: list[dict] = field(default_factory=list)
 
     @property
     def cell(self) -> str:
         return f"{self.family}__{self.severity}"
+
+    @property
+    def is_combined(self) -> bool:
+        return self.family.startswith("combined:")
+
+    def component_events(self) -> list[dict]:
+        """Ground truth per family for every combined event (task 4.10 metadata)."""
+        return [dict(c) for c in self.components]
 
 
 @dataclass
@@ -184,6 +203,9 @@ class SyntheticPanel:
                     "n_affected_bins": c.n_affected_bins,
                     "mean_length_bins": round(float(c.mean_length_bins), 2),
                     "audit": c.audit,
+                    **({"scenario": c.scenario, "scenario_families": list(c.scenario_families),
+                        "n_component_events": len(c.components)}
+                       if c.is_combined else {}),
                 }
                 for c in self.cells
             ],
@@ -229,23 +251,20 @@ def event_records(panel: SyntheticPanel) -> list[dict]:
     return out
 
 
-def plan_events(
-    n_cycles: int, n_bins: int, *, family: str, events: int, prevalence: float,
-    rng: np.random.Generator, observed: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Pick event cycles and onsets; returns ``(cycles, onsets, labels)``.
+def _draw_onsets(cycles: np.ndarray, n_bins: int, *, family: str, rng: np.random.Generator,
+                 observed: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Onsets + labels for a FIXED set of cycles.
 
-    Onsets are restricted to windows that contain at least one observed bin for the
-    family's channels. A cloud-covered event is invisible in both the input and the
-    score, so including it would add a guaranteed miss for every architecture and
-    compress the differences the benchmark exists to measure.
+    ``labels`` is enumeration-ordered — row ``i`` belongs to ``cycles[i]`` — and callers
+    must never index it by cycle id. Onsets are restricted to windows that contain at
+    least one observed bin for the family's channels. A cloud-covered event is invisible
+    in both the input and the score, so including it would add a guaranteed miss for
+    every architecture and compress the differences the benchmark exists to measure.
     """
     lo, hi = FAMILY_LENGTH[family]
-    labels = np.zeros((n_cycles, n_bins), dtype=bool)
-    n_ev = max(1, min(int(events), int(round(prevalence * n_cycles * 1.0)), n_cycles))
-    cyc = rng.choice(n_cycles, size=n_ev, replace=False)
-    onsets = np.zeros(n_ev, dtype=np.int64)
-    for i, ci in enumerate(cyc):
+    onsets = np.zeros(len(cycles), dtype=np.int64)
+    labels = np.zeros((len(cycles), n_bins), dtype=bool)
+    for i, ci in enumerate(cycles):
         length = int(rng.integers(lo, hi + 1))
         cand = np.arange(0, max(1, n_bins - length + 1))
         ch_ok = observed[int(ci)]
@@ -257,7 +276,21 @@ def plan_events(
                 cand = cand[good]
         onset = int(rng.choice(cand))
         onsets[i] = onset
-        labels[int(ci), onset : onset + length] = True
+        labels[i, onset : onset + length] = True
+    return onsets, labels
+
+
+def plan_events(
+    n_cycles: int, n_bins: int, *, family: str, events: int, prevalence: float,
+    rng: np.random.Generator, observed: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Pick event cycles and onsets; returns ``(cycles, onsets, labels)``.
+
+    ``labels`` row ``i`` belongs to ``cycles[i]`` (enumeration order, NOT cycle id).
+    """
+    n_ev = max(1, min(int(events), int(round(prevalence * n_cycles * 1.0)), n_cycles))
+    cyc = rng.choice(n_cycles, size=n_ev, replace=False)
+    onsets, labels = _draw_onsets(cyc, n_bins, family=family, rng=rng, observed=observed)
     return cyc.astype(np.int64), onsets, labels
 
 
@@ -308,6 +341,12 @@ def apply_panel(
     cells: list[InjectionCell] = []
     labels_bin = np.zeros((n, T), dtype=bool)
     combined = {c["name"]: tuple(c["families"]) for c in (syn.get("combined_scenarios") or [])}
+    unknown_combo = sorted({f for fams in combined.values() for f in fams if f not in FAMILY_SHAPES})
+    if unknown_combo:
+        raise KeyError(
+            f"combined_scenarios {unknown_combo} name families that are not implemented; "
+            f"registered: {sorted(FAMILY_SHAPES)}"
+        )
     grid = [(f, s) for f in families for s in sevs]
     for fam, sev in grid:
         cyc, ons, lab = plan_events(
@@ -319,7 +358,7 @@ def apply_panel(
         shape = FAMILY_SHAPES[fam]
         resp = FAMILY_CHANNELS[fam]
         for j, gi in enumerate(gidx):
-            length = max(1, int(lab[cyc[j]].sum()))
+            length = max(1, int(lab[j].sum()))
             prof = shape(T, int(ons[j]), length, rng) * mults[sev]
             for cname, sign in resp.items():
                 c = ch.get(cname)
@@ -328,10 +367,11 @@ def apply_panel(
                 x[gi, :, c] = (x[gi, :, c] + prof * sign * scale[c]).astype(np.float32)
             delta[gi] += prof * resp.get("ndvi", 0.0) * scale[ch.get("ndvi", 0)]
         lab_full = np.zeros((n, T), dtype=bool)
-        # `cyc` indexes the *subset*; `gidx` are the global rows. Writing the labels at
-        # the subset positions would attach every event to the wrong cycle whenever a
-        # pool (train-only / dev-only) is narrower than the archive.
-        lab_full[gidx] = lab[cyc]
+        # `cyc` indexes the *subset* and `gidx` are the global rows in the same order;
+        # `lab` is enumeration-ordered (row j ↔ gidx[j]), so this assignment maps each
+        # event to its own cycle even when a pool (train-only / dev-only) is narrower
+        # than the archive.
+        lab_full[gidx] = lab
         labels_bin |= lab_full
         cells.append(
             InjectionCell(
@@ -342,18 +382,75 @@ def apply_panel(
                 if lab_full.any() else float("nan"),
             )
         )
+    # ---- task 4.9: the designed combined scenarios ------------------------------------
+    # Each scenario draws ONE set of cycles per severity and injects every constituent
+    # family into the SAME cycle at that family's own (observed-window) onset, so one
+    # event genuinely carries several mechanisms at once. The labels are the union of the
+    # component windows, and `components` records each family's onset/length/channels —
+    # the ground-truth metadata 4.10 requires for a multi-family event. These cells are
+    # scored per-cell but stay outside the pre-registered 5 × 3 headline macro.
+    for name, fams in combined.items():
+        for sev in sevs:
+            n_ev = max(1, min(int(events), int(round(prevalence * len(idx) * 1.0)), len(idx)))
+            cyc = rng.choice(len(idx), size=n_ev, replace=False)
+            gidx = idx[cyc]
+            observed_rows = m[idx].any(-1)
+            lab_union = np.zeros((n_ev, T), dtype=bool)
+            delta = np.zeros((n, T), dtype=np.float64)
+            components: list[dict] = []
+            channels_all: list[str] = []
+            for fam in fams:
+                ons, lab_f = _draw_onsets(cyc, T, family=fam, rng=rng, observed=observed_rows)
+                shape = FAMILY_SHAPES[fam]
+                resp = FAMILY_CHANNELS[fam]
+                for j, gi in enumerate(gidx):
+                    length = max(1, int(lab_f[j].sum()))
+                    prof = shape(T, int(ons[j]), length, rng) * mults[sev]
+                    for cname, sign in resp.items():
+                        c = ch.get(cname)
+                        if c is None:
+                            continue
+                        x[gi, :, c] = (x[gi, :, c] + prof * sign * scale[c]).astype(np.float32)
+                    delta[gi] += prof * resp.get("ndvi", 0.0) * scale[ch.get("ndvi", 0)]
+                    components.append({"family": fam, "cycle_position": int(j),
+                                       "onset_bin": int(ons[j]), "length_bins": length,
+                                       "magnitude": float(mults[sev]),
+                                       "channels": sorted(resp)})
+                lab_union |= lab_f
+                channels_all += [c for c in resp if c not in channels_all]
+            lab_full = np.zeros((n, T), dtype=bool)
+            lab_full[gidx] = lab_union
+            labels_bin |= lab_full
+            cells.append(
+                InjectionCell(
+                    family=f"combined:{name}", severity=sev, magnitude=mults[sev],
+                    cycle_index=gidx,
+                    onset_index=np.array([c["onset_bin"] for c in components
+                                          if c["family"] == fams[0]][:n_ev], dtype=np.int64),
+                    labels=lab_full, delta=delta, channels=tuple(channels_all),
+                    n_events=int(len(gidx)), n_affected_bins=int(lab_full.sum()),
+                    mean_length_bins=float(lab_full.sum(1)[lab_full.sum(1) > 0].mean())
+                    if lab_full.any() else float("nan"),
+                    scenario=name, scenario_families=tuple(fams), components=components,
+                )
+            )
     panel = SyntheticPanel(
         x=x.astype(np.float32), m=m, cells=cells, labels_bin=labels_bin,
         labels_cycle=labels_bin.any(axis=1), prevalence_target=prevalence, seed=int(seed),
         pool=pool, channel_names=names,
         generator_sha256=_tensor_sha(x) , clean_sha256=_tensor_sha(np.asarray(clean.x)),
         notes=[f"role={role}", "severity multiplier × per-channel MAD of clean data",
-               f"events_per_cell={events}"],
+               f"events_per_cell={events}",
+               (f"combined_scenarios={sorted(combined)}: cells named combined:<scenario>__<severity>, "
+                "reported per-cell, excluded from the pre-registered 5×3 headline macro"
+                if combined else "no combined_scenarios declared")],
     )
     audit_realism(panel, clean_x=np.asarray(clean.x), scale=scale, cfg=cfg)
-    for name, fams in combined.items():          # the two multi-family scenarios
-        panel.notes.append(f"combined_scenario {name}: {'+'.join(fams)} (overlapping cells)")
-        panel.audit_summary.setdefault("combined_scenarios", {})[name] = list(fams)
+    for name, fams in combined.items():
+        panel.audit_summary.setdefault("combined_scenarios", {})[name] = {
+            "families": list(fams),
+            "cells": [c.cell for c in panel.cells if c.scenario == name],
+        }
     return panel
 
 
