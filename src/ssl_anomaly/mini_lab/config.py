@@ -26,6 +26,11 @@ class RepresentationConfig:
     include_delta_t: bool = True
     include_indices: bool = True
     weather_group: str = "weather_plus_derived"
+    # Task 0A.4 (design §1A.4): a window with fewer than ``min_obs`` valid
+    # observations (dates with any observed core band/index feature) is
+    # excluded and counted. Default 2 keeps windows with at least two usable
+    # acquisitions; excluded windows are surfaced in the run manifest.
+    min_obs: int = 2
 
 
 @dataclass
@@ -101,6 +106,7 @@ def load_run_config(path: str | Path) -> RunConfig:
             include_delta_t=bool(rep.get("include_delta_t", True)),
             include_indices=bool(rep.get("include_indices", True)),
             weather_group=str(rep.get("weather_group", "weather_plus_derived")),
+            min_obs=int(rep.get("min_obs", 2)),
         ),
         protocol=ProtocolConfig(
             name=str(proto.get("name", "lodo")),

@@ -71,6 +71,9 @@ class MiniDataset:
     #: ``sensor_id`` array; a farm without the array maps to None (absent is
     #: recorded, never imputed).
     sensor_ids: dict[str, "np.ndarray | None"] = field(default_factory=dict)
+    #: per-unit count of windows excluded by the ``min_obs`` rule (task 0A.4);
+    #: exclusions are evidence and surface in the run manifest.
+    min_obs_excluded: dict[str, int] = field(default_factory=dict)
 
     @property
     def n_units(self) -> int:
@@ -94,9 +97,18 @@ class Split:
 
 def _farm_groups(store_root: Path) -> list[tuple[str, Any]]:
     store = store_root / "satellite.zarr"
+    if not store.exists():
+        raise RuntimeError(f"mini store {store} does not exist")
     out = []
     for d in sorted(p for p in store.iterdir() if p.is_dir() and (p / ".zgroup").exists()):
         out.append((d.name, zarr.open_group(str(d), mode="r")))
+    if not out:
+        # Fail closed: an empty/unexpected store (e.g. zarr v3 groups without
+        # .zgroup) must not silently produce an empty dataset.
+        raise RuntimeError(
+            f"mini store {store} contains no readable farm groups "
+            "(expected one directory per farm with a .zgroup marker)"
+        )
     return out
 
 
@@ -258,9 +270,18 @@ def _temporal_units(
     cfg: RunConfig,
     *,
     store_root: Path | None = None,
-) -> list[tuple[tuple[str, ...], np.ndarray, np.ndarray, np.ndarray]]:
-    """Split a unit's series into temporal samples; Δt is always preserved."""
+    n_core: int | None = None,
+) -> tuple[list[tuple[tuple[str, ...], np.ndarray, np.ndarray, np.ndarray]], int]:
+    """Split a unit's series into temporal samples; Δt is always preserved.
+
+    Returns ``(units, n_excluded_min_obs)``. Task 0A.4: windows with fewer
+    than ``min_obs`` valid observations (dates with any observed core
+    band/index feature — weather columns never count towards ``min_obs``) are
+    excluded and the exclusion is COUNTED, never silent.
+    """
     rep = cfg.representation
+    core = observed[:, :n_core] if n_core is not None else observed
+    valid_obs_per_date = core.any(axis=1) if core.size else np.zeros(len(dates), dtype=bool)
     n = len(dates)
     if rep.temporal == "full":
         idx = [np.arange(n)]
@@ -288,8 +309,12 @@ def _temporal_units(
     else:
         raise ValueError(f"Unknown temporal representation {rep.temporal}")
     out = []
+    n_excluded = 0
     for sel in idx:
         if sel.size < 2:
+            continue
+        if int(valid_obs_per_date[sel].sum()) < max(1, int(rep.min_obs)):
+            n_excluded += 1
             continue
         out.append(
             (
@@ -299,7 +324,7 @@ def _temporal_units(
                 delta_t[sel],
             )
         )
-    return out
+    return out, n_excluded
 
 
 def build_dataset(
@@ -397,9 +422,12 @@ def build_dataset(
                 farm_features = {n: joined[:, j] for j, n in enumerate(names + wnames)}
                 ds.source_manifest["feature_validation"] = validate_feature_set(farm_features)
                 validated_this_farm = True
-            for si, (sdates, svalues, sobserved, sdelta) in enumerate(
-                _temporal_units(joined, joined_obs, udates, udelta, cfg, store_root=root)
-            ):
+            temporal_units, n_excluded = _temporal_units(
+                joined, joined_obs, udates, udelta, cfg, store_root=root,
+                n_core=len(names),
+            )
+            ds.min_obs_excluded[f"{farm_id}:{ui}"] = n_excluded
+            for si, (sdates, svalues, sobserved, sdelta) in enumerate(temporal_units):
                 ds.samples.append(
                     MiniSample(
                         farm_id=farm_id,
@@ -414,6 +442,8 @@ def build_dataset(
         farm: ("present" if arr is not None else "absent (run scripts/add_sensor_ids_mini.py)")
         for farm, arr in ds.sensor_ids.items()
     }
+    ds.source_manifest["min_obs"] = int(cfg.representation.min_obs)
+    ds.source_manifest["min_obs_excluded_total"] = int(sum(ds.min_obs_excluded.values()))
     return ds
 
 

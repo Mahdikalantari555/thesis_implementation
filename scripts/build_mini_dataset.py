@@ -47,6 +47,7 @@ if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
 from ssl_anomaly.config import QualityCfg  # noqa: E402
+from ssl_anomaly.io.data_contract import convert_st_qa_dn  # noqa: E402
 from ssl_anomaly.io.landsat import quality_mask  # noqa: E402
 from ssl_anomaly.utils.tracking import get_git_commit_sha  # noqa: E402
 from ssl_anomaly.utils.paths import localize  # noqa: E402
@@ -96,6 +97,9 @@ FILE_MAP = OrderedDict(
 )
 BAND_ORDER = list(FILE_MAP)
 QA_FILE = "qa_pixel.tif"
+# Task 0A.4 quality-signal layers; ingested when the scene provides them.
+QA_RADSAT_FILE = "qa_radsat.tif"
+ST_QA_FILE = "st_qa.tif"
 ZARR_FORMAT = 2
 
 # Parity tolerances: reflectance is unitless, LST is Kelvin. These are wide
@@ -428,6 +432,15 @@ def build_farm(
         chunks=(1, h, w),
         fill_value=0,
     )
+    # Task 0A.4: QA_RADSAT (saturation) and ST_QA (LST uncertainty) are
+    # ingested as quality signals WHEN the scene provides them. The current
+    # METRIC scene dirs carry only qa_pixel.tif, so these arrays are created
+    # lazily on first sight; their per-date absence is recorded in the group
+    # attrs — never filled with zeros or imputed.
+    qa_radsat_arr = None
+    st_qa_arr = None
+    n_qa_radsat = 0
+    n_st_qa = 0
     in_field_arr = group.create_array("in_field", shape=(h, w), dtype="uint8", fill_value=0)
     in_field_arr[:] = in_field_mask
 
@@ -475,6 +488,10 @@ def build_farm(
             "band_order": BAND_ORDER,
             "date_source": "scene_inventory.parquet:acquisition_date",
             "quality": "Landsat C2 QA_PIXEL bits + finite-value gate",
+            # 0A.4 counts are set after the date loop; initialised here so the
+            # attrs always exist and absence is explicit.
+            "n_qa_radsat_dates": 0,
+            "n_st_qa_dates": 0,
         }
     )
 
@@ -507,6 +524,27 @@ def build_farm(
             with rasterio.open(qa_path) as src:
                 qa = src.read(1, window=window).astype(np.uint16)
             qmask = quality_mask(qa, qcfg)
+            # Task 0A.4: ingest QA_RADSAT / ST_QA when the scene provides them.
+            radsat_path = scene / QA_RADSAT_FILE
+            if radsat_path.exists():
+                if qa_radsat_arr is None:
+                    qa_radsat_arr = group.create_array(
+                        "qa_radsat", shape=(len(dates), h, w), dtype="uint16",
+                        chunks=(1, h, w), fill_value=0,
+                    )
+                with rasterio.open(radsat_path) as src:
+                    qa_radsat_arr[di] = src.read(1, window=window).astype(np.uint16)
+                n_qa_radsat += 1
+            stqa_path = scene / ST_QA_FILE
+            if stqa_path.exists():
+                if st_qa_arr is None:
+                    st_qa_arr = group.create_array(
+                        "st_qa", shape=(len(dates), h, w), dtype="float32",
+                        chunks=(1, h, w), fill_value=np.nan,
+                    )
+                with rasterio.open(stqa_path) as src:
+                    st_qa_arr[di] = convert_st_qa_dn(src.read(1, window=window))
+                n_st_qa += 1
             cube = np.full((len(BAND_ORDER), h, w), np.nan, dtype=np.float32)
             for bi, band in enumerate(BAND_ORDER):
                 path = scene / FILE_MAP[band]
@@ -545,6 +583,10 @@ def build_farm(
     wall = round(time.monotonic() - t0, 2)
     group.attrs["n_present_dates"] = n_present
     group.attrs["n_absent_dates"] = n_missing
+    # Task 0A.4: quality-signal coverage (absence = the scene set carries no
+    # qa_radsat/st_qa rasters; recorded, never imputed).
+    group.attrs["n_qa_radsat_dates"] = n_qa_radsat
+    group.attrs["n_st_qa_dates"] = n_st_qa
     group.attrs["wall_s"] = wall
     return {
         "farm_id": farm_id,
