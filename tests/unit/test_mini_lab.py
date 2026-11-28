@@ -83,9 +83,12 @@ def test_lodo_protocol_splits_are_farm_disjoint_and_normalization_train_only():
     for name, train, dev, test in splits:
         assert set(train.farm_ids).isdisjoint(test.farm_ids)
         assert train.n > 0 and test.n > 0
-        # Train-only fit: the mean of train features is ~0 even if test is
-        # shifted, proving test values did not enter normalization.
-        assert abs(float(train.x.mean())) < 0.5
+        # Train-only fit: the mean of train VALUE features is ~0 even if test
+        # is shifted, proving test values did not enter normalization. (The
+        # appended token channels — task 2.3 — are constant by construction
+        # and are excluded from this check via n_value_features.)
+        n_val = train.n_value_features or train.x.shape[-1]
+        assert abs(float(train.x[:, :, :n_val].mean())) < 0.5
         assert np.isfinite(train.x).all()
         assert int((~train.observed).sum()) >= 1  # imputed values are marked
 

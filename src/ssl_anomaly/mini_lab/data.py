@@ -83,16 +83,23 @@ class MiniDataset:
 @dataclass
 class Split:
     name: str
-    x: np.ndarray  # (N, T, F)
-    observed: np.ndarray  # (N, T, F)
+    x: np.ndarray  # (N, T, D_in): values(F) + optional mask(F) + optional Δt(1)
+    observed: np.ndarray  # (N, T, F) value-feature observation mask
     delta_t: np.ndarray  # (N, T)
     farm_ids: list[str]
     date_ranges: list[tuple[str, str]]
     sha256: str
+    #: number of VALUE feature columns at the front of x (task 2.3); losses
+    #: and range assertions use only these columns
+    n_value_features: int | None = None
 
     @property
     def n(self) -> int:
         return int(self.x.shape[0])
+
+    @property
+    def n_input_features(self) -> int:
+        return int(self.x.shape[2])
 
 
 def _farm_groups(store_root: Path) -> list[tuple[str, Any]]:
@@ -563,6 +570,19 @@ def split_datasets(ds: MiniDataset, cfg: RunConfig) -> list[tuple[str, Split, Sp
             # Mask-aware: imputed zeros are marked observed=False and counted.
             x = np.where(obs, x, 0.0).astype(np.float32)
             dt = np.stack([s.delta_t for s in samples]).astype(np.float32)
+            # Task 2.3: per-observation token channels. The model input is
+            # [values(F) | observation_mask(F) | delta_t_norm(1)]; the value
+            # channel is 0 exactly where the mask is 0 (never NaN→0 unmasked),
+            # and Δt carries the irregular sampling into every token.
+            n_features = x.shape[2]
+            if cfg.representation.input_mask_channel or cfg.representation.input_delta_t_channel:
+                chans = [x]
+                if cfg.representation.input_mask_channel:
+                    chans.append(obs.astype(np.float32))
+                if cfg.representation.input_delta_t_channel:
+                    scale = float(cfg.representation.delta_t_channel_scale)
+                    chans.append((dt / scale)[:, :, None].astype(np.float32))
+                x = np.concatenate(chans, axis=2)
             return Split(
                 name=name,
                 x=x,
@@ -571,6 +591,7 @@ def split_datasets(ds: MiniDataset, cfg: RunConfig) -> list[tuple[str, Split, Sp
                 farm_ids=[s.farm_id for s in samples],
                 date_ranges=[(s.dates[0], s.dates[-1]) for s in samples],
                 sha256=_hash_arrays(x, obs, dt),
+                n_value_features=n_features,
             )
 
         dev_split = to_split(dev_samples) if dev_samples is not None else None

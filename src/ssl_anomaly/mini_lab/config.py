@@ -31,6 +31,16 @@ class RepresentationConfig:
     # excluded and counted. Default 2 keeps windows with at least two usable
     # acquisitions; excluded windows are surfaced in the run manifest.
     min_obs: int = 2
+    # Task 2.3 (design §1): per-observation token channels in the model input.
+    # The input becomes [values_scaled(F) | observation_mask(F) | delta_t_norm(1)]
+    # = 2F+1 columns; the value channel is 0 exactly where the mask is 0, so a
+    # NaN can never become 0 without its mask channel. Losses stay on the
+    # value columns only (the runner slices them).
+    input_mask_channel: bool = True
+    input_delta_t_channel: bool = True
+    # Δt channel scaling: days / delta_t_channel_scale (pre-registered fixed
+    # constant, one unit ≈ 30 days ≈ one revisit month).
+    delta_t_channel_scale: float = 30.0
 
 
 @dataclass
@@ -138,6 +148,9 @@ def load_run_config(path: str | Path) -> RunConfig:
             include_indices=bool(rep.get("include_indices", True)),
             weather_group=str(rep.get("weather_group", "weather_plus_derived")),
             min_obs=int(rep.get("min_obs", 2)),
+            input_mask_channel=bool(rep.get("input_mask_channel", True)),
+            input_delta_t_channel=bool(rep.get("input_delta_t_channel", True)),
+            delta_t_channel_scale=float(rep.get("delta_t_channel_scale", 30.0)),
         ),
         protocol=ProtocolConfig(
             name=str(proto.get("name", "lodo")),

@@ -36,7 +36,7 @@ def _masked_reconstruction_loss(
     observed: torch.Tensor | None = None,
     mask_ratio: float = 0.25,
 ) -> torch.Tensor:
-    b, t, _ = x.shape
+    b, t, d_in = x.shape
     masked = x.clone()
     n = max(1, int(t * mask_ratio))
     for i in range(b):
@@ -46,6 +46,11 @@ def _masked_reconstruction_loss(
     err = (recon - x).pow(2)
     if observed is None:
         return err.mean()
+    # Task 2.3: losses stay on the VALUE columns; the mask/Δt token channels
+    # (appended after the value features) are model input, not targets.
+    n_val = observed.shape[-1]
+    if d_in > n_val:
+        err = err[..., :n_val]
     return (err * observed).sum() / observed.sum().clamp(min=1)
 
 
@@ -94,6 +99,10 @@ def _scores(model: nn.Module, x: torch.Tensor, observed: torch.Tensor, family: s
             return d.min(dim=1).values.cpu().numpy()
         if family == "reconstruction":
             err = (recon - x).pow(2)
+            # value columns only: token channels are not targets (task 2.3)
+            n_val = observed.shape[-1]
+            if err.shape[-1] > n_val:
+                err = err[..., :n_val]
             denom = observed.sum(dim=(1, 2)).clamp(min=1)
             return ((err * observed).sum(dim=(1, 2)) / denom).cpu().numpy()
         raise ValueError(f"Unknown model family {family!r}")
@@ -302,6 +311,14 @@ def _one_seed(
             "evidence for L2 controlled deviation, NOT stress detection."
         ),
         "n_imputed_features": int((~torch.from_numpy(test.observed).bool()).sum().item()),
+        "input_feature_counts": {
+            "value_features": len(feature_names),
+            "input_columns": int(xte.shape[-1]),
+            "mask_channel": bool(cfg.representation.input_mask_channel),
+            "delta_t_channel": bool(cfg.representation.input_delta_t_channel),
+            "delta_t_channel_scale": float(cfg.representation.delta_t_channel_scale),
+            "note": "input = [values | mask | dt/30]; losses and scores use value columns only (task 2.3)",
+        },
         "valid_patch_counts": valid_patch_counts,
         "device": str(device),
         "max_steps": cfg.model.max_steps,

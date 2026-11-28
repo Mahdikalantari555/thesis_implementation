@@ -185,14 +185,13 @@ def _probe_metrics(model, x_dev: torch.Tensor, dev: Split, *, feature_names: lis
 
     n = x_dev.shape[0]
     ndvi_idx = feature_names.index("ndvi") if "ndvi" in feature_names else 0
-    lst_idx = feature_names.index("lst") if "lst" in feature_names else None
 
     emb = _embed(model, x_dev, batch=probe_max_samples)
     health = rep_health(emb, std_floor=PER_DIM_STD_FLOOR)
     metrics: dict[str, float] = {}
 
     with torch.no_grad():
-        ndvi_col = x_dev[..., ndvi_idx].cpu().numpy()  # (N, T)
+        ndvi_col = x_dev[:, :, ndvi_idx].cpu().numpy()  # (N, T) value column
     observed = dev.observed
 
     # ---- circular season-phase probe ------------------------------------
@@ -222,17 +221,15 @@ def _probe_metrics(model, x_dev: torch.Tensor, dev: Split, *, feature_names: lis
         metrics.update(same_field_same_phase_knn(emb[rows], field_ids[rows], bins[rows]))
 
     # ---- frozen gap reconstruction ----------------------------------------
-    core = [i for i, nm in enumerate(feature_names)]
-    if core:
-        obs_core = observed  # (N, T, F)
-        xnp = x_dev.cpu().numpy()
-        gap_vals = np.where(obs_core, xnp, np.nan)
-        target = np.nanmean(gap_vals[:, :, core], axis=(1, 2))
-        rows = np.isfinite(target) & np.isfinite(emb).all(axis=1)
-        if rows.sum() >= 8:
-            metrics.update(gap_reconstruction_probe(emb[rows], target[rows]))
-    if lst_idx is None:
-        pass  # lst absent in some fixtures; probes degrade gracefully
+    # value columns only: token channels (mask/Δt) are constructed, not
+    # measurements, and never enter the gap target
+    n_val = len(feature_names)
+    xnp = x_dev.cpu().numpy()[:, :, :n_val]
+    gap_vals = np.where(observed, xnp, np.nan)
+    target = np.nanmean(gap_vals, axis=(1, 2))
+    rows = np.isfinite(target) & np.isfinite(emb).all(axis=1)
+    if rows.sum() >= 8:
+        metrics.update(gap_reconstruction_probe(emb[rows], target[rows]))
     return metrics, health
 
 
@@ -622,6 +619,14 @@ def train_one_seed_to_plateau(
             "evidence for L2 controlled deviation, NOT stress detection."
         ),
         "n_imputed_features": int((~test.observed).sum()),
+        "input_feature_counts": {
+            "value_features": len(feature_names),
+            "input_columns": int(test.x.shape[-1]),
+            "mask_channel": bool(cfg.representation.input_mask_channel),
+            "delta_t_channel": bool(cfg.representation.input_delta_t_channel),
+            "delta_t_channel_scale": float(cfg.representation.delta_t_channel_scale),
+            "note": "input = [values | mask | dt/30]; losses and scores use value columns only (task 2.3)",
+        },
         "valid_patch_counts": valid_patch_counts,
         "device": str(device),
         "max_steps": cfg.model.max_steps,
