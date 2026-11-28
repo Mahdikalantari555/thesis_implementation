@@ -300,6 +300,51 @@ def variance_decomposition(
         "caveat": lab.get("caveat", "factors are not orthogonal; shares may not be uniquely attributable"),
     }
 
+def kendall_w(values: np.ndarray, *, names: list[str] | None = None) -> dict:
+    """Kendall's W — the agreement of item rankings across blocks (task 10.7's engine).
+
+    ``values`` is (blocks × items) of the primary metric; ranks are taken within each
+    block, so W = 1 means every block orders the items identically (an interaction-free
+    ranking: whoever wins on one anomaly family wins on all of them) and W near 0 means
+    the ranking is block-specific — the interaction the benchmark must not hide. W comes
+    with its χ² approximation, refused (``available: False``) where n or k are too small
+    to support the asymptotic p — the W itself is still reported for what it is.
+    """
+    v = np.asarray(values, dtype=np.float64)
+    if v.ndim != 2 or v.shape[1] < 3 or v.shape[0] < 3:
+        return {"available": False, "n_blocks": int(v.shape[0]) if v.ndim == 2 else 0,
+                "n_items": int(v.shape[1]) if v.ndim == 2 else 0,
+                "reason": "W needs a (blocks × items) table with ≥3 of each"}
+    ok_rows = np.isfinite(v).all(axis=1)
+    if ok_rows.sum() < 3:
+        return {"available": False, "n_blocks": int(ok_rows.sum()),
+                "reason": f"{int(ok_rows.sum())} complete blocks; W over partial blocks would rank presence, not performance"}
+    from scipy import stats as sst
+
+    t = v[ok_rows]
+    n_blocks, k_items = t.shape
+    ranks = np.apply_along_axis(sst.rankdata, 1, t)          # within each block
+    rank_sum = ranks.sum(axis=0)
+    s_stat = float(((rank_sum - n_blocks * (k_items + 1) / 2.0) ** 2).sum())
+    w = float(12.0 * s_stat / (n_blocks ** 2 * (k_items ** 3 - k_items)))
+    chi2 = float(n_blocks * (k_items - 1) * w)
+    p = float(sst.chi2.sf(chi2, k_items - 1)) if n_blocks >= 10 else None
+    mean_rank = ranks.mean(axis=0)
+    order = np.argsort(-mean_rank)
+    out = {
+        "available": True, "w": round(w, 4), "chi2": round(chi2, 4), "df": k_items - 1,
+        "p": None if p is None else round(p, 6), "n_blocks": int(n_blocks), "n_items": int(k_items),
+        "mean_rank": {names[i]: round(float(mean_rank[i]), 3) for i in range(k_items)} if names
+        else {i: round(float(mean_rank[i]), 3) for i in range(k_items)},
+        "order": [names[i] for i in order] if names else [int(order[i]) for i in range(k_items)],
+        "note": ("W=1: the same item wins in every block (no ranking interaction). W≈0: the ranking "
+                 "is block-specific — report per-block winners instead of one overall rank"
+                 if w < 0.5 else
+                 "W>0.5: rankings agree across blocks; a single overall ordering is a defensible summary"),
+    }
+    return out
+
+
 def wilcoxon_paired(diffs: np.ndarray, *, zero_method: str = "wilcox") -> dict:
     """Wilcoxon signed-rank on paired differences, with the degeneracies reported.
 

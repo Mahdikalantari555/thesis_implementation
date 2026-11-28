@@ -329,6 +329,96 @@ def paired_comparisons(rows: list[dict], by: str, *, n_boot: int = 4000) -> list
     return out
 
 
+def interaction_table(rows: list[dict], by: str) -> dict:
+    """Task 10.7: does the ranking transfer, or is it an interaction talking?
+
+    With ``by`` a model factor (paradigm / backbone / model_id), the (factor, family)
+    matrix of per-cell AUPRC asks whether the same factor wins on every anomaly family.
+    Kendall's W over the per-family rankings is the summary: W near 1 = the ranking is
+    family-robust; W near 0 = the winner is family-specific and an overall rank would
+    hide it. The per-family winner is printed beside the table, so an interaction is
+    visible without recomputation. A (factor, family) cell with no data is a hole in the
+    table, reported as such — never imputed — and W runs over complete rows only.
+    """
+    from ssl_anomaly.benchmarking.config import FAMILIES
+
+    vals: dict[tuple[str, str], list[float]] = defaultdict(list)
+    for r in rows:
+        if not r.get("usable"):
+            continue
+        key = str((r.get("factors") or {}).get(by) or r.get(by) or "?")
+        for c in (r.get("per_cell") or {}).values():
+            fam = str(c.get("family") or "?")
+            a = c.get("auprc")
+            if fam in FAMILIES and a is not None and math.isfinite(float(a)):
+                vals[(key, fam)].append(float(a))
+    fams = [f for f in FAMILIES if any(k[1] == f for k in vals)]
+    items = sorted({k[0] for k in vals})
+    if len(fams) < 3 or len(items) < 3:
+        return {"available": False, "factor": by, "n_families": len(fams), "n_items": len(items),
+                "reason": (f"the family interaction needs ≥3 {by} levels × ≥3 families with usable "
+                           "cells; an interaction statistic over fewer would be arithmetic, not evidence")}
+    mat = np.array([[float(np.mean(vals[(i, f)])) if vals.get((i, f)) else np.nan
+                     for f in fams] for i in items], dtype=np.float64)
+    counts = np.array([[len(vals.get((i, f), ())) for f in fams] for i in items])
+    # W's blocks are the FAMILIES and its items are the factor levels: the question is
+    # whether the levels' ranking agrees across families, so the matrix is transposed.
+    res = _st.kendall_w(mat.T, names=items)
+    res.update({"factor": by, "blocks": fams, "items": items, "matrix": mat.round(5).tolist(),
+                "n_per_cell": counts.tolist(), "holes": int((counts == 0).sum()),
+                "kind": "factor_x_family",
+                "note": (f"rows = {by} levels, blocks = anomaly families; a W below ~0.5 means the "
+                         f"{by} ranking changes with the anomaly family — the per-family winner "
+                         "table is then the honest leaderboard, not the mean")})
+    res["winner_per_block"] = {
+        f: (items[int(np.nanargmax(mat[:, j]))] if np.isfinite(mat[:, j]).any() else None)
+        for j, f in enumerate(fams)}
+    return res
+
+
+def suppression_deltas(rows: list[dict]) -> dict:
+    """Task 10.7: Δ(S_y − S0) per (model, suppression), with sign consistency across models.
+
+    A suppression treatment that helps one paradigm and hurts another is exactly the
+    interaction a mean over models hides; the sign consistency column is the honest
+    one-line answer to "does S1/S2/S3 help everywhere?".
+    """
+    per: dict[tuple[str, str], list[float]] = defaultdict(list)
+    for r in rows:
+        if not r.get("usable"):
+            continue
+        mid = str(r.get("model_id") or "?")
+        sup = str((r.get("factors") or {}).get("suppression") or "?")
+        v = _cell_metric(r)
+        if v is not None:
+            per[(mid, sup)].append(float(v))
+    models = sorted({k[0] for k in per})
+    sups = sorted({k[1] for k in per})
+    if not models or "S0" not in sups:
+        return {"available": False, "reason": "no usable S0 baseline cell; deltas are undefined"}
+    out: dict[str, dict] = {}
+    for mid in models:
+        base = per.get((mid, "S0"))
+        if not base:
+            continue
+        row = {}
+        for s in sups:
+            if s == "S0" or not per.get((mid, s)):
+                continue
+            row[s] = round(float(np.mean(per[(mid, s)])) - float(np.mean(base)), 5)
+        if row:
+            out[mid] = row
+    if not out:
+        return {"available": False, "reason": "no model has both an S0 cell and a treated cell"}
+    sup_cols = sorted({k for v in out.values() for k in v})
+    consistent = {s: (len({d[s] > 0 for d in out.values() if s in d}) == 1) for s in sup_cols}
+    return {"available": True, "deltas": out, "n_models": len(out),
+            "sign_consistent": consistent,
+            "note": ("sign_consistent[suppression]=True means every model moves the same way "
+                     "under that treatment; a treatment that helps one paradigm and hurts "
+                     "another is exactly the interaction a mean hides")}
+
+
 def variance_split(rows: list[dict]) -> dict:
     """Seed / farm / anomaly-cell / model, from the recorded per-farm numbers (task 8.7)."""
     vals, sd, fm, cl, md = [], [], [], [], []
@@ -522,6 +612,53 @@ def build_report(out_dir: Path, cfg, cells_matrix: list, *, n_boot: int = 4000,
                   "", _friedman_line(fr), ""]
         L.append("")
 
+    # -- 3.4 interaction analyses (task 10.7) ------------------------------
+    L += ["## 3.4 Interaction — does the ranking transfer across anomaly families, and does "
+          "suppression help everywhere?", "",
+          "_Two questions a single leaderboard cannot answer. The matrices come from the recorded "
+          "per-cell values; Kendall's W summarises rank agreement across blocks (W≈1: the same "
+          "winner everywhere; W≈0: the ranking is block-specific and the per-block winner is the "
+          "honest leaderboard). A cell with no data is a hole, printed as such._", ""]
+    interactions: dict[str, dict] = {}
+    for label, factor in (("paradigm × family", "paradigm"), ("backbone × family", "backbone"),
+                          ("model × family", "model_id")):
+        res = interaction_table(usable, factor)
+        interactions[label] = res
+        L += [f"**{label}**", ""]
+        if not res.get("available"):
+            L += [f"_Not available_: {res.get('reason')}", ""]
+            continue
+        head = "| " + " | ".join([res["factor"]] + res["blocks"]) + " |"
+        sep = "|" + "|".join(["---"] + ["---:"] * len(res["blocks"])) + "|"
+        L += [head, sep]
+        display_order = sorted(res["items"], key=lambda k: -float(res["mean_rank"][k]))
+        for item in display_order:
+            i = res["items"].index(item)
+            row = res["matrix"][i]
+            L.append("| " + " | ".join([item] + [
+                _fmt(row[j], 3) if np.isfinite(row[j]) else "—" for j in range(len(res["blocks"]))]) + " |")
+        L += ["", f"W = **{res.get('w')}** (χ²={res.get('chi2')}, df={res.get('df')}, "
+                  f"p={res.get('p')}, blocks={res.get('n_blocks')}, holes={res.get('holes')})",
+              "Winners per family: " + ", ".join(
+                  f"{f} → {w}" for f, w in (res.get('winner_per_block') or {}).items()), ""]
+    sd = suppression_deltas(usable)
+    interactions["suppression_deltas"] = sd
+    L += ["**model × suppression — Δ(S − S0) of macro-AUPRC**", ""]
+    if not sd.get("available"):
+        L += [f"_Not available_: {sd.get('reason')}", ""]
+    else:
+        cols = sorted({k for v in sd["deltas"].values() for k in v})
+        L += ["| model | " + " | ".join(cols) + " |", "|---|" + "---:|" * len(cols)]
+        for mid, d in sorted(sd["deltas"].items()):
+            L.append(f"| {mid} | " + " | ".join(_fmt(d.get(c), 4) if c in d else "—"
+                                                for c in cols) + " |")
+        L += ["", "Sign consistency: " + ", ".join(
+            f"{s}: {'consistent' if ok else 'MIXED'}" for s, ok in sd["sign_consistent"].items()), ""]
+    fixture_int = fixture_only
+    if fixture_int:
+        L += ["_These interaction numbers are fixture numbers (see §0): they exercise the code path "
+              "and carry no claim._", ""]
+
     # -- 4. secondary metrics --------------------------------------------
     L += ["## 4. Secondary metrics (never used to pick a winner)", "",
           _secondaries(usable), ""]
@@ -560,7 +697,8 @@ def build_report(out_dir: Path, cfg, cells_matrix: list, *, n_boot: int = 4000,
         {"coverage": counts, "usable": len(usable), "aggregate": {f: aggregate(usable, f) for f in
                                                                    ("paradigm", "backbone", "suppression",
                                                                     "input", "fusion", "calibration")},
-         "variance": vs, "warnings": warns}, indent=1, sort_keys=True, default=str), encoding="utf-8")
+         "interactions": interactions, "variance": vs, "warnings": warns},
+        indent=1, sort_keys=True, default=str), encoding="utf-8")
     return ReportArtifacts(p, L, warns)
 
 
